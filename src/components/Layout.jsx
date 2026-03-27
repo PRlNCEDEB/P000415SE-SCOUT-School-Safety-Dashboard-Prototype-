@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-
+// TODO: Load visible navigation items based on the authenticated user's role/permissions.
 const navItems = [
   { path: '/', label: 'Dashboard', icon: '🏠' },
   { path: '/incidents', label: 'Incidents', icon: '🚨' },
@@ -47,10 +47,12 @@ export default function Layout({ children }) {
         {/* Bottom - User + Logout */}
         <div className="p-3 border-t border-gray-200">
           <div className="px-3 py-2 mb-1">
+            {/* TODO: Replace hardcoded user details with the authenticated user's name and role from backend/session data. */}
             <p className="text-sm font-medium text-gray-800">Admin User</p>
             <p className="text-xs text-gray-400">Safety Manager</p>
           </div>
           <button
+          // TODO: Replace redirect-only logout with backend/session logout and clear stored auth data before navigating to login.
             onClick={() => navigate('/login')}
             className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100 transition-colors"
           >

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+// TODO: Replace mock incident data with incidents retrieved from the backend API.
 import { incidents } from '../data/mockData'
 
 const priorityColors = {
@@ -31,7 +32,8 @@ export default function Incidents() {
   const [filterStatus, setFilterStatus] = useState('all')
   const [filterPriority, setFilterPriority] = useState('all')
   const [search, setSearch] = useState('')
-
+  // TODO: Move incident filtering and search to backend query parameters
+  // when integrating with the API, so the server returns only the required records.
   const filtered = incidents.filter(i => {
     const matchStatus = filterStatus === 'all' || i.status === filterStatus
     const matchPriority = filterPriority === 'all' || i.priority === filterPriority
@@ -47,6 +49,7 @@ export default function Incidents() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Incident Log</h1>
+          {/* TODO: Replace the mock total count with the total number of incidents returned by the backend API. */}
           <p className="text-sm text-gray-500">{incidents.length} total incidents</p>
         </div>
         <button

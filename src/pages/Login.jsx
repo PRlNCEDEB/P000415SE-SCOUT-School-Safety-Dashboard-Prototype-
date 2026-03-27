@@ -6,10 +6,12 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const navigate = useNavigate()
-
+  // TODO: Replace hardcoded login validation with backend authentication.
   const handleLogin = (e) => {
     e.preventDefault()
+    // TODO: Send login credentials to the backend and validate the user session/role before redirecting.
     if (email === 'admin@school.edu' && password === 'password123') {
+       // TODO: Redirect after a successful backend login and store the returned auth token/session if required.
       navigate('/')
     } else {
       setError('Invalid email or password')
@@ -80,7 +82,7 @@ export default function Login() {
             </button>
           </form>
         </div>
-
+        {/* TODO: Remove demo credentials once backend authentication is connected. */}
         {/* Demo account hint */}
         <div className="mt-4 bg-white rounded-xl border border-gray-200 p-4">
           <p className="text-xs text-gray-500 mb-1">

@@ -34,7 +34,7 @@ export default function SubmitAlert() {
     location: '',
   })
   const [errors, setErrors] = useState({})
-
+ // TODO: Keep basic client-side validation here, but also validate all alert fields again on the backend before saving.
   const validate = () => {
     const e = {}
     if (!form.type) e.type = 'Please select an alert type'
@@ -48,7 +48,7 @@ export default function SubmitAlert() {
     setForm(prev => ({ ...prev, [field]: value }))
     setErrors(prev => ({ ...prev, [field]: '' }))
   }
-
+  // TODO: Replace local submit handling with a backend API request to create a new alert event.
   const handleSubmit = (e) => {
     e.preventDefault()
     const e2 = validate()
@@ -56,6 +56,7 @@ export default function SubmitAlert() {
       setErrors(e2)
       return
     }
+    // TODO: Show the success state only after the backend confirms the alert was saved and notifications were triggered.
     setSubmitted(true)
   }
 
@@ -65,6 +66,7 @@ export default function SubmitAlert() {
         <div className="bg-white border border-gray-200 rounded-xl p-8 text-center">
           <div className="text-5xl mb-4">✅</div>
           <h2 className="text-xl font-bold text-gray-900 mb-2">Alert Submitted</h2>
+          {/* TODO: Replace this mock success message with the actual backend/API submission result. */}
           <p className="text-sm text-gray-500 mb-6">
             Your alert has been logged and the safety team has been notified.
           </p>

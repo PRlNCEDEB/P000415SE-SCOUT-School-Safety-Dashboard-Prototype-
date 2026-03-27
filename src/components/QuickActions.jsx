@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-
+// TODO: Replace hardcoded emergency types with values fetched from backend if these categories are stored centrally.
 const emergencyTypes = [
   { value: 'Natural Disaster', icon: '🌊', desc: 'Earthquake, flood, severe weather' },
   { value: 'Fire', icon: '🔥', desc: 'Fire emergency or smoke detected' },
@@ -7,6 +7,7 @@ const emergencyTypes = [
 ]
 
 export default function QuickActions() {
+  // TODO: Fetch existing action log records from backend when the component loads.
   const [logs, setLogs] = useState([])
   const [feedback, setFeedback] = useState(null)
   const [showConfirm, setShowConfirm] = useState(false)
@@ -45,6 +46,7 @@ export default function QuickActions() {
   }
 
   const handleCategorySelect = (type) => {
+    // TODO: Replace local-only success flow with backend request handling, including loading, success, and error states.
     const newLog = {
       id: Date.now().toString(),
       button: '1',
@@ -55,6 +57,7 @@ export default function QuickActions() {
       description: '',
       location: '',
     }
+    // TODO: Replace local state update with backend-created log record response.
     setLogs(prev => [newLog, ...prev])
     setShowCategory(false)
     setFeedback({ button: '1', actions: 'Email + SMS + Record' })
@@ -62,6 +65,7 @@ export default function QuickActions() {
   }
 
   const handleAction2 = () => {
+    // TODO: Call backend for the general action and handle loading, success, and failure before updating UI.
     const newLog = {
       id: Date.now().toString(),
       button: '2',
@@ -72,12 +76,14 @@ export default function QuickActions() {
       description: '',
       location: '',
     }
+    // TODO: Replace local state update with backend-created log record response.
     setLogs(prev => [newLog, ...prev])
     setFeedback({ button: '2', actions: 'Email + Record' })
     setTimeout(() => setFeedback(null), 3000)
   }
 
   const handleSaveEdit = () => {
+     // TODO: Persist edited details to backend and show loading/error feedback if the update fails.
     setLogs(prev => prev.map(l => l.id === editingId ? { ...l, ...editForm } : l))
     setEditingId(null)
     setEditForm({ title: '', description: '', location: '' })
@@ -139,12 +145,14 @@ export default function QuickActions() {
       {/* Action Log */}
       <div>
         <h3 className="text-sm font-semibold text-gray-900 mb-2">Action Log</h3>
+        {/* TODO: Load action logs from backend instead of relying on local component state only. */}
         {logs.length === 0 ? (
           <div className="bg-white border border-gray-200 rounded-xl p-6 text-center">
             <p className="text-xs text-gray-400">No actions recorded yet. Press 1 or 2 to trigger.</p>
           </div>
         ) : (
           <div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100 overflow-hidden">
+            {/* TODO: Render persisted action log records fetched from backend. */}
             {logs.map(log => (
               <div key={log.id} className="px-4 py-3 flex items-start gap-3">
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold shrink-0 ${

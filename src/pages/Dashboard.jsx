@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom'
+// TODO: Replace mock incident data with incidents fetched from backend
 import { incidents } from '../data/mockData'
 import QuickActions from '../components/QuickActions'
 
@@ -61,6 +62,7 @@ export default function Dashboard() {
         <StatCard label="Active Incidents" value={active.length} color="text-gray-700" icon="🚨" />
         <StatCard label="Critical" value={critical} color="text-red-600" icon="⚡" />
         <StatCard label="High Priority" value={high} color="text-orange-600" icon="🚩" />
+        {/* TODO: Replace hardcoded average response time with backend-calculated metric. */}
         <StatCard label="Avg Response" value="4.2m" color="text-blue-600" icon="⏱️" />
       </div>
 

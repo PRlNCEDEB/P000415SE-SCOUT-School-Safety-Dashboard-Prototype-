@@ -11,8 +11,11 @@ import Notifications from './pages/Notifications'
 function App() {
   return (
     <BrowserRouter>
+    {/* TODO: Protect authenticated application routes and redirect unauthenticated users to the login page. */}
       <Routes>
+        {/* TODO: Redirect authenticated users away from the login page if a valid session already exists. */}
         <Route path="/login" element={<Login />} />
+        {/* TODO: Wrap these application routes in protected route logic once backend authentication/session handling is implemented. */}
         <Route path="/" element={<Layout><Dashboard /></Layout>} />
         <Route path="/incidents" element={<Layout><Incidents /></Layout>} />
         <Route path="/incidents/:id" element={<Layout><IncidentDetail /></Layout>} />

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-
+// TODO: Replace mock notification records with delivery logs retrieved from the backend API.
 const mockNotifications = [
   {
     id: '1',
@@ -88,7 +88,7 @@ const statusStyle = {
 export default function Notifications() {
   const [filterChannel, setFilterChannel] = useState('all')
   const [filterStatus, setFilterStatus] = useState('all')
-
+  // TODO: Replace client-side notification summary counts with backend-provided metrics.
   const totalSent = mockNotifications.filter(
     n => n.sms === 'sent' || n.email === 'sent'
   ).length
@@ -97,7 +97,7 @@ export default function Notifications() {
   ).length
   const smsFailed = mockNotifications.filter(n => n.sms === 'failed').length
   const emailFailed = mockNotifications.filter(n => n.email === 'failed').length
-
+  // TODO: Move notification filtering to backend query parameters when integrating with the API.
   const filtered = mockNotifications.filter(n => {
     if (filterChannel === 'sms') return n.sms === filterStatus || filterStatus === 'all'
     if (filterChannel === 'email') return n.email === filterStatus || filterStatus === 'all'
@@ -159,6 +159,7 @@ export default function Notifications() {
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+            {/* TODO: Replace the mock record count with the total number of delivery log records returned by the backend API. */}
             Delivery Log — {filtered.length} records
           </p>
         </div>
@@ -167,7 +168,9 @@ export default function Notifications() {
             <div className="p-8 text-center text-sm text-gray-400">
               No notifications match your filters.
             </div>
-          ) : (
+          ) : 
+          {/* TODO: Ensure notification records are rendered from backend-loaded state once API integration is complete. */}
+          (
             filtered.map(n => (
               <div key={n.id} className="px-4 py-4 flex items-start gap-4">
 

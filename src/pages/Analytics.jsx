@@ -2,7 +2,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line, CartesianGrid, Legend
 } from 'recharts'
-
+// TODO: Replace hardcoded incident-type counts with analytics data fetched from backend.
 const incidentsByType = [
   { type: 'Medical', count: 12 },
   { type: 'Fire', count: 5 },
@@ -12,7 +12,7 @@ const incidentsByType = [
   { type: 'Maintenance', count: 6 },
   { type: 'General', count: 4 },
 ]
-
+// TODO: Replace hardcoded daily incident trend with backend analytics data for the selected time period.
 const incidentsByDay = [
   { day: 'Mon', incidents: 4 },
   { day: 'Tue', incidents: 7 },
@@ -20,14 +20,14 @@ const incidentsByDay = [
   { day: 'Thu', incidents: 8 },
   { day: 'Fri', incidents: 5 },
 ]
-
+// TODO: Replace hardcoded response-time trend with backend-calculated response metrics.
 const responseTimeData = [
   { week: 'Week 1', avgMinutes: 6.2 },
   { week: 'Week 2', avgMinutes: 5.1 },
   { week: 'Week 3', avgMinutes: 4.8 },
   { week: 'Week 4', avgMinutes: 4.2 },
 ]
-
+// TODO: Replace hardcoded status breakdown with backend aggregation of incident statuses.
 const statusBreakdown = [
   { name: 'Resolved', value: 28 },
   { name: 'Acknowledged', value: 8 },
@@ -36,7 +36,7 @@ const statusBreakdown = [
 ]
 
 const PIE_COLORS = ['#22c55e', '#3b82f6', '#ef4444', '#9ca3af']
-
+// TODO: Replace hardcoded location counts with backend analytics data grouped by location.
 const locationData = [
   { location: 'Oval', count: 8 },
   { location: 'Canteen', count: 6 },
@@ -58,6 +58,7 @@ export default function Analytics() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      {/* TODO: Replace hardcoded summary metrics with backend-provided analytics totals and response metrics. */}
         <SummaryCard label="Total Incidents" value="51" icon="🚨" color="text-gray-700" />
         <SummaryCard label="Resolved" value="28" icon="✅" color="text-green-600" />
         <SummaryCard label="Avg Response" value="4.2m" icon="⏱️" color="text-blue-600" />
@@ -71,9 +72,10 @@ export default function Analytics() {
         <div className="bg-white border border-gray-200 rounded-xl p-5">
           <h2 className="font-semibold text-gray-900 mb-4">Incidents by Type</h2>
           <ResponsiveContainer width="100%" height={220}>
+
             <BarChart data={incidentsByType} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
               <XAxis dataKey="type" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 11 }} /> 
               <Tooltip />
               <Bar dataKey="count" fill="#ef4444" radius={[4, 4, 0, 0]} />
             </BarChart>
@@ -85,6 +87,7 @@ export default function Analytics() {
           <h2 className="font-semibold text-gray-900 mb-4">Status Breakdown</h2>
           <ResponsiveContainer width="100%" height={220}>
             <PieChart>
+             
               <Pie
                 data={statusBreakdown}
                 cx="50%"
@@ -113,6 +116,7 @@ export default function Analytics() {
         <div className="bg-white border border-gray-200 rounded-xl p-5">
           <h2 className="font-semibold text-gray-900 mb-4">Avg Response Time (minutes)</h2>
           <ResponsiveContainer width="100%" height={220}>
+            
             <LineChart data={responseTimeData} margin={{ top: 0, right: 10, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis dataKey="week" tick={{ fontSize: 11 }} />
@@ -133,7 +137,7 @@ export default function Analytics() {
         <div className="bg-white border border-gray-200 rounded-xl p-5">
           <h2 className="font-semibold text-gray-900 mb-4">Incidents by Location</h2>
           <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={locationData} layout="vertical" margin={{ top: 0, right: 10, left: 20, bottom: 0 }}>
+                       <BarChart data={locationData} layout="vertical" margin={{ top: 0, right: 10, left: 20, bottom: 0 }}>
               <XAxis type="number" tick={{ fontSize: 11 }} />
               <YAxis dataKey="location" type="category" tick={{ fontSize: 11 }} />
               <Tooltip />
