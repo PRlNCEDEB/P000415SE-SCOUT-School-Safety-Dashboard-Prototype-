@@ -32,6 +32,7 @@ export default function Incidents() {
   const [filterStatus, setFilterStatus] = useState('all')
   const [filterPriority, setFilterPriority] = useState('all')
   const [search, setSearch] = useState('')
+
   // TODO: Move incident filtering and search to backend query parameters
   // when integrating with the API, so the server returns only the required records.
   const filtered = incidents.filter(i => {

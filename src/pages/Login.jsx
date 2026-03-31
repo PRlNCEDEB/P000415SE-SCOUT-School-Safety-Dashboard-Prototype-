@@ -1,20 +1,34 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
+
+const demoAccounts = [
+  { name: 'Admin User', email: 'admin@school.edu', role: 'admin', color: 'bg-red-100 text-red-700' },
+  { name: 'Staff User', email: 'user@school.edu', role: 'user', color: 'bg-blue-100 text-blue-700' },
+]
 
 export default function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+  const { login } = useAuth()
   const navigate = useNavigate()
+
   // TODO: Replace hardcoded login validation with backend authentication.
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault()
+    setError('')
+    setLoading(true)
+    await new Promise(r => setTimeout(r, 400))
     // TODO: Send login credentials to the backend and validate the user session/role before redirecting.
-    if (email === 'admin@school.edu' && password === 'password123') {
-       // TODO: Redirect after a successful backend login and store the returned auth token/session if required.
+    const result = login(email, password)
+    setLoading(false)
+    if (result.success) {
+      // TODO: Redirect after a successful backend login and store the returned auth token/session if required.
       navigate('/')
     } else {
-      setError('Invalid email or password')
+      setError(result.message)
     }
   }
 
@@ -34,7 +48,7 @@ export default function Login() {
         {/* Card */}
         <div className="bg-white rounded-xl border border-gray-200 p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-1">Sign in</h2>
-          <p className="text-sm text-gray-500 mb-6">Enter your school credentials to continue.</p>
+          <p className="text-sm text-gray-500 mb-6">Enter your credentials to continue.</p>
 
           {/* Notice */}
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-5">
@@ -43,7 +57,6 @@ export default function Login() {
             </p>
           </div>
 
-          {/* Form */}
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
               <label className="block text-sm text-gray-700 mb-1">Email address</label>
@@ -76,20 +89,37 @@ export default function Login() {
 
             <button
               type="submit"
-              className="w-full py-2.5 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors"
+              disabled={loading}
+              className="w-full py-2.5 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors disabled:opacity-60"
             >
-              Sign in
+              {loading ? 'Signing in…' : 'Sign in'}
             </button>
           </form>
         </div>
+
         {/* TODO: Remove demo credentials once backend authentication is connected. */}
-        {/* Demo account hint */}
+        {/* Demo accounts */}
         <div className="mt-4 bg-white rounded-xl border border-gray-200 p-4">
-          <p className="text-xs text-gray-500 mb-1">
-            <strong className="text-gray-700">Demo account</strong>
+          <p className="text-xs font-semibold text-gray-700 mb-3">
+            Demo accounts — password: <code className="bg-gray-100 px-1 rounded">password123</code>
           </p>
-          <p className="text-xs text-gray-400">Email: admin@school.edu</p>
-          <p className="text-xs text-gray-400">Password: password123</p>
+          <div className="space-y-2">
+            {demoAccounts.map(u => (
+              <button
+                key={u.email}
+                onClick={() => { setEmail(u.email); setPassword('password123') }}
+                className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-gray-50 border border-transparent hover:border-gray-200 transition-colors"
+              >
+                <div className="text-left">
+                  <p className="text-sm text-gray-800">{u.name}</p>
+                  <p className="text-xs text-gray-400">{u.email}</p>
+                </div>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${u.color}`}>
+                  {u.role}
+                </span>
+              </button>
+            ))}
+          </div>
         </div>
 
       </div>

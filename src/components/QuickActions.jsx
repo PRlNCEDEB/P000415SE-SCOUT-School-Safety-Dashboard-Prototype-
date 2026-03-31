@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import { useAuth } from '../context/AuthContext'
+
 // TODO: Replace hardcoded emergency types with values fetched from backend if these categories are stored centrally.
 const emergencyTypes = [
   { value: 'Natural Disaster', icon: '🌊', desc: 'Earthquake, flood, severe weather' },
@@ -7,6 +9,7 @@ const emergencyTypes = [
 ]
 
 export default function QuickActions() {
+  const { isAdmin } = useAuth()
   // TODO: Fetch existing action log records from backend when the component loads.
   const [logs, setLogs] = useState([])
   const [feedback, setFeedback] = useState(null)
@@ -83,7 +86,7 @@ export default function QuickActions() {
   }
 
   const handleSaveEdit = () => {
-     // TODO: Persist edited details to backend and show loading/error feedback if the update fails.
+    // TODO: Persist edited details to backend and show loading/error feedback if the update fails.
     setLogs(prev => prev.map(l => l.id === editingId ? { ...l, ...editForm } : l))
     setEditingId(null)
     setEditForm({ title: '', description: '', location: '' })
@@ -175,15 +178,17 @@ export default function QuickActions() {
                   {log.location && <p className="text-xs text-gray-400">📍 {log.location}</p>}
                   <p className="text-xs text-gray-400 mt-0.5">{log.actions.join(' + ')} · {log.timestamp}</p>
                 </div>
-                <button
-                  onClick={() => {
-                    setEditingId(log.id)
-                    setEditForm({ title: log.title, description: log.description, location: log.location })
-                  }}
-                  className="text-xs text-gray-400 hover:text-gray-600 shrink-0"
-                >
-                  ✏️
-                </button>
+                {isAdmin && (
+                  <button
+                    onClick={() => {
+                      setEditingId(log.id)
+                      setEditForm({ title: log.title, description: log.description, location: log.location })
+                    }}
+                    className="text-xs text-gray-400 hover:text-gray-600 shrink-0"
+                  >
+                    ✏️
+                  </button>
+                )}
               </div>
             ))}
           </div>
