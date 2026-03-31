@@ -34,7 +34,8 @@ export default function SubmitAlert() {
     location: '',
   })
   const [errors, setErrors] = useState({})
- // TODO: Keep basic client-side validation here, but also validate all alert fields again on the backend before saving.
+
+  // TODO: Keep basic client-side validation here, but also validate all alert fields again on the backend before saving.
   const validate = () => {
     const e = {}
     if (!form.type) e.type = 'Please select an alert type'
@@ -48,6 +49,7 @@ export default function SubmitAlert() {
     setForm(prev => ({ ...prev, [field]: value }))
     setErrors(prev => ({ ...prev, [field]: '' }))
   }
+
   // TODO: Replace local submit handling with a backend API request to create a new alert event.
   const handleSubmit = (e) => {
     e.preventDefault()

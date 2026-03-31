@@ -1,11 +1,13 @@
 import { useState } from 'react'
+import { useAuth } from '../context/AuthContext'
+
 // TODO: Replace mock notification records with delivery logs retrieved from the backend API.
 const mockNotifications = [
   {
     id: '1',
     incidentTitle: 'Student injury - oval',
-    recipientName: 'Principal Davis',
-    recipientEmail: 'davis@school.edu',
+    recipientName: 'Admin User',
+    recipientEmail: 'admin@school.edu',
     recipientPhone: '+61 400 111 222',
     sms: 'sent',
     email: 'sent',
@@ -26,8 +28,8 @@ const mockNotifications = [
   {
     id: '3',
     incidentTitle: 'Altercation near canteen',
-    recipientName: 'Deputy Principal',
-    recipientEmail: 'deputy@school.edu',
+    recipientName: 'Staff User',
+    recipientEmail: 'user@school.edu',
     recipientPhone: '+61 400 555 666',
     sms: 'sent',
     email: 'sent',
@@ -37,8 +39,8 @@ const mockNotifications = [
   {
     id: '4',
     incidentTitle: 'Lockdown initiated - main building',
-    recipientName: 'All Staff',
-    recipientEmail: 'staff@school.edu',
+    recipientName: 'Admin User',
+    recipientEmail: 'admin@school.edu',
     recipientPhone: '+61 400 777 888',
     sms: 'sent',
     email: 'sent',
@@ -59,8 +61,8 @@ const mockNotifications = [
   {
     id: '6',
     incidentTitle: 'Fire alarm triggered - Block B',
-    recipientName: 'Fire Warden',
-    recipientEmail: 'warden@school.edu',
+    recipientName: 'Staff User',
+    recipientEmail: 'user@school.edu',
     recipientPhone: '+61 400 123 456',
     sms: 'sent',
     email: 'sent',
@@ -86,19 +88,27 @@ const statusStyle = {
 }
 
 export default function Notifications() {
+  const { isAdmin, currentUser } = useAuth()
   const [filterChannel, setFilterChannel] = useState('all')
   const [filterStatus, setFilterStatus] = useState('all')
+
+  // Admin sees all, user sees only their own
+  const visibleNotifications = isAdmin
+    ? mockNotifications
+    : mockNotifications.filter(n => n.recipientName === currentUser.name)
+
   // TODO: Replace client-side notification summary counts with backend-provided metrics.
-  const totalSent = mockNotifications.filter(
+  const totalSent = visibleNotifications.filter(
     n => n.sms === 'sent' || n.email === 'sent'
   ).length
-  const totalFailed = mockNotifications.filter(
+  const totalFailed = visibleNotifications.filter(
     n => n.sms === 'failed' || n.email === 'failed'
   ).length
-  const smsFailed = mockNotifications.filter(n => n.sms === 'failed').length
-  const emailFailed = mockNotifications.filter(n => n.email === 'failed').length
+  const smsFailed = visibleNotifications.filter(n => n.sms === 'failed').length
+  const emailFailed = visibleNotifications.filter(n => n.email === 'failed').length
+
   // TODO: Move notification filtering to backend query parameters when integrating with the API.
-  const filtered = mockNotifications.filter(n => {
+  const filtered = visibleNotifications.filter(n => {
     if (filterChannel === 'sms') return n.sms === filterStatus || filterStatus === 'all'
     if (filterChannel === 'email') return n.email === filterStatus || filterStatus === 'all'
     if (filterStatus === 'all') return true
@@ -111,8 +121,23 @@ export default function Notifications() {
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Notifications</h1>
-        <p className="text-sm text-gray-500">Track SMS and email delivery across all incidents</p>
+        <p className="text-sm text-gray-500">
+          {isAdmin
+            ? 'Track SMS and email delivery across all incidents'
+            : 'Your personal notification history'}
+        </p>
       </div>
+
+      {/* User info banner */}
+      {!isAdmin && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 flex items-center gap-2 mb-6">
+          <span>ℹ️</span>
+          <p className="text-sm text-blue-800">
+            You are viewing your personal notification history only.
+            Admins can see all delivery logs across the system.
+          </p>
+        </div>
+      )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
@@ -122,8 +147,8 @@ export default function Notifications() {
         <SummaryCard label="Email Failed" value={emailFailed} icon="📧" color="text-orange-600" />
       </div>
 
-      {/* Failed alerts banner */}
-      {totalFailed > 0 && (
+      {/* Failed alerts banner — admin only */}
+      {isAdmin && totalFailed > 0 && (
         <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-center gap-3 mb-6">
           <span className="text-red-500">⚠️</span>
           <p className="text-sm text-red-800">
@@ -157,20 +182,24 @@ export default function Notifications() {
 
       {/* Notification Log */}
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
+        <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
             {/* TODO: Replace the mock record count with the total number of delivery log records returned by the backend API. */}
             Delivery Log — {filtered.length} records
           </p>
+          {!isAdmin && (
+            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+              Personal view only
+            </span>
+          )}
         </div>
         <div className="divide-y divide-gray-100">
           {filtered.length === 0 ? (
             <div className="p-8 text-center text-sm text-gray-400">
               No notifications match your filters.
             </div>
-          ) : 
-          {/* TODO: Ensure notification records are rendered from backend-loaded state once API integration is complete. */}
-          (
+          ) : (
+            // TODO: Ensure notification records are rendered from backend-loaded state once API integration is complete.
             filtered.map(n => (
               <div key={n.id} className="px-4 py-4 flex items-start gap-4">
 

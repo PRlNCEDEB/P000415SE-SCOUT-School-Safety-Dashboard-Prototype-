@@ -2,6 +2,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 // TODO: Replace mock incident lookup with backend fetch by incident ID.
 import { incidents } from '../data/mockData'
+import { useAuth } from '../context/AuthContext'
 
 const priorityColors = {
   critical: 'bg-red-100 text-red-700',
@@ -42,6 +43,7 @@ const nextLabel = {
 export default function IncidentDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { isAdmin } = useAuth()
   const found = incidents.find(i => i.id === id)
   // TODO: Replace local-only status state with backend-backed incident status updates.
   const [status, setStatus] = useState(found?.status)
@@ -137,20 +139,26 @@ export default function IncidentDetail() {
         )}
       </div>
 
-      {/* Action Button */}
-      {nextStatus[status] && (
-        <button
-        // TODO: Persist status transition to backend before updating the UI.
-        // const handleStatusUpdate = async () => {
-        // call backend
-        // update UI on success
-        // show error on failure
-        //}
-          onClick={() => setStatus(nextStatus[status])}//onClick={handleStatusUpdate}
-          className="w-full py-3 bg-red-600 text-white font-medium rounded-xl hover:bg-red-700 transition-colors"
-        >
-          {nextLabel[status]}
-        </button>
+      {/* Action Button — admin only */}
+      {isAdmin ? (
+        nextStatus[status] && (
+          <button
+            // TODO: Persist status transition to backend before updating the UI.
+            // const handleStatusUpdate = async () => {
+            //   call backend
+            //   update UI on success
+            //   show error on failure
+            // }
+            onClick={() => setStatus(nextStatus[status])} // onClick={handleStatusUpdate}
+            className="w-full py-3 bg-red-600 text-white font-medium rounded-xl hover:bg-red-700 transition-colors"
+          >
+            {nextLabel[status]}
+          </button>
+        )
+      ) : (
+        <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 flex items-center gap-2 text-sm text-gray-500">
+          🔒 Status can only be updated by an Admin
+        </div>
       )}
 
       {status === 'archived' && (
