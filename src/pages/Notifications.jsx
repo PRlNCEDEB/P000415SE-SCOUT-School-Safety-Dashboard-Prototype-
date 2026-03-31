@@ -199,31 +199,34 @@ export default function Notifications() {
               No notifications match your filters.
             </div>
           ) : (
-            <>
-              {/* TODO: Ensure notification records are rendered from backend-loaded state once API integration is complete. */}
-              {filtered.map(n => (
-                <div key={n.id} className="px-4 py-4 flex items-start gap-4">
-                  <span className="text-xl mt-0.5">{typeIcons[n.type]}</span>
+            // TODO: Ensure notification records are rendered from backend-loaded state once API integration is complete.
+            filtered.map(n => (
+              <div key={n.id} className="px-4 py-4 flex items-start gap-4">
 
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-800">{n.incidentTitle}</p>
-                    <p className="text-xs text-gray-500 mt-0.5">
-                      👤 {n.recipientName} · 📧 {n.recipientEmail} · 📱 {n.recipientPhone}
-                    </p>
-                    <p className="text-xs text-gray-400 mt-0.5">🕐 {n.timestamp}</p>
-                  </div>
+                {/* Icon */}
+                <span className="text-xl mt-0.5">{typeIcons[n.type]}</span>
 
-                  <div className="flex flex-col gap-1.5 shrink-0 items-end">
-                    <span className={`text-xs px-2 py-0.5 rounded ${statusStyle[n.sms]}`}>
-                      📱 SMS {n.sms}
-                    </span>
-                    <span className={`text-xs px-2 py-0.5 rounded ${statusStyle[n.email]}`}>
-                      📧 Email {n.email}
-                    </span>
-                  </div>
+                {/* Main info */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-800">{n.incidentTitle}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    👤 {n.recipientName} · 📧 {n.recipientEmail} · 📱 {n.recipientPhone}
+                  </p>
+                  <p className="text-xs text-gray-400 mt-0.5">🕐 {n.timestamp}</p>
                 </div>
-              ))}
-            </>
+
+                {/* Channel statuses */}
+                <div className="flex flex-col gap-1.5 shrink-0 items-end">
+                  <span className={`text-xs px-2 py-0.5 rounded ${statusStyle[n.sms]}`}>
+                    📱 SMS {n.sms}
+                  </span>
+                  <span className={`text-xs px-2 py-0.5 rounded ${statusStyle[n.email]}`}>
+                    📧 Email {n.email}
+                  </span>
+                </div>
+
+              </div>
+            ))
           )}
         </div>
       </div>
