@@ -1,7 +1,5 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-// TODO: Replace mock incident data with incidents retrieved from the backend API.
-import { incidents } from '../data/mockData'
 
 const priorityColors = {
   critical: 'bg-red-100 text-red-700',
@@ -13,6 +11,7 @@ const priorityColors = {
 const statusColors = {
   triggered: 'bg-red-100 text-red-700',
   acknowledged: 'bg-blue-100 text-blue-700',
+  'in-progress': 'bg-purple-100 text-purple-700',
   resolved: 'bg-green-100 text-green-700',
   archived: 'bg-gray-100 text-gray-500',
 }
@@ -27,7 +26,7 @@ const typeIcons = {
   general: '📢',
 }
 
-export default function Incidents() {
+export default function Incidents({ incidents }) {
   const navigate = useNavigate()
   const [filterStatus, setFilterStatus] = useState('all')
   const [filterPriority, setFilterPriority] = useState('all')
@@ -78,6 +77,7 @@ export default function Incidents() {
           <option value="all">All Statuses</option>
           <option value="triggered">Triggered</option>
           <option value="acknowledged">Acknowledged</option>
+          <option value="in-progress">In Progress</option>
           <option value="resolved">Resolved</option>
           <option value="archived">Archived</option>
         </select>
