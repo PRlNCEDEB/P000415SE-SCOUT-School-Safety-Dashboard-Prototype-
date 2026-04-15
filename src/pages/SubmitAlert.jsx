@@ -23,9 +23,8 @@ const locations = [
   'Main Building', 'Cafeteria', 'Library', 'Car Park', 'Reception',
 ]
 
-export default function SubmitAlert() {
+export default function SubmitAlert({ onSubmitAlert }) {
   const navigate = useNavigate()
-  const [submitted, setSubmitted] = useState(false)
   const [form, setForm] = useState({
     type: '',
     priority: '',
@@ -34,6 +33,7 @@ export default function SubmitAlert() {
     location: '',
   })
   const [errors, setErrors] = useState({})
+  const [isSubmitting, setIsSubmitting] = useState(false)
  // TODO: Keep basic client-side validation here, but also validate all alert fields again on the backend before saving.
   const validate = () => {
     const e = {}
@@ -49,51 +49,23 @@ export default function SubmitAlert() {
     setErrors(prev => ({ ...prev, [field]: '' }))
   }
   // TODO: Replace local submit handling with a backend API request to create a new alert event.
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
+    if (isSubmitting) return
+
     const e2 = validate()
     if (Object.keys(e2).length > 0) {
       setErrors(e2)
       return
     }
-    // TODO: Show the success state only after the backend confirms the alert was saved and notifications were triggered.
-    setSubmitted(true)
-  }
 
-  if (submitted) {
-    return (
-      <div className="p-6 max-w-lg mx-auto">
-        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center">
-          <div className="text-5xl mb-4">✅</div>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">Alert Submitted</h2>
-          {/* TODO: Replace this mock success message with the actual backend/API submission result. */}
-          <p className="text-sm text-gray-500 mb-6">
-            Your alert has been logged and the safety team has been notified.
-          </p>
-          <div className="bg-gray-50 rounded-lg p-4 text-left mb-6 space-y-2">
-            <p className="text-xs text-gray-500">Summary</p>
-            <p className="text-sm text-gray-800"><strong>Type:</strong> {form.type}</p>
-            <p className="text-sm text-gray-800"><strong>Priority:</strong> {form.priority}</p>
-            <p className="text-sm text-gray-800"><strong>Title:</strong> {form.title}</p>
-            <p className="text-sm text-gray-800"><strong>Location:</strong> {form.location}</p>
-          </div>
-          <div className="flex gap-3">
-            <button
-              onClick={() => { setSubmitted(false); setForm({ type: '', priority: '', title: '', description: '', location: '' }) }}
-              className="flex-1 py-2 border border-gray-300 text-sm rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              Submit Another
-            </button>
-            <button
-              onClick={() => navigate('/')}
-              className="flex-1 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors"
-            >
-              Go to Dashboard
-            </button>
-          </div>
-        </div>
-      </div>
-    )
+    setIsSubmitting(true)
+    try {
+      const createdIncident = await Promise.resolve(onSubmitAlert(form))
+      navigate(`/incidents/${createdIncident.id}`)
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -206,9 +178,10 @@ export default function SubmitAlert() {
         {/* Submit */}
         <button
           onClick={handleSubmit}
-          className="w-full py-3 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition-colors"
+          disabled={isSubmitting}
+          className="w-full py-3 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
         >
-          🚨 Submit Alert
+          {isSubmitting ? 'Submitting...' : '🚨 Submit Alert'}
         </button>
 
       </div>

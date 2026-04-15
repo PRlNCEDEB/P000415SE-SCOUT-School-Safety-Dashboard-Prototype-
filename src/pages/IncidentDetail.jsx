@@ -1,7 +1,4 @@
 import { useParams, useNavigate } from 'react-router-dom'
-import { useState } from 'react'
-// TODO: Replace mock incident lookup with backend fetch by incident ID.
-import { incidents } from '../data/mockData'
 
 const priorityColors = {
   critical: 'bg-red-100 text-red-700',
@@ -39,12 +36,11 @@ const nextLabel = {
   resolved: 'Archive',
 }
 
-export default function IncidentDetail() {
+export default function IncidentDetail({ incidents, onUpdateIncidentStatus }) {
   const { id } = useParams()
   const navigate = useNavigate()
   const found = incidents.find(i => i.id === id)
-  // TODO: Replace local-only status state with backend-backed incident status updates.
-  const [status, setStatus] = useState(found?.status)
+  const status = found?.status
   // TODO: Add loading and error handling for backend incident fetch states.
   if (!found) {
     return (
@@ -146,7 +142,7 @@ export default function IncidentDetail() {
         // update UI on success
         // show error on failure
         //}
-          onClick={() => setStatus(nextStatus[status])}//onClick={handleStatusUpdate}
+          onClick={() => onUpdateIncidentStatus(found.id, nextStatus[status])}//onClick={handleStatusUpdate}
           className="w-full py-3 bg-red-600 text-white font-medium rounded-xl hover:bg-red-700 transition-colors"
         >
           {nextLabel[status]}
