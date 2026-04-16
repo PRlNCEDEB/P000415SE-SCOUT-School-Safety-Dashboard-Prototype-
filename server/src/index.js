@@ -3,7 +3,7 @@ const express = require('express')
 const cors = require('cors')
 const { initFirebase } = require('./db/firebase')
 
-const authRoutes = require('./middleware/authMiddleware')
+//const authRoutes = require('./middleware/authMiddleware')
 const incidentRoutes = require('./routes/incidents')
 const notificationRoutes = require('./routes/notifications')
 const analyticsRoutes = require('./routes/analytics')
@@ -23,7 +23,7 @@ app.use(express.json())
 initFirebase()
 
 // ── Routes ────────────────────────────────────────────────────────────────────
-app.use('/api/auth', authRoutes)
+//app.use('/api/auth', authRoutes)
 app.use('/api/incidents', incidentRoutes)
 app.use('/api/notifications', notificationRoutes)
 app.use('/api/analytics', analyticsRoutes)
