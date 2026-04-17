@@ -13,6 +13,7 @@ const priorityColors = {
 const statusColors = {
   triggered: 'bg-red-100 text-red-700',
   acknowledged: 'bg-blue-100 text-blue-700',
+  'in-progress': 'bg-purple-100 text-purple-700',
   resolved: 'bg-green-100 text-green-700',
   archived: 'bg-gray-100 text-gray-500',
 }
@@ -29,17 +30,17 @@ const typeIcons = {
 
 const nextStatus = {
   triggered: 'acknowledged',
-  acknowledged: 'resolved',
-  resolved: 'archived',
+  acknowledged: 'in-progress',
+  'in-progress': 'resolved',
 }
 
 const nextLabel = {
   triggered: 'Acknowledge',
-  acknowledged: 'Mark Resolved',
-  resolved: 'Archive',
+  acknowledged: 'Mark In Progress',
+  'in-progress': 'Mark Resolved',
 }
 
-export default function IncidentDetail() {
+export default function IncidentDetail({ incidents, onUpdateIncidentStatus }) {
   const { id } = useParams()
   const navigate = useNavigate()
   const { isAdmin } = useAuth()
@@ -130,7 +131,7 @@ export default function IncidentDetail() {
             <span className={`text-xs px-2 py-1 rounded ${priorityColors[found.priority]}`}>
               {found.priority}
             </span>
-            <span className={`text-xs px-2 py-1 rounded ${statusColors[status]}`}>
+            <span className={`text-xs px-2 py-1 rounded ${statusColors[status] || statusColors.archived}`}>
               {status}
             </span>
           </div>
@@ -198,7 +199,7 @@ export default function IncidentDetail() {
             //   update UI on success
             //   show error on failure
             // }
-            onClick={() => setStatus(nextStatus[status])} // onClick={handleStatusUpdate}
+            onClick={() => onUpdateIncidentStatus(found.id, nextStatus[status])} // onClick={handleStatusUpdate}
             className="w-full py-3 bg-red-600 text-white font-medium rounded-xl hover:bg-red-700 transition-colors"
           >
             {nextLabel[status]}
