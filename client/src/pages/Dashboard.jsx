@@ -1,6 +1,4 @@
 import { useNavigate } from 'react-router-dom'
-// TODO: Replace mock incident data with incidents fetched from backend
-import { incidents } from '../data/mockData'
 import QuickActions from '../components/QuickActions'
 
 const priorityColors = {
@@ -13,6 +11,7 @@ const priorityColors = {
 const statusColors = {
   triggered: 'bg-red-100 text-red-700',
   acknowledged: 'bg-blue-100 text-blue-700',
+  'in-progress': 'bg-purple-100 text-purple-700',
   resolved: 'bg-green-100 text-green-700',
   archived: 'bg-gray-100 text-gray-500',
 }
@@ -27,13 +26,14 @@ const typeIcons = {
   general: '📢',
 }
 
-export default function Dashboard() {
+export default function Dashboard({ incidents, onSubmitAlert }) {
   const navigate = useNavigate()
 
   const active = incidents.filter(i => i.status !== 'archived')
   const critical = active.filter(i => i.priority === 'critical').length
   const high = active.filter(i => i.priority === 'high').length
   const unacked = active.filter(i => i.status === 'triggered')
+  const recent = incidents.filter(i => i.status !== 'triggered')
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -54,7 +54,7 @@ export default function Dashboard() {
 
       {/* Quick Actions */}
       <div className="bg-white border border-gray-200 rounded-xl p-5 mb-6">
-        <QuickActions />
+        <QuickActions onSubmitAlert={onSubmitAlert} />
       </div>
 
       {/* Stat Cards */}
@@ -104,7 +104,7 @@ export default function Dashboard() {
           </button>
         </div>
         <div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100 overflow-hidden">
-          {incidents.map(i => (
+          {recent.map(i => (
             <div
               key={i.id}
               onClick={() => navigate(`/incidents/${i.id}`)}
