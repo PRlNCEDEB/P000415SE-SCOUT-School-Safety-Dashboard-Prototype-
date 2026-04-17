@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { getIncidentById } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 
 const priorityColors = {
@@ -42,9 +44,60 @@ export default function IncidentDetail({ incidents, onUpdateIncidentStatus }) {
   const { id } = useParams()
   const navigate = useNavigate()
   const { isAdmin } = useAuth()
-  const found = incidents.find(i => i.id === id)
-  const status = found?.status
-  // TODO: Add loading and error handling for backend incident fetch states.
+  const [incident, setIncident] = useState(null)
+  const [status, setStatus] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let isActive = true
+
+    async function loadIncident() {
+      setLoading(true)
+      setError('')
+
+      try {
+        const record = await getIncidentById(id)
+
+        if (isActive) {
+          setIncident(record)
+          setStatus(record?.status || '')
+        }
+      } catch (err) {
+        if (isActive) {
+          setError(err.message || 'Failed to load incident.')
+        }
+      } finally {
+        if (isActive) {
+          setLoading(false)
+        }
+      }
+    }
+
+    loadIncident()
+
+    return () => {
+      isActive = false
+    }
+  }, [id])
+
+  const found = incident
+
+  if (loading) {
+    return <div className="p-6 text-center text-gray-500">Loading incident...</div>
+  }
+
+  if (error) {
+    return (
+      <div className="p-6 text-center text-gray-500">
+        {error}{' '}
+        <button onClick={() => navigate('/incidents')} className="text-blue-600 hover:underline">
+          Go back
+        </button>
+      </div>
+    )
+  }
+
   if (!found) {
     return (
       <div className="p-6 text-center text-gray-500">

@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { getIncidents } from '../api/client'
 
 const priorityColors = {
   critical: 'bg-red-100 text-red-700',
@@ -28,12 +29,44 @@ const typeIcons = {
 
 export default function Incidents({ incidents }) {
   const navigate = useNavigate()
+  const [incidents, setIncidents] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
   const [filterPriority, setFilterPriority] = useState('all')
   const [search, setSearch] = useState('')
 
-  // TODO: Move incident filtering and search to backend query parameters
-  // when integrating with the API, so the server returns only the required records.
+  useEffect(() => {
+    let isActive = true
+
+    async function loadIncidents() {
+      setLoading(true)
+      setError('')
+
+      try {
+        const records = await getIncidents()
+
+        if (isActive) {
+          setIncidents(records)
+        }
+      } catch (err) {
+        if (isActive) {
+          setError(err.message || 'Failed to load incidents.')
+        }
+      } finally {
+        if (isActive) {
+          setLoading(false)
+        }
+      }
+    }
+
+    loadIncidents()
+
+    return () => {
+      isActive = false
+    }
+  }, [])
+
   const filtered = incidents.filter(i => {
     const matchStatus = filterStatus === 'all' || i.status === filterStatus
     const matchPriority = filterPriority === 'all' || i.priority === filterPriority
@@ -49,8 +82,9 @@ export default function Incidents({ incidents }) {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Incident Log</h1>
-          {/* TODO: Replace the mock total count with the total number of incidents returned by the backend API. */}
-          <p className="text-sm text-gray-500">{incidents.length} total incidents</p>
+          <p className="text-sm text-gray-500">
+            {loading ? 'Loading incidents...' : `${incidents.length} total incidents`}
+          </p>
         </div>
         <button
           onClick={() => navigate('/submit')}
@@ -96,7 +130,11 @@ export default function Incidents({ incidents }) {
 
       {/* List */}
       <div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100 overflow-hidden">
-        {filtered.length === 0 ? (
+        {loading ? (
+          <div className="p-8 text-center text-sm text-gray-500">Loading incidents...</div>
+        ) : error ? (
+          <div className="p-8 text-center text-sm text-red-600">{error}</div>
+        ) : filtered.length === 0 ? (
           <div className="p-8 text-center text-sm text-gray-500">No incidents found.</div>
         ) : (
           filtered.map(i => (
