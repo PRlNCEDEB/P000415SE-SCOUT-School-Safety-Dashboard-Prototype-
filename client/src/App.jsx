@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { useState } from 'react'
 import { AuthProvider } from './context/AuthContext'
+import Login from './pages/Login'
 import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
 import Incidents from './pages/Incidents'
@@ -42,6 +43,7 @@ function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
+          <Route path="/login" element={<Login />} />
           <Route path="/" element={<Layout><Dashboard incidents={incidents} onSubmitAlert={handleSubmitAlert} /></Layout>} />
           <Route path="/incidents" element={<Layout><Incidents incidents={incidents} /></Layout>} />
           <Route path="/incidents/:id" element={<Layout><IncidentDetail incidents={incidents} onUpdateIncidentStatus={handleUpdateIncidentStatus} /></Layout>} />
