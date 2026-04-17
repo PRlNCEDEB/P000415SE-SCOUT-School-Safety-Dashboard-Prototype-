@@ -393,10 +393,10 @@ export default function QuickActions({ onSubmitAlert }) {
                     </div>
                     <div className="flex gap-1">
                       <span className={`text-xs px-2 py-0.5 rounded ${result.emailStatus === 'sent' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                        📧 {r.emailStatus}
+                        📧 {result.emailStatus}
                       </span>
                       <span className={`text-xs px-2 py-0.5 rounded ${result.smsStatus === 'sent' ? 'bg-green-100 text-green-700' : result.smsStatus === 'skipped' ? 'bg-gray-100 text-gray-500' : 'bg-red-100 text-red-700'}`}>
-                       📱 {r.smsStatus}
+                       📱 {result.smsStatus}
                       </span>
                     </div>
                   </div>
