@@ -4,9 +4,9 @@ import { useAuth } from '../context/AuthContext'
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'
 
 const emergencyTypes = [
-  { value: 'Natural Disaster', icon: 'ND', desc: 'Earthquake, flood, severe weather' },
-  { value: 'Fire', icon: 'FR', desc: 'Fire emergency or smoke detected' },
-  { value: 'Threat', icon: 'TH', desc: 'Security threat or lockdown' },
+  { value: 'Natural Disaster', icon: '🌊', desc: 'Earthquake, flood, severe weather' },
+  { value: 'Fire', icon: '🔥', desc: 'Fire emergency or smoke detected' },
+  { value: 'Threat', icon: '🛡️', desc: 'Security threat or lockdown' },
 ]
 
 export default function QuickActions({ onSubmitAlert }) {
@@ -174,9 +174,9 @@ export default function QuickActions({ onSubmitAlert }) {
           </span>
           <div className="text-4xl font-bold text-red-700 mb-3 text-center">1</div>
           <div className="space-y-1">
-            <p className="text-xs text-red-700">Email notification</p>
-            <p className="text-xs text-red-700">SMS notification</p>
-            <p className="text-xs text-red-700">Create incident record</p>
+             <p className="text-xs text-red-700">📧 Send Email</p>
+            <p className="text-xs text-red-700">📱 Send SMS</p>
+            <p className="text-xs text-red-700">🗄️ Create Record</p>
           </div>
         </button>
 
@@ -186,15 +186,15 @@ export default function QuickActions({ onSubmitAlert }) {
         >
           <div className="text-4xl font-bold text-gray-700 mb-3 text-center">2</div>
           <div className="space-y-1">
-            <p className="text-xs text-gray-600">Email notification</p>
-            <p className="text-xs text-gray-600">Create incident record</p>
+             <p className="text-xs text-gray-600">📧 Send Email</p>
+            <p className="text-xs text-gray-600">🗄️ Create Record</p>
           </div>
         </button>
       </div>
 
       {feedback && (
         <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3 flex items-center gap-2">
-          <span className="text-green-600">OK</span>
+         <span className="text-green-600">✅</span>
           <div>
             <p className="text-sm font-semibold text-green-900">Action {feedback.button} triggered</p>
             <p className="text-xs text-green-700">{feedback.actions} completed</p>
@@ -229,7 +229,7 @@ export default function QuickActions({ onSubmitAlert }) {
                     <p className="text-sm text-gray-400 italic">No details added</p>
                   )}
                   {log.description && <p className="text-xs text-gray-500 mt-0.5">{log.description}</p>}
-                  {log.location && <p className="text-xs text-gray-400">Location: {log.location}</p>}
+                  {log.location && <p className="text-xs text-gray-400">📍 {log.location}</p>}
                   <p className="text-xs text-gray-400 mt-0.5">{log.actions.join(' + ')} - {log.timestamp}</p>
                 </div>
                 {isAdmin && (
@@ -254,7 +254,7 @@ export default function QuickActions({ onSubmitAlert }) {
           <div className="absolute inset-0 bg-black bg-opacity-40" onClick={() => setShowConfirm(false)} />
           <div className="relative bg-white border-2 border-red-500 rounded-xl p-6 max-w-md w-full shadow-xl">
             <div className="flex items-start gap-3 mb-4">
-              <div className="p-2 bg-red-100 rounded-lg">!</div>
+               <div className="p-2 bg-red-100 rounded-lg">⚠️</div>
               <div>
                 <h4 className="font-semibold text-gray-900">Emergency Alert Confirmation</h4>
                 <p className="text-sm text-gray-500 mt-1">
@@ -366,7 +366,7 @@ export default function QuickActions({ onSubmitAlert }) {
                   loading || code.length !== 3 ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-red-600 text-white hover:bg-red-700'
                 }`}
               >
-                {loading ? 'Sending...' : 'Send Alert'}
+                {loading ? 'Sending...' : '🚨 Send Alert'}
               </button>
             </div>
           </div>
@@ -378,7 +378,7 @@ export default function QuickActions({ onSubmitAlert }) {
           <div className="absolute inset-0 bg-black bg-opacity-40" onClick={() => setShowResult(null)} />
           <div className="relative bg-white border border-gray-200 rounded-xl p-6 max-w-md w-full shadow-xl">
             <div className="text-center mb-4">
-              <div className="text-4xl mb-2">OK</div>
+              <div className="text-4xl mb-2">✅</div>
               <h4 className="font-bold text-gray-900">Emergency Alert Sent</h4>
               <p className="text-sm text-gray-500 mt-1">{showResult.message}</p>
             </div>
@@ -393,10 +393,10 @@ export default function QuickActions({ onSubmitAlert }) {
                     </div>
                     <div className="flex gap-1">
                       <span className={`text-xs px-2 py-0.5 rounded ${result.emailStatus === 'sent' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                        Email {result.emailStatus}
+                        📧 {r.emailStatus}
                       </span>
                       <span className={`text-xs px-2 py-0.5 rounded ${result.smsStatus === 'sent' ? 'bg-green-100 text-green-700' : result.smsStatus === 'skipped' ? 'bg-gray-100 text-gray-500' : 'bg-red-100 text-red-700'}`}>
-                        SMS {result.smsStatus}
+                       📱 {r.smsStatus}
                       </span>
                     </div>
                   </div>
@@ -467,6 +467,7 @@ export default function QuickActions({ onSubmitAlert }) {
           </div>
         </div>
       )}
+      
     </div>
   )
 }

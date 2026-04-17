@@ -15,6 +15,12 @@ const emergencyRecipients = [
     email: 'debprince21@gmail.com',
     phone: '+61422262896'
   },
+  {
+    name: 'Jacky',
+    team: 'General',
+    email: 'east.horng27@gmail.com',
+    phone: '+61472578362'
+  },
   // Add more recipients:
   // { name: 'Principal', team: 'Management', email: 'principal@school.edu', phone: '+61400000001' },
   // { name: 'First Aid Officer', team: 'Medical', email: 'firstaid@school.edu', phone: '+61400000002' },

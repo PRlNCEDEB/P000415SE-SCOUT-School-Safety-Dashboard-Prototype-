@@ -17,13 +17,13 @@ const statusColors = {
 }
 
 const typeIcons = {
-  medical: 'MED',
-  behaviour: 'BHV',
-  fire: 'FIR',
-  lockdown: 'LCK',
-  weather: 'WEA',
-  maintenance: 'MNT',
-  general: 'GEN',
+   medical: '🏥',
+  behaviour: '⚠️',
+  fire: '🔥',
+  lockdown: '🔒',
+  weather: '🌩️',
+  maintenance: '🔧',
+  general: '📢',
 }
 
 export default function Dashboard({ incidents, onSubmitAlert }) {
@@ -46,7 +46,7 @@ export default function Dashboard({ incidents, onSubmitAlert }) {
           onClick={() => navigate('/submit')}
           className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors"
         >
-          + Submit Alert
+          ➕ Submit Alert
         </button>
       </div>
 
@@ -55,10 +55,10 @@ export default function Dashboard({ incidents, onSubmitAlert }) {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <StatCard label="Active Incidents" value={active.length} color="text-gray-700" icon="ACT" />
-        <StatCard label="Critical" value={critical} color="text-red-600" icon="CRT" />
-        <StatCard label="High Priority" value={high} color="text-orange-600" icon="HI" />
-        <StatCard label="Avg Response" value="4.2m" color="text-blue-600" icon="AVG" />
+          <StatCard label="Active Incidents" value={active.length} color="text-gray-700" icon="🚨" />
+        <StatCard label="Critical" value={critical} color="text-red-600" icon="⚡" />
+        <StatCard label="High Priority" value={high} color="text-orange-600" icon="🚩" />
+        <StatCard label="Avg Response" value="4.2m" color="text-blue-600" icon="⏱️" />
       </div>
 
       {unacked.length > 0 && (
