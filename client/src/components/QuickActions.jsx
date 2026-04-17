@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { useAuth } from '../context/AuthContext'
 
 const emergencyTypes = [
   { value: 'Natural Disaster', icon: '🌊', desc: 'Earthquake, flood, severe weather' },
@@ -11,7 +10,6 @@ export default function QuickActions() {
   const { isAdmin } = useAuth()
   const [logs, setLogs] = useState([])
   const [feedback, setFeedback] = useState(null)
-  const [showConfirm, setShowConfirm] = useState(false)
   const [showCategory, setShowCategory] = useState(false)
   const [showKeypad, setShowKeypad] = useState(false)
   const [selectedType, setSelectedType] = useState(null)
@@ -95,6 +93,20 @@ export default function QuickActions() {
     }
 
     setLoading(false)
+  }
+
+  const handleCloseVerification = () => {
+    setShowEmergencyVerification(false)
+    setPendingEmergencyType(null)
+    setVerificationCode('')
+    setVerificationError('')
+  }
+
+  const handleBackToEmergencyType = () => {
+    setShowEmergencyVerification(false)
+    setVerificationCode('')
+    setVerificationError('')
+    setShowCategory(true)
   }
 
   const handleAction2 = () => {
@@ -230,7 +242,7 @@ export default function QuickActions() {
           <div className="absolute inset-0 bg-black bg-opacity-40" onClick={() => setShowCategory(false)} />
           <div className="relative bg-white border border-gray-200 rounded-xl p-6 max-w-md w-full shadow-xl">
             <div className="flex items-center justify-between mb-4">
-              <h4 className="font-semibold text-gray-900">Select Emergency Type</h4>
+              <h4 className="text-lg font-bold text-gray-900">Select Emergency Type</h4>
               <button onClick={() => setShowCategory(false)} className="text-gray-400 hover:text-gray-600">✕</button>
             </div>
             <p className="text-sm text-gray-500 mb-4">Choose the category that best describes this emergency:</p>
@@ -337,11 +349,11 @@ export default function QuickActions() {
       {/* Edit Details Modal */}
       {editingId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black bg-opacity-30" onClick={() => setEditingId(null)} />
-          <div className="relative bg-white border border-gray-200 rounded-xl p-6 max-w-md w-full shadow-lg">
+          <div className="absolute inset-0 bg-black bg-opacity-40" onClick={() => setShowStandardCategory(false)} />
+          <div className="relative bg-white border border-gray-200 rounded-xl p-6 max-w-md w-full shadow-xl">
             <div className="flex items-center justify-between mb-4">
-              <h4 className="font-semibold text-gray-900">Add Details to Record</h4>
-              <button onClick={() => setEditingId(null)} className="text-gray-400 hover:text-gray-600">✕</button>
+              <h4 className="text-lg font-bold text-gray-900">Select Alert Type 2 Category</h4>
+              <button onClick={() => setShowStandardCategory(false)} className="text-gray-400 hover:text-gray-600">✕</button>
             </div>
             <div className="space-y-4">
               <div>
@@ -361,6 +373,52 @@ export default function QuickActions() {
               <button onClick={() => setEditingId(null)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">Cancel</button>
               <button onClick={handleSaveEdit} className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors">💾 Save Details</button>
             </div>
+            <p className="text-sm text-gray-500 mb-3">Enter the 4-digit code to submit this emergency alert.</p>
+            <input
+              type="password"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              maxLength={4}
+              value={verificationCode}
+              onChange={(e) => {
+                const numericValue = e.target.value.replace(/\D/g, '').slice(0, 4)
+                setVerificationCode(numericValue)
+                setVerificationError('')
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  handleEmergencyVerificationSubmit()
+                }
+              }}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 mb-2"
+              placeholder="••••"
+            />
+            {verificationError && <p className="text-xs text-red-500 mb-3">{verificationError}</p>}
+            <button
+              onClick={handleEmergencyVerificationSubmit}
+              className="w-full py-2.5 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition-colors"
+            >
+              Verify and Submit
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Success Modal */}
+      {showEmergencySuccess && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black bg-opacity-40" onClick={() => setShowEmergencySuccess(false)} />
+          <div className="relative bg-white border border-gray-200 rounded-xl p-6 max-w-sm w-full shadow-xl text-center">
+            <div className="text-4xl mb-2">✅</div>
+            <h4 className="text-lg font-bold text-gray-900 mb-2">Incident Submitted</h4>
+            <p className="text-sm text-gray-500 mb-4">The incident was submitted successfully.</p>
+            <button
+              onClick={() => setShowEmergencySuccess(false)}
+              className="w-full py-2.5 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition-colors"
+            >
+              OK
+            </button>
           </div>
         </div>
       )}

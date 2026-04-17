@@ -1,7 +1,6 @@
+import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { useState } from 'react'
-// TODO: Replace mock incident lookup with backend fetch by incident ID.
-import { incidents } from '../data/mockData'
+import { getIncidentById } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 
 const priorityColors = {
@@ -14,6 +13,7 @@ const priorityColors = {
 const statusColors = {
   triggered: 'bg-red-100 text-red-700',
   acknowledged: 'bg-blue-100 text-blue-700',
+  'in-progress': 'bg-purple-100 text-purple-700',
   resolved: 'bg-green-100 text-green-700',
   archived: 'bg-gray-100 text-gray-500',
 }
@@ -30,24 +30,74 @@ const typeIcons = {
 
 const nextStatus = {
   triggered: 'acknowledged',
-  acknowledged: 'resolved',
-  resolved: 'archived',
+  acknowledged: 'in-progress',
+  'in-progress': 'resolved',
 }
 
 const nextLabel = {
   triggered: 'Acknowledge',
-  acknowledged: 'Mark Resolved',
-  resolved: 'Archive',
+  acknowledged: 'Mark In Progress',
+  'in-progress': 'Mark Resolved',
 }
 
-export default function IncidentDetail() {
+export default function IncidentDetail({ incidents, onUpdateIncidentStatus }) {
   const { id } = useParams()
   const navigate = useNavigate()
   const { isAdmin } = useAuth()
-  const found = incidents.find(i => i.id === id)
-  // TODO: Replace local-only status state with backend-backed incident status updates.
-  const [status, setStatus] = useState(found?.status)
-  // TODO: Add loading and error handling for backend incident fetch states.
+  const [incident, setIncident] = useState(null)
+  const [status, setStatus] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let isActive = true
+
+    async function loadIncident() {
+      setLoading(true)
+      setError('')
+
+      try {
+        const record = await getIncidentById(id)
+
+        if (isActive) {
+          setIncident(record)
+          setStatus(record?.status || '')
+        }
+      } catch (err) {
+        if (isActive) {
+          setError(err.message || 'Failed to load incident.')
+        }
+      } finally {
+        if (isActive) {
+          setLoading(false)
+        }
+      }
+    }
+
+    loadIncident()
+
+    return () => {
+      isActive = false
+    }
+  }, [id])
+
+  const found = incident
+
+  if (loading) {
+    return <div className="p-6 text-center text-gray-500">Loading incident...</div>
+  }
+
+  if (error) {
+    return (
+      <div className="p-6 text-center text-gray-500">
+        {error}{' '}
+        <button onClick={() => navigate('/incidents')} className="text-blue-600 hover:underline">
+          Go back
+        </button>
+      </div>
+    )
+  }
+
   if (!found) {
     return (
       <div className="p-6 text-center text-gray-500">
@@ -81,7 +131,7 @@ export default function IncidentDetail() {
             <span className={`text-xs px-2 py-1 rounded ${priorityColors[found.priority]}`}>
               {found.priority}
             </span>
-            <span className={`text-xs px-2 py-1 rounded ${statusColors[status]}`}>
+            <span className={`text-xs px-2 py-1 rounded ${statusColors[status] || statusColors.archived}`}>
               {status}
             </span>
           </div>
@@ -149,7 +199,7 @@ export default function IncidentDetail() {
             //   update UI on success
             //   show error on failure
             // }
-            onClick={() => setStatus(nextStatus[status])} // onClick={handleStatusUpdate}
+            onClick={() => onUpdateIncidentStatus(found.id, nextStatus[status])} // onClick={handleStatusUpdate}
             className="w-full py-3 bg-red-600 text-white font-medium rounded-xl hover:bg-red-700 transition-colors"
           >
             {nextLabel[status]}

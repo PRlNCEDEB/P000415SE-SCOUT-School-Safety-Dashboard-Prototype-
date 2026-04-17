@@ -1,13 +1,9 @@
-import { Link, useLocation, useNavigate, Navigate } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 export default function Layout({ children }) {
   const location = useLocation()
-  const navigate = useNavigate()
   const { currentUser, logout, isAdmin } = useAuth()
-
-  // Redirect to login if not logged in
-  if (!currentUser) return <Navigate to="/login" />
 
   // TODO: Load visible navigation items based on the authenticated user's role/permissions.
   const navItems = [
@@ -80,12 +76,12 @@ export default function Layout({ children }) {
             </div>
             <p className="text-xs text-gray-400">{currentUser.email}</p>
           </div>
-          {/* TODO: Replace redirect-only logout with backend/session logout and clear stored auth data before navigating to login. */}
+          {/* TODO: Replace mock logout with real backend/session sign-out once auth is implemented. */}
           <button
-            onClick={() => { logout(); navigate('/login') }}
+            onClick={logout}
             className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100 transition-colors"
           >
-            <span>🚪</span> Logout
+            <span>🔄</span> Reset Session
           </button>
         </div>
 

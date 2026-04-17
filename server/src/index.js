@@ -3,7 +3,7 @@ const express = require('express')
 const cors = require('cors')
 const { initFirebase } = require('./db/firebase')
 
-//const authRoutes = require('./middleware/authMiddleware')
+const authRoutes = require('./routes/auth')
 const incidentRoutes = require('./routes/incidents')
 const notificationRoutes = require('./routes/notifications')
 const analyticsRoutes = require('./routes/analytics')
