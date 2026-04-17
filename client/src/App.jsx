@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { useState } from 'react'
 import { AuthProvider } from './context/AuthContext'
 import Login from './pages/Login'
@@ -43,8 +43,9 @@ function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
+          <Route path="/" element={<Navigate to="/login" replace />} />
           <Route path="/login" element={<Login />} />
-          <Route path="/" element={<Layout><Dashboard incidents={incidents} onSubmitAlert={handleSubmitAlert} /></Layout>} />
+          <Route path="/dashboard" element={<Layout><Dashboard incidents={incidents} onSubmitAlert={handleSubmitAlert} /></Layout>} />
           <Route path="/incidents" element={<Layout><Incidents incidents={incidents} /></Layout>} />
           <Route path="/incidents/:id" element={<Layout><IncidentDetail incidents={incidents} onUpdateIncidentStatus={handleUpdateIncidentStatus} /></Layout>} />
           <Route path="/submit" element={<Layout><SubmitAlert onSubmitAlert={handleSubmitAlert} /></Layout>} />

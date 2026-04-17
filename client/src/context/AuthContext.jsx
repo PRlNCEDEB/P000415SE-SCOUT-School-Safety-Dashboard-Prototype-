@@ -8,7 +8,7 @@ const mockUsers = [
 ]
 
 export function AuthProvider({ children }) {
-  const [currentUser, setCurrentUser] = useState(mockUsers[0])
+  const [currentUser, setCurrentUser] = useState(null)
 
   const login = (email, password) => {
     const found = mockUsers.find(u => u.email === email && u.password === password)
@@ -19,8 +19,7 @@ export function AuthProvider({ children }) {
     return { success: false, message: 'Invalid email or password' }
   }
 
-  // Sign-in page removed: keep a default authenticated session.
-  const logout = () => setCurrentUser(mockUsers[0])
+  const logout = () => setCurrentUser(null)
 
   return (
     <AuthContext.Provider value={{ currentUser, login, logout, isAdmin: currentUser?.role === 'admin' }}>
