@@ -27,7 +27,7 @@ const typeIcons = {
   general: '📢',
 }
 
-export default function Incidents({ incidents }) {
+export default function Incidents() {
   const navigate = useNavigate()
   const [incidents, setIncidents] = useState([])
   const [loading, setLoading] = useState(true)
