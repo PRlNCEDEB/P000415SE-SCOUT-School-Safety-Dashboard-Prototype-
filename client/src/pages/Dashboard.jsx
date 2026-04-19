@@ -1,4 +1,6 @@
 import { useNavigate } from 'react-router-dom'
+// TODO: Replace mock incident data with incidents fetched from backend
+import { incidents } from '../data/mockData'
 import QuickActions from '../components/QuickActions'
 
 const priorityColors = {
@@ -11,13 +13,12 @@ const priorityColors = {
 const statusColors = {
   triggered: 'bg-red-100 text-red-700',
   acknowledged: 'bg-blue-100 text-blue-700',
-  'in-progress': 'bg-purple-100 text-purple-700',
   resolved: 'bg-green-100 text-green-700',
   archived: 'bg-gray-100 text-gray-500',
 }
 
 const typeIcons = {
-   medical: '🏥',
+  medical: '🏥',
   behaviour: '⚠️',
   fire: '🔥',
   lockdown: '🔒',
@@ -26,17 +27,18 @@ const typeIcons = {
   general: '📢',
 }
 
-export default function Dashboard({ incidents, onSubmitAlert }) {
+export default function Dashboard() {
   const navigate = useNavigate()
 
-  const active = incidents.filter(incident => incident.status !== 'archived')
-  const critical = active.filter(incident => incident.priority === 'critical').length
-  const high = active.filter(incident => incident.priority === 'high').length
-  const unacked = active.filter(incident => incident.status === 'triggered')
-  const recent = incidents.filter(incident => incident.status !== 'triggered')
+  const active = incidents.filter(i => i.status !== 'archived')
+  const critical = active.filter(i => i.priority === 'critical').length
+  const high = active.filter(i => i.priority === 'high').length
+  const unacked = active.filter(i => i.status === 'triggered')
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
+
+      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
@@ -50,17 +52,21 @@ export default function Dashboard({ incidents, onSubmitAlert }) {
         </button>
       </div>
 
+      {/* Quick Actions */}
       <div className="bg-white border border-gray-200 rounded-xl p-5 mb-6">
-        <QuickActions onSubmitAlert={onSubmitAlert} />
+        <QuickActions />
       </div>
 
+      {/* Stat Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <StatCard label="Active Incidents" value={active.length} color="text-gray-700" icon="🚨" />
+        <StatCard label="Active Incidents" value={active.length} color="text-gray-700" icon="🚨" />
         <StatCard label="Critical" value={critical} color="text-red-600" icon="⚡" />
         <StatCard label="High Priority" value={high} color="text-orange-600" icon="🚩" />
+        {/* TODO: Replace hardcoded average response time with backend-calculated metric. */}
         <StatCard label="Avg Response" value="4.2m" color="text-blue-600" icon="⏱️" />
       </div>
 
+      {/* Unacknowledged Alerts */}
       {unacked.length > 0 && (
         <div className="mb-6">
           <div className="flex items-center gap-2 mb-2">
@@ -69,19 +75,19 @@ export default function Dashboard({ incidents, onSubmitAlert }) {
             <span className="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded">{unacked.length}</span>
           </div>
           <div className="space-y-2">
-            {unacked.map(incident => (
+            {unacked.map(i => (
               <div
-                key={incident.id}
-                onClick={() => navigate(`/incidents/${incident.id}`)}
+                key={i.id}
+                onClick={() => navigate(`/incidents/${i.id}`)}
                 className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 flex items-center gap-3 cursor-pointer hover:bg-red-100 transition-colors"
               >
-                <span className="text-xs font-semibold text-gray-600">{typeIcons[incident.type] || 'GEN'}</span>
+                <span>{typeIcons[i.type]}</span>
                 <div className="flex-1">
-                  <p className="text-sm text-red-900">{incident.title}</p>
-                  <p className="text-xs text-red-600">{incident.location} - {incident.timestamp}</p>
+                  <p className="text-sm text-red-900">{i.title}</p>
+                  <p className="text-xs text-red-600">{i.location} · {i.timestamp}</p>
                 </div>
-                <span className={`text-xs px-2 py-0.5 rounded ${priorityColors[incident.priority]}`}>
-                  {incident.priority}
+                <span className={`text-xs px-2 py-0.5 rounded ${priorityColors[i.priority]}`}>
+                  {i.priority}
                 </span>
               </div>
             ))}
@@ -89,6 +95,7 @@ export default function Dashboard({ incidents, onSubmitAlert }) {
         </div>
       )}
 
+      {/* Recent Incidents */}
       <div>
         <div className="flex items-center justify-between mb-2">
           <h2 className="font-semibold text-gray-900">Recent Incidents</h2>
@@ -97,28 +104,29 @@ export default function Dashboard({ incidents, onSubmitAlert }) {
           </button>
         </div>
         <div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100 overflow-hidden">
-          {recent.map(incident => (
+          {incidents.map(i => (
             <div
-              key={incident.id}
-              onClick={() => navigate(`/incidents/${incident.id}`)}
+              key={i.id}
+              onClick={() => navigate(`/incidents/${i.id}`)}
               className="px-4 py-3 flex items-center gap-3 cursor-pointer hover:bg-gray-50 transition-colors"
             >
-              <span className="text-xs font-semibold text-gray-600">{typeIcons[incident.type] || 'GEN'}</span>
+              <span>{typeIcons[i.type]}</span>
               <div className="flex-1">
-                <p className="text-sm text-gray-800">{incident.title}</p>
-                <p className="text-xs text-gray-500">{incident.location} - {incident.timestamp} - {incident.triggeredByName}</p>
+                <p className="text-sm text-gray-800">{i.title}</p>
+                <p className="text-xs text-gray-500">{i.location} · {i.timestamp} · {i.triggeredByName}</p>
               </div>
-              <span className={`text-xs px-2 py-0.5 rounded ${priorityColors[incident.priority]}`}>
-                {incident.priority}
+              <span className={`text-xs px-2 py-0.5 rounded ${priorityColors[i.priority]}`}>
+                {i.priority}
               </span>
-              <span className={`text-xs px-2 py-0.5 rounded ${statusColors[incident.status]}`}>
-                {incident.status}
+              <span className={`text-xs px-2 py-0.5 rounded ${statusColors[i.status]}`}>
+                {i.status}
               </span>
-              <span className="text-gray-400">&gt;</span>
+              <span className="text-gray-400">›</span>
             </div>
           ))}
         </div>
       </div>
+
     </div>
   )
 }
@@ -126,7 +134,7 @@ export default function Dashboard({ incidents, onSubmitAlert }) {
 function StatCard({ label, value, color, icon }) {
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-4">
-      <div className="mb-1 text-xs font-semibold text-gray-500">{icon}</div>
+      <div className="mb-1">{icon}</div>
       <div className={`text-2xl font-semibold ${color}`}>{value}</div>
       <div className="text-xs text-gray-500">{label}</div>
     </div>

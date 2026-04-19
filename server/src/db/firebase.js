@@ -22,9 +22,10 @@ function initFirebase() {
   )
 
   if (!fs.existsSync(serviceAccountPath)) {
-    console.error('❌ Firebase service account file not found at:', serviceAccountPath)
-    console.error('   Download it from: Firebase Console → Project Settings → Service Accounts')
-    process.exit(1)
+    console.warn('⚠️ Firebase service account file not found at:', serviceAccountPath)
+    console.warn('   Running backend in local mock-data mode.')
+    db = { collection: () => ({}) }
+    return db
   }
 
   const serviceAccount = require(serviceAccountPath)
