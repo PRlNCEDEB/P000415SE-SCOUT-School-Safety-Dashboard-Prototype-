@@ -12,6 +12,7 @@ const priorityColors = {
 const statusColors = {
   triggered: 'bg-red-100 text-red-700',
   acknowledged: 'bg-blue-100 text-blue-700',
+  'in-progress': 'bg-purple-100 text-purple-700',
   resolved: 'bg-green-100 text-green-700',
   archived: 'bg-gray-100 text-gray-500',
 }
@@ -110,6 +111,7 @@ export default function Incidents() {
           <option value="all">All Statuses</option>
           <option value="triggered">Triggered</option>
           <option value="acknowledged">Acknowledged</option>
+          <option value="in-progress">In Progress</option>
           <option value="resolved">Resolved</option>
           <option value="archived">Archived</option>
         </select>

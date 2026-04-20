@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+client/node_modules/
+server/node_modules/
+
+# Build output and caches
+dist/
+client/dist/
+dist-ssr/
+.vite/
+client/.vite/
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Local env files
+.env
+.env.local
+client/.env
+server/.env
+
+# Secrets
+server/firebase-service-account.json
+
+# Local files
+*.local
+src.zip
+
+# Editor and OS files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+Thumbs.db
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

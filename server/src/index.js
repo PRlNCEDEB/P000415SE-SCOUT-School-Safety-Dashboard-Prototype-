@@ -23,7 +23,7 @@ app.use(express.json())
 initFirebase()
 
 // ── Routes ────────────────────────────────────────────────────────────────────
-app.use('/api/auth', authRoutes)
+//app.use('/api/auth', authRoutes)
 app.use('/api/incidents', incidentRoutes)
 app.use('/api/notifications', notificationRoutes)
 app.use('/api/analytics', analyticsRoutes)
