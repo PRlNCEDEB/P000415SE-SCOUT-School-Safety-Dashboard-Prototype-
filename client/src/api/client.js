@@ -1,39 +1,40 @@
-const API_BASE = 'http://localhost:3001/api'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'
 
-export async function apiCall(endpoint, options = {}) {
-  const token = localStorage.getItem('auth_token')
-  const headers = {
-    'Content-Type': 'application/json',
-    ...options.headers,
-  }
-  if (token) headers.Authorization = `Bearer ${token}`
-
-  const res = await fetch(`${API_BASE}${endpoint}`, {
+async function request(path, options = {}) {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    headers: {
+      'Content-Type': 'application/json',
+      ...(options.headers || {}),
+    },
     ...options,
-    headers,
   })
-  
-  if (!res.ok) {
-    if (res.status === 401) localStorage.removeItem('auth_token')
-    throw new Error(`API error: ${res.status}`)
+
+  if (!response.ok) {
+    let message = 'Request failed.'
+
+    try {
+      const payload = await response.json()
+      message = payload.error || message
+    } catch {
+      // Keep the fallback message when the error response is not JSON.
+    }
+
+    throw new Error(message)
   }
-  return res.json()
+
+  if (response.status === 204) {
+    return null
+  }
+
+  return response.json()
 }
 
-export const authAPI = {
-  login: (email, password) => 
-    apiCall('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
-  me: () => apiCall('/auth/me'),
+export async function getIncidents() {
+  const data = await request('/incidents')
+  return data.incidents || []
 }
 
-export const incidentAPI = {
-  create: (data) => 
-    apiCall('/incidents', { method: 'POST', body: JSON.stringify(data) }),
-  list: () => apiCall('/incidents'),
-  updateStatus: (id, status) => 
-    apiCall(`/incidents/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+export async function getIncidentById(id) {
+  const data = await request(`/incidents/${id}`)
+  return data.incident || null
 }
-
-// Named exports used by page components
-export const getIncidents = () => apiCall('/incidents')
-export const getIncidentById = (id) => apiCall(`/incidents/${id}`)
