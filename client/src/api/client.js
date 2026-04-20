@@ -1,4 +1,4 @@
-const API_BASE = 'http://localhost:3001/api'
+const API_BASE = 'http://localhost:5000/api'
 
 export async function apiCall(endpoint, options = {}) {
   const token = localStorage.getItem('auth_token')
@@ -29,11 +29,21 @@ export const authAPI = {
 export const incidentAPI = {
   create: (data) => 
     apiCall('/incidents', { method: 'POST', body: JSON.stringify(data) }),
-  list: () => apiCall('/incidents'),
+  list: () => apiCall('/incidents').then(data => data.incidents ?? data),
   updateStatus: (id, status) => 
     apiCall(`/incidents/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
 }
 
+export const analyticsAPI = {
+  summary: () => apiCall('/analytics/summary'),
+  byType: () => apiCall('/analytics/by-type'),
+  statusBreakdown: () => apiCall('/analytics/status-breakdown'),
+  byLocation: () => apiCall('/analytics/by-location'),
+  thisWeek: () => apiCall('/analytics/this-week'),
+  responseTimeTrend: () => apiCall('/analytics/response-time-trend'),
+  all: () => apiCall('/analytics/all'),
+}
+
 // Named exports used by page components
-export const getIncidents = () => apiCall('/incidents')
+export const getIncidents = () => apiCall('/incidents').then(data => data.incidents ?? data)
 export const getIncidentById = (id) => apiCall(`/incidents/${id}`)

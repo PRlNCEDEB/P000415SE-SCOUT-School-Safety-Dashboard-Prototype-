@@ -28,6 +28,9 @@ server/.env
 # Secrets
 server/firebase-service-account.json
 
+# Markdown source files
+*.md
+
 # Local files
 *.local
 src.zip

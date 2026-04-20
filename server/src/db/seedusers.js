@@ -19,7 +19,7 @@ const users = [
   {
       name: 'Murali User',
       email: 'gmd@school.edu',
-      password: 'gmd',
+      password: 'password123',
       role: 'user',
     },
 

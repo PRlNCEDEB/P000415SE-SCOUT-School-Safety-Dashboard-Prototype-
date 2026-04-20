@@ -1,5 +1,7 @@
 import { useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
 import QuickActions from '../components/QuickActions'
+import { incidentAPI } from '../api/client'
 
 const priorityColors = {
   critical: 'bg-red-100 text-red-700',
@@ -26,14 +28,41 @@ const typeIcons = {
   general: '📢',
 }
 
-export default function Dashboard({ incidents, onSubmitAlert }) {
+export default function Dashboard({ onSubmitAlert }) {
   const navigate = useNavigate()
+  const [incidents, setIncidents] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchIncidents = async () => {
+      try {
+        setLoading(true)
+        const data = await incidentAPI.list()
+        setIncidents(data)
+      } catch (error) {
+        console.error('Failed to fetch incidents:', error)
+        setIncidents([])
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchIncidents()
+  }, [])
 
   const active = incidents.filter(incident => incident.status !== 'archived')
   const critical = active.filter(incident => incident.priority === 'critical').length
   const high = active.filter(incident => incident.priority === 'high').length
   const unacked = active.filter(incident => incident.status === 'triggered')
   const recent = incidents.filter(incident => incident.status !== 'triggered')
+
+  if (loading) {
+    return (
+      <div className="p-6 max-w-5xl mx-auto">
+        <p className="text-gray-500 text-center py-10">Loading incidents...</p>
+      </div>
+    )
+  }
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
