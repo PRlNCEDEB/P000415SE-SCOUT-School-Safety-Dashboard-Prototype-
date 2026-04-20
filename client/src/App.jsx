@@ -28,6 +28,7 @@ function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/" element={<Layout><Dashboard onSubmitAlert={handleSubmitAlert} /></Layout>} />
+          <Route path="/dashboard" element={<Layout><Dashboard onSubmitAlert={handleSubmitAlert} /></Layout>} />
           <Route path="/incidents" element={<Layout><Incidents /></Layout>} />
           <Route path="/incidents/:id" element={<Layout><IncidentDetail onUpdateIncidentStatus={handleUpdateIncidentStatus} /></Layout>} />
           <Route path="/submit" element={<Layout><SubmitAlert onSubmitAlert={handleSubmitAlert} /></Layout>} />

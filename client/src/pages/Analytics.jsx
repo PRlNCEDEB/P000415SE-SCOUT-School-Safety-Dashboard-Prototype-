@@ -54,7 +54,7 @@ export default function Analytics() {
     fetchAnalytics()
 
     // Set up polling for live updates every 30 seconds
-    const interval = setInterval(fetchAnalytics, 30000)
+    const interval = setInterval(fetchAnalytics, 10000)
     return () => clearInterval(interval)
   }, [isAdmin])
 
