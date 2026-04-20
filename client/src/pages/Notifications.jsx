@@ -1,75 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
-
-// TODO: Replace mock notification records with delivery logs retrieved from the backend API.
-const mockNotifications = [
-  {
-    id: '1',
-    incidentTitle: 'Student injury - oval',
-    recipientName: 'Admin User',
-    recipientEmail: 'admin@school.edu',
-    recipientPhone: '+61 400 111 222',
-    sms: 'sent',
-    email: 'sent',
-    timestamp: 'Today 10:32am',
-    type: 'medical',
-  },
-  {
-    id: '2',
-    incidentTitle: 'Student injury - oval',
-    recipientName: 'First Aid Officer',
-    recipientEmail: 'firstaid@school.edu',
-    recipientPhone: '+61 400 333 444',
-    sms: 'sent',
-    email: 'failed',
-    timestamp: 'Today 10:32am',
-    type: 'medical',
-  },
-  {
-    id: '3',
-    incidentTitle: 'Altercation near canteen',
-    recipientName: 'Staff User',
-    recipientEmail: 'user@school.edu',
-    recipientPhone: '+61 400 555 666',
-    sms: 'sent',
-    email: 'sent',
-    timestamp: 'Today 9:15am',
-    type: 'behaviour',
-  },
-  {
-    id: '4',
-    incidentTitle: 'Lockdown initiated - main building',
-    recipientName: 'Admin User',
-    recipientEmail: 'admin@school.edu',
-    recipientPhone: '+61 400 777 888',
-    sms: 'sent',
-    email: 'sent',
-    timestamp: 'Yesterday 11:45am',
-    type: 'lockdown',
-  },
-  {
-    id: '5',
-    incidentTitle: 'Lockdown initiated - main building',
-    recipientName: 'Police Liaison',
-    recipientEmail: 'police@school.edu',
-    recipientPhone: '+61 400 999 000',
-    sms: 'failed',
-    email: 'sent',
-    timestamp: 'Yesterday 11:45am',
-    type: 'lockdown',
-  },
-  {
-    id: '6',
-    incidentTitle: 'Fire alarm triggered - Block B',
-    recipientName: 'Staff User',
-    recipientEmail: 'user@school.edu',
-    recipientPhone: '+61 400 123 456',
-    sms: 'sent',
-    email: 'sent',
-    timestamp: 'Yesterday 2:10pm',
-    type: 'fire',
-  },
-]
+import { notificationsAPI } from '../api/client'
 
 const typeIcons = {
   medical: '🏥',
@@ -91,13 +22,30 @@ export default function Notifications() {
   const { isAdmin, currentUser } = useAuth()
   const [filterChannel, setFilterChannel] = useState('all')
   const [filterStatus, setFilterStatus] = useState('all')
+  const [notifications, setNotifications] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const fetch = async () => {
+      try {
+        const data = await notificationsAPI.list()
+        setNotifications(data)
+      } catch (err) {
+        console.error('Failed to fetch notifications:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetch()
+    const interval = setInterval(fetch, 15000)
+    return () => clearInterval(interval)
+  }, [])
 
   // Admin sees all, user sees only their own
   const visibleNotifications = isAdmin
-    ? mockNotifications
-    : mockNotifications.filter(n => n.recipientName === currentUser.name)
+    ? notifications
+    : notifications.filter(n => n.recipientEmail === currentUser.email)
 
-  // TODO: Replace client-side notification summary counts with backend-provided metrics.
   const totalSent = visibleNotifications.filter(
     n => n.sms === 'sent' || n.email === 'sent'
   ).length
@@ -107,13 +55,20 @@ export default function Notifications() {
   const smsFailed = visibleNotifications.filter(n => n.sms === 'failed').length
   const emailFailed = visibleNotifications.filter(n => n.email === 'failed').length
 
-  // TODO: Move notification filtering to backend query parameters when integrating with the API.
   const filtered = visibleNotifications.filter(n => {
     if (filterChannel === 'sms') return n.sms === filterStatus || filterStatus === 'all'
     if (filterChannel === 'email') return n.email === filterStatus || filterStatus === 'all'
     if (filterStatus === 'all') return true
     return n.sms === filterStatus || n.email === filterStatus
   })
+
+  if (loading) {
+    return (
+      <div className="p-6 max-w-5xl mx-auto">
+        <p className="text-gray-500 text-center py-10">Loading notifications...</p>
+      </div>
+    )
+  }
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -184,7 +139,6 @@ export default function Notifications() {
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-            {/* TODO: Replace the mock record count with the total number of delivery log records returned by the backend API. */}
             Delivery Log — {filtered.length} records
           </p>
           {!isAdmin && (
@@ -199,7 +153,6 @@ export default function Notifications() {
               No notifications match your filters.
             </div>
           ) : (
-            // TODO: Ensure notification records are rendered from backend-loaded state once API integration is complete.
             filtered.map(n => (
               <div key={n.id} className="px-4 py-4 flex items-start gap-4">
 

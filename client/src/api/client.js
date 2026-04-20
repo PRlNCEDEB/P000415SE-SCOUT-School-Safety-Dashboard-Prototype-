@@ -34,6 +34,10 @@ export const incidentAPI = {
     apiCall(`/incidents/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
 }
 
+export const notificationsAPI = {
+  list: () => apiCall('/notifications').then(data => data.notifications ?? data),
+}
+
 export const analyticsAPI = {
   summary: () => apiCall('/analytics/summary'),
   byType: () => apiCall('/analytics/by-type'),

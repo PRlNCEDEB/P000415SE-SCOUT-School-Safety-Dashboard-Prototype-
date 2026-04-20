@@ -3,6 +3,7 @@ const express = require('express')
 const router = express.Router()
 const sgMail = require('@sendgrid/mail')
 const twilio = require('twilio')
+const { getDb } = require('../db/firebase')
 
 sgMail.setApiKey(process.env.SENDGRID_API_KEY)
 const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
@@ -112,15 +113,49 @@ router.post('/emergency', async (req, res) => {
   }
 
   const emailsSent = results.filter(r => r.emailStatus === 'sent').length
+  const timestamp = new Date().toISOString()
+
+  // Save each recipient's delivery log to Firestore
+  try {
+    const db = getDb()
+    const batch = db.batch()
+    for (const r of results) {
+      const ref = db.collection('notifications').doc()
+      batch.set(ref, {
+        incidentTitle: `${emergencyType}${location ? ' - ' + location : ''}`,
+        type: emergencyType.toLowerCase(),
+        recipientName: r.name,
+        recipientEmail: r.email,
+        sms: r.smsStatus,
+        email: r.emailStatus,
+        timestamp,
+      })
+    }
+    await batch.commit()
+  } catch (err) {
+    console.error('Failed to save notification logs:', err.message)
+  }
 
   res.json({
     success: emailsSent > 0,
     message: `Emergency alert sent to ${emailsSent} of ${results.length} recipients.`,
     emergencyType,
     location: location || null,
-    timestamp: new Date().toISOString(),
+    timestamp,
     results
   })
+})
+
+// GET /api/notifications — fetch delivery logs from Firestore
+router.get('/', async (req, res, next) => {
+  try {
+    const db = getDb()
+    const snapshot = await db.collection('notifications').orderBy('timestamp', 'desc').limit(100).get()
+    const notifications = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+    res.json({ notifications })
+  } catch (err) {
+    next(err)
+  }
 })
 
 module.exports = router
