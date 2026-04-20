@@ -1,75 +1,89 @@
 const express = require('express')
-const { docToObject, formatTimestamp, getDb, snapshotToArray } = require('../db/firebase')
+const {
+  getAllIncidents,
+  getIncidentById,
+  createIncident,
+  updateIncidentStatus,
+} = require('../data/incidents')
 
 const router = express.Router()
 
-function getSortValue(incident) {
-  const value = incident.createdAt || incident.updatedAt || incident.timestamp
+const ACTIVE_STATUSES = new Set(['triggered', 'acknowledged', 'in-progress'])
+const VALID_STATUSES = new Set(['triggered', 'acknowledged', 'in-progress', 'resolved', 'archived'])
+const VALID_PRIORITIES = new Set(['critical', 'high', 'medium', 'low'])
 
-  if (!value) return 0
-  if (typeof value.toMillis === 'function') return value.toMillis()
-
-  const parsed = Date.parse(value)
-  return Number.isNaN(parsed) ? 0 : parsed
+function normaliseText(value = '') {
+  return String(value).trim().toLowerCase()
 }
 
-function toIncidentResponse(incident) {
-  return {
-    id: String(incident.id),
-    type: incident.type || 'general',
-    priority: incident.priority || 'low',
-    status: incident.status || 'triggered',
-    title: incident.title || 'Untitled incident',
-    location: incident.location || 'Unknown location',
-    timestamp: incident.createdAt ? formatTimestamp(incident.createdAt) : '',
-    triggeredByName: incident.triggeredByName || 'Unknown reporter',
-    description: incident.description || '',
-    notifications: [],
-  }
-}
+router.get('/', (req, res) => {
+  const status = normaliseText(req.query.status || 'active')
+  const priority = normaliseText(req.query.priority || 'all')
+  const search = normaliseText(req.query.search || '')
 
-router.get('/', async (req, res, next) => {
-  try {
-    const snapshot = await getDb().collection('incidents').get()
-    const incidents = snapshotToArray(snapshot)
-      .sort((left, right) => getSortValue(right) - getSortValue(left))
-      .map(toIncidentResponse)
+  let filtered = [...getAllIncidents()]
 
-    res.json({ incidents })
-  } catch (error) {
-    next(error)
+  if (status === 'active') {
+    filtered = filtered.filter((incident) => ACTIVE_STATUSES.has(incident.status))
+  } else if (status !== 'all') {
+    filtered = filtered.filter((incident) => incident.status === status)
   }
+
+  if (priority !== 'all') {
+    filtered = filtered.filter((incident) => incident.priority === priority)
+  }
+
+  if (search) {
+    filtered = filtered.filter((incident) => {
+      const haystack = [incident.title, incident.type, incident.location, incident.status]
+        .join(' ')
+        .toLowerCase()
+      return haystack.includes(search)
+    })
+  }
+
+  res.json({
+    items: filtered,
+    total: filtered.length,
+    appliedFilters: { status, priority, search },
+  })
 })
 
-router.get('/:id', async (req, res, next) => {
-  try {
-    const doc = await getDb().collection('incidents').doc(req.params.id).get()
-    const incident = docToObject(doc)
-
-    if (!incident) {
-      return res.status(404).json({ error: 'Incident not found.' })
-    }
-
-    const notificationsSnapshot = await getDb()
-      .collection('notifications')
-      .where('incidentId', '==', req.params.id)
-      .get()
-
-    const notifications = snapshotToArray(notificationsSnapshot).map(notification => ({
-      recipientName: notification.recipientName || 'Unknown recipient',
-      sms: notification.smsStatus || 'pending',
-      email: notification.emailStatus || 'pending',
-    }))
-
-    res.json({
-      incident: {
-        ...toIncidentResponse(incident),
-        notifications,
-      },
-    })
-  } catch (error) {
-    next(error)
+router.get('/:id', (req, res) => {
+  const incident = getIncidentById(req.params.id)
+  if (!incident) {
+    return res.status(404).json({ error: 'Incident not found.' })
   }
+  return res.json(incident)
+})
+
+router.post('/', (req, res) => {
+  const { type, priority, title, location, description, triggeredByName } = req.body || {}
+
+  if (!type || !priority || !title?.trim() || !location) {
+    return res.status(400).json({ error: 'type, priority, title, and location are required.' })
+  }
+
+  if (!VALID_PRIORITIES.has(priority)) {
+    return res.status(400).json({ error: 'Invalid priority value.' })
+  }
+
+  const incident = createIncident({ type, priority, title, location, description, triggeredByName })
+  return res.status(201).json(incident)
+})
+
+router.patch('/:id/status', (req, res) => {
+  const status = normaliseText(req.body?.status)
+  if (!VALID_STATUSES.has(status)) {
+    return res.status(400).json({ error: 'Invalid status value.' })
+  }
+
+  const incident = updateIncidentStatus(req.params.id, status)
+  if (!incident) {
+    return res.status(404).json({ error: 'Incident not found.' })
+  }
+
+  return res.json(incident)
 })
 
 module.exports = router
