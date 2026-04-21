@@ -11,7 +11,7 @@ const analyticsRoutes = require('./routes/analytics')
 const actionLogRoutes = require('./routes/actionLogs')
 
 const app = express()
-const PORT = process.env.PORT || 3001
+const PORT = process.env.PORT || 5000
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(cors({
@@ -27,7 +27,7 @@ initFirebase()
 seedDemoAnalyticsData().catch(err => console.error('Failed to seed analytics:', err))
 
 // ── Routes ────────────────────────────────────────────────────────────────────
-app.use('/api/auth', authRoutes)
+//app.use('/api/auth', authRoutes)
 app.use('/api/incidents', incidentRoutes)
 app.use('/api/notifications', notificationRoutes)
 app.use('/api/analytics', analyticsRoutes)

@@ -1,29 +1,32 @@
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'
 
-export async function apiCall(endpoint, options = {}) {
-  const token = localStorage.getItem('auth_token')
-  const headers = {
-    'Content-Type': 'application/json',
-    ...options.headers,
-  }
-  if (token) headers.Authorization = `Bearer ${token}`
-
-  const res = await fetch(`${API_BASE}${endpoint}`, {
+async function request(path, options = {}) {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    headers: {
+      'Content-Type': 'application/json',
+      ...(options.headers || {}),
+    },
     ...options,
-    headers,
   })
-  
-  if (!res.ok) {
-    if (res.status === 401) localStorage.removeItem('auth_token')
-    throw new Error(`API error: ${res.status}`)
-  }
-  return res.json()
-}
 
-export const authAPI = {
-  login: (email, password) => 
-    apiCall('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
-  me: () => apiCall('/auth/me'),
+  if (!response.ok) {
+    let message = 'Request failed.'
+
+    try {
+      const payload = await response.json()
+      message = payload.error || message
+    } catch {
+      // Keep the fallback message when the error response is not JSON.
+    }
+
+    throw new Error(message)
+  }
+
+  if (response.status === 204) {
+    return null
+  }
+
+  return response.json()
 }
 
 export const incidentAPI = {
