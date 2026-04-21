@@ -30,10 +30,11 @@ export default function Analytics() {
   useEffect(() => {
     if (!isAdmin) return
 
+    let isFirst = true
+
     const fetchAnalytics = async () => {
       try {
-        setLoading(true)
-        setError(null)
+        if (isFirst) setLoading(true)
 
         const data = await analyticsAPI.all()
 
@@ -45,16 +46,15 @@ export default function Analytics() {
         setResponseTimeData(data.responseTimeData)
       } catch (err) {
         console.error('Failed to fetch analytics:', err)
-        setError('Failed to load analytics data')
+        if (isFirst) setError('Failed to load analytics data')
       } finally {
-        setLoading(false)
+        if (isFirst) { setLoading(false); isFirst = false }
       }
     }
 
     fetchAnalytics()
 
-    // Set up polling for live updates every 30 seconds
-    const interval = setInterval(fetchAnalytics, 10000)
+    const interval = setInterval(fetchAnalytics, 30000)
     return () => clearInterval(interval)
   }, [isAdmin])
 
@@ -100,10 +100,7 @@ export default function Analytics() {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Analytics</h1>
-          <p className="text-sm text-gray-500">Live operational insights from Firestore</p>
-        </div>
-        <div className="text-xs bg-green-50 text-green-700 px-3 py-1 rounded-full border border-green-200">
-          ✓ Live updates
+          <p className="text-sm text-gray-500">Operational insights</p>
         </div>
       </div>
 

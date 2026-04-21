@@ -72,4 +72,41 @@ router.get('/:id', async (req, res, next) => {
   }
 })
 
+router.post('/', async (req, res, next) => {
+  try {
+    const { type, priority, status, title, location, description, triggeredByName, triggeredById } = req.body
+    const now = new Date().toISOString()
+
+    const docRef = await getDb().collection('incidents').add({
+      type: type || 'general',
+      priority: priority || 'low',
+      status: status || 'triggered',
+      title: title || 'Untitled incident',
+      location: location || 'Unknown',
+      description: description || '',
+      triggeredByName: triggeredByName || 'Unknown',
+      triggeredById: triggeredById || null,
+      createdAt: now,
+      updatedAt: now,
+    })
+
+    const doc = await docRef.get()
+    const incident = { id: doc.id, ...doc.data() }
+    res.status(201).json(toIncidentResponse(incident))
+  } catch (error) {
+    next(error)
+  }
+})
+
+router.patch('/:id/status', async (req, res, next) => {
+  try {
+    const { status } = req.body
+    const now = new Date().toISOString()
+    await getDb().collection('incidents').doc(req.params.id).update({ status, updatedAt: now })
+    res.json({ success: true })
+  } catch (error) {
+    next(error)
+  }
+})
+
 module.exports = router
