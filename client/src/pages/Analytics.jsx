@@ -26,36 +26,45 @@ export default function Analytics() {
   const [incidentsByDay, setIncidentsByDay] = useState([])
   const [responseTimeData, setResponseTimeData] = useState([])
 
-  // Fetch all analytics data
+  const fetchAnalytics = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const data = await analyticsAPI.all()
+      setSummary(data.summary)
+      setIncidentsByType(data.incidentsByType)
+      setStatusBreakdown(data.statusBreakdown)
+      setLocationData(data.locationData)
+      setIncidentsByDay(data.incidentsByDay)
+      setResponseTimeData(data.responseTimeData)
+      return true  // success
+    } catch (err) {
+      setError(err.message || 'Failed to load analytics data')
+      return false  // failure — caller should stop polling
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Fetch on mount, then poll every 30s — stop polling on any error
   useEffect(() => {
     if (!isAdmin) return
 
-    let isFirst = true
+    let interval = null
 
-    const fetchAnalytics = async () => {
-      try {
-        if (isFirst) setLoading(true)
-
-        const data = await analyticsAPI.all()
-
-        setSummary(data.summary)
-        setIncidentsByType(data.incidentsByType)
-        setStatusBreakdown(data.statusBreakdown)
-        setLocationData(data.locationData)
-        setIncidentsByDay(data.incidentsByDay)
-        setResponseTimeData(data.responseTimeData)
-      } catch (err) {
-        console.error('Failed to fetch analytics:', err)
-        if (isFirst) setError('Failed to load analytics data')
-      } finally {
-        if (isFirst) { setLoading(false); isFirst = false }
+    fetchAnalytics().then(ok => {
+      if (ok) {
+        interval = setInterval(async () => {
+          const ok = await fetchAnalytics()
+          if (!ok) {
+            clearInterval(interval)
+            interval = null
+          }
+        }, 30000)
       }
-    }
+    })
 
-    fetchAnalytics()
-
-    const interval = setInterval(fetchAnalytics, 30000)
-    return () => clearInterval(interval)
+    return () => { if (interval) clearInterval(interval) }
   }, [isAdmin])
 
   if (!isAdmin) {
@@ -86,8 +95,15 @@ export default function Analytics() {
   if (error) {
     return (
       <div className="p-6 max-w-5xl mx-auto">
-        <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-700">
-          <p>⚠️ {error}</p>
+        <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
+          <p className="text-red-700 font-medium mb-1">⚠️ Failed to load analytics data</p>
+          <p className="text-red-500 text-sm mb-4">{error}</p>
+          <button
+            onClick={fetchAnalytics}
+            className="px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors"
+          >
+            Retry
+          </button>
         </div>
       </div>
     )

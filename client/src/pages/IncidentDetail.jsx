@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getIncidentById } from '../api/client'
+import { getIncidentById, incidentAPI } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 
 const priorityColors = {
@@ -40,7 +40,7 @@ const nextLabel = {
   'in-progress': 'Mark Resolved',
 }
 
-export default function IncidentDetail({ incidents, onUpdateIncidentStatus }) {
+export default function IncidentDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { isAdmin } = useAuth()
@@ -48,6 +48,8 @@ export default function IncidentDetail({ incidents, onUpdateIncidentStatus }) {
   const [status, setStatus] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [statusUpdating, setStatusUpdating] = useState(false)
+  const [statusError, setStatusError] = useState('')
 
   useEffect(() => {
     let isActive = true
@@ -192,18 +194,29 @@ export default function IncidentDetail({ incidents, onUpdateIncidentStatus }) {
       {/* Action Button — admin only */}
       {isAdmin ? (
         nextStatus[status] && (
-          <button
-            // TODO: Persist status transition to backend before updating the UI.
-            // const handleStatusUpdate = async () => {
-            //   call backend
-            //   update UI on success
-            //   show error on failure
-            // }
-            onClick={() => onUpdateIncidentStatus(found.id, nextStatus[status])} // onClick={handleStatusUpdate}
-            className="w-full py-3 bg-red-600 text-white font-medium rounded-xl hover:bg-red-700 transition-colors"
-          >
-            {nextLabel[status]}
-          </button>
+          <>
+            {statusError && (
+              <p className="text-sm text-red-500 mb-2 text-center">{statusError}</p>
+            )}
+            <button
+              disabled={statusUpdating}
+              onClick={async () => {
+                setStatusUpdating(true)
+                setStatusError('')
+                try {
+                  await incidentAPI.updateStatus(found.id, nextStatus[status])
+                  setStatus(nextStatus[status])
+                } catch (err) {
+                  setStatusError(err.message || 'Failed to update status. Please try again.')
+                } finally {
+                  setStatusUpdating(false)
+                }
+              }}
+              className="w-full py-3 bg-red-600 text-white font-medium rounded-xl hover:bg-red-700 transition-colors disabled:opacity-50"
+            >
+              {statusUpdating ? 'Updating...' : nextLabel[status]}
+            </button>
+          </>
         )
       ) : (
         <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 flex items-center gap-2 text-sm text-gray-500">

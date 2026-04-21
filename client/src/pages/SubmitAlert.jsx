@@ -24,7 +24,7 @@ const locations = [
   'Main Building', 'Cafeteria', 'Library', 'Car Park', 'Reception',
 ]
 
-export default function SubmitAlert({ onSubmitAlert }) {
+export default function SubmitAlert() {
   const navigate = useNavigate()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [form, setForm] = useState({

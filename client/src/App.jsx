@@ -10,28 +10,16 @@ import Analytics from './pages/Analytics'
 import Notifications from './pages/Notifications'
 
 function App() {
-
-  // Handlers will be managed by individual components using API directly
-  const handleSubmitAlert = async (alert) => {
-    // This will be handled by SubmitAlert component using incidentAPI.create()
-    return alert
-  }
-
-  const handleUpdateIncidentStatus = async (incidentId, status) => {
-    // This will be handled by component using incidentAPI.updateStatus()
-    return { incidentId, status }
-  }
-
   return (
     <AuthProvider>
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
-          <Route path="/" element={<Layout><Dashboard onSubmitAlert={handleSubmitAlert} /></Layout>} />
-          <Route path="/dashboard" element={<Layout><Dashboard onSubmitAlert={handleSubmitAlert} /></Layout>} />
+          <Route path="/" element={<Layout><Dashboard /></Layout>} />
+          <Route path="/dashboard" element={<Layout><Dashboard /></Layout>} />
           <Route path="/incidents" element={<Layout><Incidents /></Layout>} />
-          <Route path="/incidents/:id" element={<Layout><IncidentDetail onUpdateIncidentStatus={handleUpdateIncidentStatus} /></Layout>} />
-          <Route path="/submit" element={<Layout><SubmitAlert onSubmitAlert={handleSubmitAlert} /></Layout>} />
+          <Route path="/incidents/:id" element={<Layout><IncidentDetail /></Layout>} />
+          <Route path="/submit" element={<Layout><SubmitAlert /></Layout>} />
           <Route path="/analytics" element={<Layout><Analytics /></Layout>} />
           <Route path="/notifications" element={<Layout><Notifications /></Layout>} />
         </Routes>

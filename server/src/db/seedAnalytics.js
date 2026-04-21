@@ -19,7 +19,7 @@ async function seedAnalyticsData() {
     console.log('📝 Seeding analytics data into Firestore...')
 
     const now = new Date()
-    const analyticsData = [
+    const incidentsData = [
       // Medical incidents
       {
         type: 'medical',
@@ -208,17 +208,24 @@ async function seedAnalyticsData() {
 
     // Batch write to Firestore
     const batch = db.batch()
-    analyticsData.forEach((incident, index) => {
+    incidentsData.forEach((incident, index) => {
       const docRef = incidentsRef.doc(`incident_${index + 1}`)
+      // Spread createdAt across past days so analytics charts show varied data
+      const daysAgo = index % 7
+      const createdAt = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000).toISOString()
+      const updatedAt = incident.status === 'resolved'
+        ? new Date(new Date(createdAt).getTime() + 5 * 60 * 1000).toISOString()
+        : createdAt
       batch.set(docRef, {
         ...incident,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+        triggeredById: incident.triggeredById || null,
+        createdAt,
+        updatedAt,
       })
     })
 
     await batch.commit()
-    console.log(`✅ Successfully seeded ${analyticsData.length} incidents into Firestore`)
+    console.log(`✅ Successfully seeded ${incidentsData.length} incidents into Firestore`)
   } catch (error) {
     console.error('❌ Error seeding analytics data:', error)
     throw error

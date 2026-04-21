@@ -5,8 +5,19 @@ const sgMail = require('@sendgrid/mail')
 const twilio = require('twilio')
 const { getDb } = require('../db/firebase')
 
-sgMail.setApiKey(process.env.SENDGRID_API_KEY)
-const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
+// Lazily initialise clients so missing env vars don't crash the server at startup
+function getSgMail() {
+  if (!process.env.SENDGRID_API_KEY) throw new Error('SENDGRID_API_KEY is not set in .env')
+  sgMail.setApiKey(process.env.SENDGRID_API_KEY)
+  return sgMail
+}
+
+function getTwilioClient() {
+  if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN) {
+    throw new Error('TWILIO_ACCOUNT_SID or TWILIO_AUTH_TOKEN is not set in .env')
+  }
+  return twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
+}
 
 // Emergency recipients — add all staff here
 const emergencyRecipients = [
@@ -61,7 +72,7 @@ router.post('/emergency', async (req, res) => {
 
     // Send Email
     try {
-      await sgMail.send({
+      await getSgMail().send({
         to: recipient.email,
         from: process.env.FROM_EMAIL,
         subject: subject,
@@ -96,7 +107,7 @@ router.post('/emergency', async (req, res) => {
     // Send SMS
     if (recipient.phone) {
       try {
-        const sms = await twilioClient.messages.create({
+        const sms = await getTwilioClient().messages.create({
           body: `🚨 SCOUT EMERGENCY: ${emergencyType}${location ? ' at ' + location : ''}. Please respond immediately.`,
           messagingServiceSid: process.env.TWILIO_MESSAGING_SERVICE_SID,
           to: recipient.phone

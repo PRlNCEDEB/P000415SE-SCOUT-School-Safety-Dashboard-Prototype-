@@ -1,4 +1,4 @@
-const API_BASE = 'http://localhost:5000/api'
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 
 export async function apiCall(endpoint, options = {}) {
   const token = localStorage.getItem('auth_token')
@@ -50,4 +50,4 @@ export const analyticsAPI = {
 
 // Named exports used by page components
 export const getIncidents = () => apiCall('/incidents').then(data => data.incidents ?? data)
-export const getIncidentById = (id) => apiCall(`/incidents/${id}`)
+export const getIncidentById = (id) => apiCall(`/incidents/${id}`).then(data => data.incident ?? data)
