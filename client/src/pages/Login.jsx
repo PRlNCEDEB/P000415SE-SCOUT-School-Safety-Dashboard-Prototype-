@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 const demoAccounts = [
   { name: 'Admin User', email: 'admin@school.edu', role: 'admin', color: 'bg-red-100 text-red-700' },
   { name: 'Staff User', email: 'user@school.edu', role: 'user', color: 'bg-blue-100 text-blue-700' },
+  { name: 'Murali User', email: 'gmd@school.edu', role: 'user', color: 'bg-green-100 text-green-700' },
 ]
 
 export default function Login() {

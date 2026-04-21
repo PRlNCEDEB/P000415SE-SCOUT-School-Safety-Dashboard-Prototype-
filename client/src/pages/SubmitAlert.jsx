@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { incidentAPI } from '../api/client'
 
 const alertTypes = [
   { value: 'medical', label: '🏥 Medical' },
@@ -23,7 +24,7 @@ const locations = [
   'Main Building', 'Cafeteria', 'Library', 'Car Park', 'Reception',
 ]
 
-export default function SubmitAlert({ onSubmitAlert }) {
+export default function SubmitAlert() {
   const navigate = useNavigate()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [form, setForm] = useState({
@@ -50,7 +51,6 @@ export default function SubmitAlert({ onSubmitAlert }) {
     setErrors(prev => ({ ...prev, [field]: '' }))
   }
 
-  // TODO: Replace local submit handling with a backend API request to create a new alert event.
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (isSubmitting) return
@@ -63,8 +63,11 @@ export default function SubmitAlert({ onSubmitAlert }) {
 
     setIsSubmitting(true)
     try {
-      const createdIncident = await Promise.resolve(onSubmitAlert(form))
+      const createdIncident = await incidentAPI.create(form)
       navigate(`/incidents/${createdIncident.id}`)
+    } catch (error) {
+      console.error('Failed to submit alert:', error)
+      setErrors({ submit: 'Failed to submit alert. Please try again.' })
     } finally {
       setIsSubmitting(false)
     }

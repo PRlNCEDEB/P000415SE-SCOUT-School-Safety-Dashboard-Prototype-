@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'
+import { incidentAPI, apiCall } from '../api/client'
 
 const emergencyTypes = [
   { value: 'Natural Disaster', icon: '🌊', desc: 'Earthquake, flood, severe weather' },
@@ -9,7 +8,7 @@ const emergencyTypes = [
   { value: 'Threat', icon: '🛡️', desc: 'Security threat or lockdown' },
 ]
 
-export default function QuickActions({ onSubmitAlert }) {
+export default function QuickActions() {
   const { isAdmin } = useAuth()
   const [logs, setLogs] = useState([])
   const [feedback, setFeedback] = useState(null)
@@ -55,22 +54,24 @@ export default function QuickActions({ onSubmitAlert }) {
     setCustomMessage('')
   }
 
-  const createDashboardRecord = (typeValue, description) => {
-    if (!onSubmitAlert) return
-
+  const createIncidentRecord = async (typeValue, description) => {
     const mappedType = typeValue === 'Natural Disaster'
       ? 'weather'
       : typeValue === 'Fire'
         ? 'fire'
         : 'lockdown'
 
-    onSubmitAlert({
-      type: mappedType,
-      priority: 'critical',
-      title: `${typeValue} alert`,
-      location: editForm.location || 'Dashboard quick action',
-      description: description || `${typeValue} emergency triggered from dashboard.`,
-    })
+    try {
+      await incidentAPI.create({
+        type: mappedType,
+        priority: 'critical',
+        title: `${typeValue} alert`,
+        location: editForm.location || 'Dashboard quick action',
+        description: description || `${typeValue} emergency triggered from dashboard.`,
+      })
+    } catch (err) {
+      console.error('Failed to create incident record:', err)
+    }
   }
 
   const handleCodeSubmit = async () => {
@@ -83,9 +84,8 @@ export default function QuickActions({ onSubmitAlert }) {
     setCodeError('')
 
     try {
-      const response = await fetch(`${API_BASE_URL}/notifications/emergency`, {
+      const data = await apiCall('/notifications/emergency', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           code,
           emergencyType: selectedType.value,
@@ -93,8 +93,6 @@ export default function QuickActions({ onSubmitAlert }) {
           message: customMessage || `Emergency alert triggered for ${selectedType.value}. All relevant staff have been notified.`,
         }),
       })
-
-      const data = await response.json()
 
       if (data.success) {
         const newLog = {
@@ -108,7 +106,7 @@ export default function QuickActions({ onSubmitAlert }) {
           location: editForm.location,
         }
 
-        createDashboardRecord(selectedType.value, customMessage || editForm.description)
+        await createIncidentRecord(selectedType.value, customMessage || editForm.description)
         setLogs(prev => [newLog, ...prev])
         setShowKeypad(false)
         setShowResult(data)
@@ -124,7 +122,7 @@ export default function QuickActions({ onSubmitAlert }) {
     setLoading(false)
   }
 
-  const handleAction2 = () => {
+  const handleAction2 = async () => {
     const newLog = {
       id: Date.now().toString(),
       button: '2',
@@ -136,14 +134,16 @@ export default function QuickActions({ onSubmitAlert }) {
       location: '',
     }
 
-    if (onSubmitAlert) {
-      onSubmitAlert({
+    try {
+      await incidentAPI.create({
         type: 'general',
         priority: 'medium',
         title: 'General alert',
         location: 'Dashboard quick action',
         description: 'General quick action triggered from dashboard.',
       })
+    } catch (err) {
+      console.error('Failed to create general incident record:', err)
     }
 
     setLogs(prev => [newLog, ...prev])
