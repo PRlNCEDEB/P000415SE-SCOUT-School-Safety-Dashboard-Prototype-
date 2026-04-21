@@ -2,7 +2,7 @@ require('dotenv').config()
 const express = require('express')
 const cors = require('cors')
 const { initFirebase } = require('./db/firebase')
-const { seedAnalyticsData } = require('./db/seedAnalytics')
+const { seedDemoAnalyticsData } = require('./db/seedDemoAnalytics')
 
 const authRoutes = require('./routes/auth')
 const incidentRoutes = require('./routes/incidents')
@@ -24,7 +24,7 @@ app.use(express.json())
 initFirebase()
 
 // ── Seed analytics data (runs once) ───────────────────────────────────────────
-seedAnalyticsData().catch(err => console.error('Failed to seed analytics:', err))
+seedDemoAnalyticsData().catch(err => console.error('Failed to seed analytics:', err))
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/api/auth', authRoutes)

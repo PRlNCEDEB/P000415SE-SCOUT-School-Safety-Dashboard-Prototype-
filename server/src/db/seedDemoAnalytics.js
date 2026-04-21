@@ -4,12 +4,13 @@ const { getDb, serverTimestamp } = require('./firebase')
  * Seed analytics data into Firestore
  * This will create incidents with proper timestamps and response times
  */
-async function seedAnalyticsData() {
+async function seedDemoAnalyticsData() {
   try {
     const db = getDb()
     const incidentsRef = db.collection('incidents')
 
     // Check if data already exists
+    //if seeding needed comment out the following lines and seed with non-duplicate incidentsData
     const existingCount = await incidentsRef.count().get()
     if (existingCount.data().count > 0) {
       console.log('✅ Incidents already exist in Firestore. Skipping seed.')
@@ -232,4 +233,4 @@ async function seedAnalyticsData() {
   }
 }
 
-module.exports = { seedAnalyticsData }
+module.exports = { seedDemoAnalyticsData }
