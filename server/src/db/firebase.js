@@ -17,17 +17,23 @@ function initFirebase() {
     return db
   }
 
-  const serviceAccountPath = path.resolve(
-    process.env.FIREBASE_SERVICE_ACCOUNT_PATH || './firebase-service-account.json'
-  )
+  let serviceAccount
 
-  if (!fs.existsSync(serviceAccountPath)) {
-    console.error('❌ Firebase service account file not found at:', serviceAccountPath)
-    console.error('   Download it from: Firebase Console → Project Settings → Service Accounts')
-    process.exit(1)
+  if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+    // Running on Render/production — read from environment variable
+    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON)
+  } else {
+    // Running locally — read from file
+    const serviceAccountPath = path.resolve(
+      process.env.FIREBASE_SERVICE_ACCOUNT_PATH || './firebase-service-account.json'
+    )
+    if (!fs.existsSync(serviceAccountPath)) {
+      console.error('❌ Firebase service account file not found at:', serviceAccountPath)
+      console.error('   Download it from: Firebase Console → Project Settings → Service Accounts')
+      process.exit(1)
+    }
+    serviceAccount = require(serviceAccountPath)
   }
-
-  const serviceAccount = require(serviceAccountPath)
 
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
@@ -35,10 +41,7 @@ function initFirebase() {
   })
 
   db = admin.firestore()
-
-  // Use timestamps in Firestore snapshots
   db.settings({ ignoreUndefinedProperties: true })
-
   console.log('✅ Firebase initialised — project:', serviceAccount.project_id)
   return db
 }
