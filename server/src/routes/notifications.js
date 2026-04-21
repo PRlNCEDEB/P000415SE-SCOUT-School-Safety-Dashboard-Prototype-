@@ -3,9 +3,21 @@ const express = require('express')
 const router = express.Router()
 const sgMail = require('@sendgrid/mail')
 const twilio = require('twilio')
+const { getDb } = require('../db/firebase')
 
-sgMail.setApiKey(process.env.SENDGRID_API_KEY)
-const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
+// Lazily initialise clients so missing env vars don't crash the server at startup
+function getSgMail() {
+  if (!process.env.SENDGRID_API_KEY) throw new Error('SENDGRID_API_KEY is not set in .env')
+  sgMail.setApiKey(process.env.SENDGRID_API_KEY)
+  return sgMail
+}
+
+function getTwilioClient() {
+  if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN) {
+    throw new Error('TWILIO_ACCOUNT_SID or TWILIO_AUTH_TOKEN is not set in .env')
+  }
+  return twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
+}
 
 // Emergency recipients — add all staff here
 const emergencyRecipients = [
@@ -60,7 +72,7 @@ router.post('/emergency', async (req, res) => {
 
     // Send Email
     try {
-      await sgMail.send({
+      await getSgMail().send({
         to: recipient.email,
         from: process.env.FROM_EMAIL,
         subject: subject,
@@ -95,7 +107,7 @@ router.post('/emergency', async (req, res) => {
     // Send SMS
     if (recipient.phone) {
       try {
-        const sms = await twilioClient.messages.create({
+        const sms = await getTwilioClient().messages.create({
           body: `🚨 SCOUT EMERGENCY: ${emergencyType}${location ? ' at ' + location : ''}. Please respond immediately.`,
           messagingServiceSid: process.env.TWILIO_MESSAGING_SERVICE_SID,
           to: recipient.phone
@@ -112,15 +124,49 @@ router.post('/emergency', async (req, res) => {
   }
 
   const emailsSent = results.filter(r => r.emailStatus === 'sent').length
+  const timestamp = new Date().toISOString()
+
+  // Save each recipient's delivery log to Firestore
+  try {
+    const db = getDb()
+    const batch = db.batch()
+    for (const r of results) {
+      const ref = db.collection('notifications').doc()
+      batch.set(ref, {
+        incidentTitle: `${emergencyType}${location ? ' - ' + location : ''}`,
+        type: emergencyType.toLowerCase(),
+        recipientName: r.name,
+        recipientEmail: r.email,
+        sms: r.smsStatus,
+        email: r.emailStatus,
+        timestamp,
+      })
+    }
+    await batch.commit()
+  } catch (err) {
+    console.error('Failed to save notification logs:', err.message)
+  }
 
   res.json({
     success: emailsSent > 0,
     message: `Emergency alert sent to ${emailsSent} of ${results.length} recipients.`,
     emergencyType,
     location: location || null,
-    timestamp: new Date().toISOString(),
+    timestamp,
     results
   })
+})
+
+// GET /api/notifications — fetch delivery logs from Firestore
+router.get('/', async (req, res, next) => {
+  try {
+    const db = getDb()
+    const snapshot = await db.collection('notifications').orderBy('timestamp', 'desc').limit(100).get()
+    const notifications = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+    res.json({ notifications })
+  } catch (err) {
+    next(err)
+  }
 })
 
 module.exports = router
