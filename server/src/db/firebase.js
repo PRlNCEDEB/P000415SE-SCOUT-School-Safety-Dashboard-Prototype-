@@ -3,30 +3,31 @@ const path = require('path')
 const fs = require('fs')
 
 let db
-
+//returns the Firestore database instance, or throws an error if initFirebase() has not been called
 function getDb() {
   if (!db) {
     throw new Error('Firebase not initialised. Call initFirebase() first.')
   }
   return db
 }
-
+//initialises the Firebase app and Firestore database connection
 function initFirebase() {
+  //if Firebase has already been initialised, return the existing instance
   if (admin.apps.length > 0) {
     db = admin.firestore()
     return db
   }
-
+  //check for the service account file and load it
   const serviceAccountPath = path.resolve(
     process.env.FIREBASE_SERVICE_ACCOUNT_PATH || './firebase-service-account.json'
   )
-
+  //if the service account file doesn't exist, log an error and exit
   if (!fs.existsSync(serviceAccountPath)) {
     console.error('❌ Firebase service account file not found at:', serviceAccountPath)
     console.error('   Download it from: Firebase Console → Project Settings → Service Accounts')
     process.exit(1)
   }
-
+  //initialise the Firebase app with the service account credentials
   const serviceAccount = require(serviceAccountPath)
 
   admin.initializeApp({
