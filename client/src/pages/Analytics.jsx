@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { analyticsAPI } from '../api/client'
 import {
@@ -37,49 +38,22 @@ export default function Analytics() {
       setLocationData(data.locationData)
       setIncidentsByDay(data.incidentsByDay)
       setResponseTimeData(data.responseTimeData)
-      return true  // success
     } catch (err) {
       setError(err.message || 'Failed to load analytics data')
-      return false  // failure — caller should stop polling
     } finally {
       setLoading(false)
     }
   }
 
-  // Fetch on mount, then poll every 30s — stop polling on any error
+  // Fetch once on mount — no polling (saves ~2,280 Firestore reads/hour)
   useEffect(() => {
     if (!isAdmin) return
-
-    let interval = null
-
-    fetchAnalytics().then(ok => {
-      if (ok) {
-        interval = setInterval(async () => {
-          const ok = await fetchAnalytics()
-          if (!ok) {
-            clearInterval(interval)
-            interval = null
-          }
-        }, 30000)
-      }
-    })
-
-    return () => { if (interval) clearInterval(interval) }
+    fetchAnalytics()
   }, [isAdmin])
 
+  // RBAC guard — redirect non-admins (matches main branch pattern)
   if (!isAdmin) {
-    return (
-      <div className="p-6 max-w-lg mx-auto mt-20 text-center">
-        <div className="bg-white border border-gray-200 rounded-xl p-10">
-          <div className="text-5xl mb-4">🔒</div>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">Restricted Access</h2>
-          <p className="text-sm text-gray-500">
-            The Analytics page is only available to Admin users.
-            Contact your Safety Manager if you need access.
-          </p>
-        </div>
-      </div>
-    )
+    return <Navigate to="/dashboard" replace />
   }
 
   if (loading) {
@@ -118,6 +92,13 @@ export default function Analytics() {
           <h1 className="text-2xl font-bold text-gray-900">Analytics</h1>
           <p className="text-sm text-gray-500">Operational insights</p>
         </div>
+        <button
+          onClick={fetchAnalytics}
+          disabled={loading}
+          className="px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:bg-gray-400 transition-colors flex items-center gap-2"
+        >
+          {loading ? '⏳ Refreshing...' : '🔄 Refresh'}
+        </button>
       </div>
 
       {/* Summary Cards */}
