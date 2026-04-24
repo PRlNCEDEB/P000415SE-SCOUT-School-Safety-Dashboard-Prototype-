@@ -38,3 +38,24 @@ export async function getIncidentById(id) {
   const data = await request(`/incidents/${id}`)
   return data.incident || null
 }
+
+export async function getNotifications() {
+  const data = await request('/notifications')
+  return data.notifications || []
+}
+
+export async function createIncident(payload) {
+  const data = await request('/incidents', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+  return data.incident || null
+}
+
+export async function updateIncidentStatus(id, status) {
+  const data = await request(`/incidents/${id}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status }),
+  })
+  return data.incident || null
+}

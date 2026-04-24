@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { createIncident } from '../api/client'
+import { useAuth } from '../context/AuthContext'
 
 const alertTypes = [
   { value: 'medical', label: '🏥 Medical' },
@@ -23,9 +25,11 @@ const locations = [
   'Main Building', 'Cafeteria', 'Library', 'Car Park', 'Reception',
 ]
 
-export default function SubmitAlert({ onSubmitAlert }) {
+export default function SubmitAlert() {
   const navigate = useNavigate()
+  const { currentUser } = useAuth()
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
   const [form, setForm] = useState({
     type: '',
     priority: '',
@@ -35,7 +39,6 @@ export default function SubmitAlert({ onSubmitAlert }) {
   })
   const [errors, setErrors] = useState({})
 
-  // TODO: Keep basic client-side validation here, but also validate all alert fields again on the backend before saving.
   const validate = () => {
     const e = {}
     if (!form.type) e.type = 'Please select an alert type'
@@ -48,10 +51,10 @@ export default function SubmitAlert({ onSubmitAlert }) {
   const handleChange = (field, value) => {
     setForm(prev => ({ ...prev, [field]: value }))
     setErrors(prev => ({ ...prev, [field]: '' }))
+    setSubmitError('')
   }
 
-  // TODO: Replace local submit handling with a backend API request to create a new alert event.
-  const handleSubmit = async (e) => {
+  const handleSubmit = async e => {
     e.preventDefault()
     if (isSubmitting) return
 
@@ -62,9 +65,21 @@ export default function SubmitAlert({ onSubmitAlert }) {
     }
 
     setIsSubmitting(true)
+    setSubmitError('')
+
     try {
-      const createdIncident = await Promise.resolve(onSubmitAlert(form))
+      const createdIncident = await createIncident({
+        type: form.type,
+        priority: form.priority,
+        title: form.title,
+        description: form.description,
+        location: form.location,
+        triggeredByName: currentUser?.name || 'Admin User',
+      })
+
       navigate(`/incidents/${createdIncident.id}`)
+    } catch (err) {
+      setSubmitError(err.message || 'Failed to create incident.')
     } finally {
       setIsSubmitting(false)
     }
@@ -72,17 +87,12 @@ export default function SubmitAlert({ onSubmitAlert }) {
 
   return (
     <div className="p-6 max-w-lg mx-auto">
-
-      {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Submit Alert</h1>
         <p className="text-sm text-gray-500">Report a safety incident or concern</p>
       </div>
 
-      {/* Form */}
       <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-5">
-
-        {/* Alert Type */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Alert Type <span className="text-red-500">*</span>
@@ -106,7 +116,6 @@ export default function SubmitAlert({ onSubmitAlert }) {
           {errors.type && <p className="text-xs text-red-500 mt-1">{errors.type}</p>}
         </div>
 
-        {/* Priority */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Priority <span className="text-red-500">*</span>
@@ -130,7 +139,6 @@ export default function SubmitAlert({ onSubmitAlert }) {
           {errors.priority && <p className="text-xs text-red-500 mt-1">{errors.priority}</p>}
         </div>
 
-        {/* Title */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Title <span className="text-red-500">*</span>
@@ -145,7 +153,6 @@ export default function SubmitAlert({ onSubmitAlert }) {
           {errors.title && <p className="text-xs text-red-500 mt-1">{errors.title}</p>}
         </div>
 
-        {/* Location */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Location <span className="text-red-500">*</span>
@@ -163,7 +170,6 @@ export default function SubmitAlert({ onSubmitAlert }) {
           {errors.location && <p className="text-xs text-red-500 mt-1">{errors.location}</p>}
         </div>
 
-        {/* Description */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Description <span className="text-gray-400 text-xs">(optional)</span>
@@ -177,7 +183,12 @@ export default function SubmitAlert({ onSubmitAlert }) {
           />
         </div>
 
-        {/* Submit */}
+        {submitError && (
+          <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            {submitError}
+          </div>
+        )}
+
         <button
           onClick={handleSubmit}
           disabled={isSubmitting}
@@ -185,7 +196,6 @@ export default function SubmitAlert({ onSubmitAlert }) {
         >
           {isSubmitting ? 'Submitting...' : '🚨 Submit Alert'}
         </button>
-
       </div>
     </div>
   )

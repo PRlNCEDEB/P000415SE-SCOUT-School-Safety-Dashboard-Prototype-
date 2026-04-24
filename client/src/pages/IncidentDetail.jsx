@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getIncidentById } from '../api/client'
+import { getIncidentById, updateIncidentStatus } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 
 const priorityColors = {
@@ -40,7 +40,7 @@ const nextLabel = {
   'in-progress': 'Mark Resolved',
 }
 
-export default function IncidentDetail({ incidents, onUpdateIncidentStatus }) {
+export default function IncidentDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { isAdmin } = useAuth()
@@ -48,6 +48,7 @@ export default function IncidentDetail({ incidents, onUpdateIncidentStatus }) {
   const [status, setStatus] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [updating, setUpdating] = useState(false)
 
   useEffect(() => {
     let isActive = true
@@ -81,13 +82,35 @@ export default function IncidentDetail({ incidents, onUpdateIncidentStatus }) {
     }
   }, [id])
 
+  const handleStatusUpdate = async () => {
+    const newStatus = nextStatus[status]
+    if (!newStatus || updating) return
+
+    setUpdating(true)
+    setError('')
+
+    try {
+      const updatedIncident = await updateIncidentStatus(id, newStatus)
+      setIncident(prev => ({
+        ...(prev || {}),
+        ...updatedIncident,
+        notifications: prev?.notifications || updatedIncident.notifications || [],
+      }))
+      setStatus(updatedIncident.status)
+    } catch (err) {
+      setError(err.message || 'Failed to update incident status.')
+    } finally {
+      setUpdating(false)
+    }
+  }
+
   const found = incident
 
   if (loading) {
     return <div className="p-6 text-center text-gray-500">Loading incident...</div>
   }
 
-  if (error) {
+  if (error && !found) {
     return (
       <div className="p-6 text-center text-gray-500">
         {error}{' '}
@@ -111,8 +134,6 @@ export default function IncidentDetail({ incidents, onUpdateIncidentStatus }) {
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
-
-      {/* Back */}
       <button
         onClick={() => navigate('/incidents')}
         className="text-sm text-gray-500 hover:text-gray-700 mb-4 flex items-center gap-1"
@@ -120,7 +141,6 @@ export default function IncidentDetail({ incidents, onUpdateIncidentStatus }) {
         ← Back to Incidents
       </button>
 
-      {/* Header */}
       <div className="bg-white border border-gray-200 rounded-xl p-5 mb-4">
         <div className="flex items-start justify-between gap-4 mb-3">
           <div className="flex items-center gap-2">
@@ -157,7 +177,6 @@ export default function IncidentDetail({ incidents, onUpdateIncidentStatus }) {
         </div>
       </div>
 
-      {/* Description */}
       <div className="bg-white border border-gray-200 rounded-xl p-5 mb-4">
         <h2 className="font-semibold text-gray-900 mb-2">Description</h2>
         <p className="text-sm text-gray-600">
@@ -165,7 +184,6 @@ export default function IncidentDetail({ incidents, onUpdateIncidentStatus }) {
         </p>
       </div>
 
-      {/* Notification Status */}
       <div className="bg-white border border-gray-200 rounded-xl p-5 mb-4">
         <h2 className="font-semibold text-gray-900 mb-3">Notification Delivery</h2>
         {found.notifications && found.notifications.length > 0 ? (
@@ -174,10 +192,10 @@ export default function IncidentDetail({ incidents, onUpdateIncidentStatus }) {
               <div key={idx} className="flex items-center justify-between text-sm">
                 <span className="text-gray-700">{n.recipientName}</span>
                 <div className="flex gap-2">
-                  <span className={`text-xs px-2 py-0.5 rounded ${n.sms === 'sent' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                  <span className={`text-xs px-2 py-0.5 rounded ${n.sms === 'sent' ? 'bg-green-100 text-green-700' : n.sms === 'pending' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>
                     SMS {n.sms}
                   </span>
-                  <span className={`text-xs px-2 py-0.5 rounded ${n.email === 'sent' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                  <span className={`text-xs px-2 py-0.5 rounded ${n.email === 'sent' ? 'bg-green-100 text-green-700' : n.email === 'pending' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>
                     Email {n.email}
                   </span>
                 </div>
@@ -189,20 +207,20 @@ export default function IncidentDetail({ incidents, onUpdateIncidentStatus }) {
         )}
       </div>
 
-      {/* Action Button — admin only */}
+      {error && found && (
+        <div className="mb-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+          {error}
+        </div>
+      )}
+
       {isAdmin ? (
         nextStatus[status] && (
           <button
-            // TODO: Persist status transition to backend before updating the UI.
-            // const handleStatusUpdate = async () => {
-            //   call backend
-            //   update UI on success
-            //   show error on failure
-            // }
-            onClick={() => onUpdateIncidentStatus(found.id, nextStatus[status])} // onClick={handleStatusUpdate}
-            className="w-full py-3 bg-red-600 text-white font-medium rounded-xl hover:bg-red-700 transition-colors"
+            onClick={handleStatusUpdate}
+            disabled={updating}
+            className="w-full py-3 bg-red-600 text-white font-medium rounded-xl hover:bg-red-700 transition-colors disabled:opacity-60"
           >
-            {nextLabel[status]}
+            {updating ? 'Updating...' : nextLabel[status]}
           </button>
         )
       ) : (
@@ -216,7 +234,6 @@ export default function IncidentDetail({ incidents, onUpdateIncidentStatus }) {
           This incident has been archived.
         </div>
       )}
-
     </div>
   )
 }

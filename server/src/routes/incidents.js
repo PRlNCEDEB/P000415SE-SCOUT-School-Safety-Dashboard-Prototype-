@@ -1,5 +1,11 @@
 const express = require('express')
-const { docToObject, formatTimestamp, getDb, snapshotToArray } = require('../db/firebase')
+const {
+  docToObject,
+  formatTimestamp,
+  getDb,
+  snapshotToArray,
+  serverTimestamp,
+} = require('../db/firebase')
 
 const router = express.Router()
 
@@ -28,9 +34,11 @@ function toIncidentResponse(incident) {
   }
 }
 
+// GET all incidents
 router.get('/', async (req, res, next) => {
   try {
     const snapshot = await getDb().collection('incidents').get()
+
     const incidents = snapshotToArray(snapshot)
       .sort((left, right) => getSortValue(right) - getSortValue(left))
       .map(toIncidentResponse)
@@ -41,6 +49,7 @@ router.get('/', async (req, res, next) => {
   }
 })
 
+// GET single incident
 router.get('/:id', async (req, res, next) => {
   try {
     const doc = await getDb().collection('incidents').doc(req.params.id).get()
@@ -66,6 +75,81 @@ router.get('/:id', async (req, res, next) => {
         ...toIncidentResponse(incident),
         notifications,
       },
+    })
+  } catch (error) {
+    next(error)
+  }
+})
+
+// POST create incident
+router.post('/', async (req, res, next) => {
+  try {
+    const { type, priority, title, description, location, triggeredByName } = req.body
+
+    if (!type || !priority || !title || !location) {
+      return res.status(400).json({
+        error: 'Type, priority, title, and location are required.',
+      })
+    }
+
+    const payload = {
+      type,
+      priority,
+      status: 'triggered',
+      title: title.trim(),
+      description: description?.trim() || '',
+      location,
+      triggeredByName: triggeredByName || 'Admin User',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }
+
+    const docRef = await getDb().collection('incidents').add(payload)
+    const createdDoc = await docRef.get()
+    const createdIncident = docToObject(createdDoc)
+
+    res.status(201).json({
+      incident: toIncidentResponse(createdIncident),
+    })
+  } catch (error) {
+    next(error)
+  }
+})
+
+// PATCH update incident status
+router.patch('/:id/status', async (req, res, next) => {
+  try {
+    const { status } = req.body
+
+    const allowedStatuses = [
+      'triggered',
+      'acknowledged',
+      'in-progress',
+      'resolved',
+      'archived',
+    ]
+
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({ error: 'Invalid status value.' })
+    }
+
+    const docRef = getDb().collection('incidents').doc(req.params.id)
+    const existingDoc = await docRef.get()
+
+    if (!existingDoc.exists) {
+      return res.status(404).json({ error: 'Incident not found.' })
+    }
+
+    await docRef.update({
+      status,
+      updatedAt: serverTimestamp(),
+    })
+
+    const updatedDoc = await docRef.get()
+    const updatedIncident = docToObject(updatedDoc)
+
+    res.json({
+      incident: toIncidentResponse(updatedIncident),
     })
   } catch (error) {
     next(error)
