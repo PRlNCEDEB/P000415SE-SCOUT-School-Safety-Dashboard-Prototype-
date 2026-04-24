@@ -25,26 +25,27 @@ export default function Notifications() {
   const [notifications, setNotifications] = useState([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    const fetch = async () => {
-      try {
-        const data = await notificationsAPI.list()
-        setNotifications(data)
-      } catch (err) {
-        console.error('Failed to fetch notifications:', err)
-      } finally {
-        setLoading(false)
-      }
+  const fetchNotifications = async () => {
+    setLoading(true)
+    try {
+      const data = await notificationsAPI.list()
+      setNotifications(data)
+    } catch (err) {
+      console.error('Failed to fetch notifications:', err)
+    } finally {
+      setLoading(false)
     }
-    fetch()
-    const interval = setInterval(fetch, 15000)
-    return () => clearInterval(interval)
+  }
+
+  // Fetch once on mount — no polling (saves ~24,000 Firestore reads/hour)
+  useEffect(() => {
+    fetchNotifications()
   }, [])
 
   // Admin sees all, user sees only their own
   const visibleNotifications = isAdmin
     ? notifications
-    : notifications.filter(n => n.recipientEmail === currentUser.email)
+    : notifications.filter(n => n.recipientEmail === currentUser?.email)
 
   const totalSent = visibleNotifications.filter(
     n => n.sms === 'sent' || n.email === 'sent'
@@ -74,13 +75,22 @@ export default function Notifications() {
     <div className="p-6 max-w-5xl mx-auto">
 
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Notifications</h1>
-        <p className="text-sm text-gray-500">
-          {isAdmin
-            ? 'Track SMS and email delivery across all incidents'
-            : 'Your personal notification history'}
-        </p>
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Notifications</h1>
+          <p className="text-sm text-gray-500">
+            {isAdmin
+              ? 'Track SMS and email delivery across all incidents'
+              : 'Your personal notification history'}
+          </p>
+        </div>
+        <button
+          onClick={fetchNotifications}
+          disabled={loading}
+          className="px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:bg-gray-400 transition-colors flex items-center gap-2"
+        >
+          {loading ? '⏳ Refreshing...' : '🔄 Refresh'}
+        </button>
       </div>
 
       {/* User info banner */}
@@ -163,7 +173,7 @@ export default function Notifications() {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-800">{n.incidentTitle}</p>
                   <p className="text-xs text-gray-500 mt-0.5">
-                    👤 {n.recipientName} · 📧 {n.recipientEmail} · 📱 {n.recipientPhone}
+                    👤 {n.recipientName} · 📧 {n.recipientEmail}
                   </p>
                   <p className="text-xs text-gray-400 mt-0.5">🕐 {n.timestamp}</p>
                 </div>
