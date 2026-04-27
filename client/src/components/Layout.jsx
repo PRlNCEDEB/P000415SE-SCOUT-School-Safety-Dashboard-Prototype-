@@ -1,9 +1,53 @@
+import { useState, useEffect } from 'react'
 import { Link, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { getIncidentById } from '../api/client'
 
 export default function Layout({ children }) {
   const location = useLocation()
   const { currentUser, logout, isAdmin } = useAuth()
+
+  // Active emergency banner state
+  const [activeEmergency, setActiveEmergency] = useState(null)
+  const [acknowledgedBy, setAcknowledgedBy] = useState([])
+
+  // On mount, check localStorage for an active emergency
+  useEffect(() => {
+    const stored = localStorage.getItem('activeEmergency')
+    if (stored) {
+      try {
+        setActiveEmergency(JSON.parse(stored))
+      } catch {
+        localStorage.removeItem('activeEmergency')
+      }
+    }
+  }, [])
+
+  // Poll the incident every 5 seconds to check for acknowledgements
+  useEffect(() => {
+    if (!activeEmergency?.incidentId) return
+
+    const poll = async () => {
+      try {
+        const incident = await getIncidentById(activeEmergency.incidentId)
+        if (incident?.acknowledgedBy?.length > 0) {
+          setAcknowledgedBy(incident.acknowledgedBy)
+        }
+      } catch (err) {
+        console.error('Failed to poll incident acknowledgement:', err)
+      }
+    }
+
+    poll()
+    const interval = setInterval(poll, 5000)
+    return () => clearInterval(interval)
+  }, [activeEmergency])
+
+  const dismissBanner = () => {
+    localStorage.removeItem('activeEmergency')
+    setActiveEmergency(null)
+    setAcknowledgedBy([])
+  }
 
   if (!currentUser) {
     return <Navigate to="/login" replace />
@@ -17,9 +61,50 @@ export default function Layout({ children }) {
     { path: '/notifications', label: 'Notifications', icon: 'N', allowed: true },
   ]
 
+  const isAcknowledged = acknowledgedBy.length > 0
+  const firstAck = acknowledgedBy[0]
+
   return (
     <div className="flex h-screen bg-gray-50">
-      <div className="w-56 bg-white border-r border-gray-200 flex flex-col">
+
+      {/* Floating Emergency Banner — shown on all pages */}
+      {activeEmergency && (
+        <div className={`fixed top-0 left-0 right-0 z-50 px-4 py-3 flex items-center justify-between shadow-lg ${
+          isAcknowledged ? 'bg-green-600' : 'bg-red-600'
+        }`}>
+          <div className="flex items-center gap-3">
+            {isAcknowledged ? (
+              <>
+                <span className="text-xl">✅</span>
+                <div>
+                  <p className="text-white font-semibold text-sm">Help is on the way!</p>
+                  <p className="text-white text-xs opacity-90">
+                    {firstAck.name} acknowledged at {new Date(firstAck.acknowledgedAt).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                </div>
+              </>
+            ) : (
+              <>
+                <span className="text-xl animate-pulse">🚨</span>
+                <div>
+                  <p className="text-white font-semibold text-sm">
+                    {activeEmergency.emergencyType} Emergency Alert Sent
+                  </p>
+                  <p className="text-white text-xs opacity-90">⏳ Waiting for acknowledgement...</p>
+                </div>
+              </>
+            )}
+          </div>
+          <button
+            onClick={dismissBanner}
+            className="text-white text-xs opacity-75 hover:opacity-100 px-2 py-1 rounded hover:bg-white hover:bg-opacity-20 transition-colors"
+          >
+            ✕ Dismiss
+          </button>
+        </div>
+      )}
+
+      <div className={`w-56 bg-white border-r border-gray-200 flex flex-col ${activeEmergency ? 'mt-12' : ''}`}>
         <div className="flex items-center gap-2 px-4 py-5 border-b border-gray-200">
           <div className="w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center">
             <span className="text-white text-sm">S</span>
@@ -83,9 +168,10 @@ export default function Layout({ children }) {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className={`flex-1 overflow-y-auto ${activeEmergency ? 'mt-12' : ''}`}>
         {children}
       </div>
+
     </div>
   )
 }

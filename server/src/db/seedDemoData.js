@@ -1,4 +1,4 @@
-const { getDb, initFirebase, serverTimestamp } = require('./firebase')
+const { getDb, initFirebase } = require('./firebase')
 const { notificationRecipients, notificationRouting } = require('./demoSeedData_notification')
 
 async function upsertCollection(collectionName, docs) {
@@ -6,12 +6,13 @@ async function upsertCollection(collectionName, docs) {
 
   for (const doc of docs) {
     const { id, ...rest } = doc
+    const now = new Date().toISOString()
 
     await db.collection(collectionName).doc(id).set(
       {
         ...rest,
-        updatedAt: serverTimestamp(),
-        createdAt: serverTimestamp(),
+        createdAt: now,
+        updatedAt: now,
       },
       { merge: true }
     )
