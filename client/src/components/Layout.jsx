@@ -11,39 +11,24 @@ export default function Layout({ children }) {
   const [activeEmergency, setActiveEmergency] = useState(null)
   const [acknowledgedBy, setAcknowledgedBy] = useState([])
 
-  // On mount, check localStorage for an active emergency
-  // Also listen for emergency triggered in the same tab
+  // Check localStorage every second for active emergency
+  // This ensures the banner appears on the same page without needing to navigate
   useEffect(() => {
-    const stored = localStorage.getItem('activeEmergency')
-    if (stored) {
-      try {
-        setActiveEmergency(JSON.parse(stored))
-      } catch {
-        localStorage.removeItem('activeEmergency')
+    const check = () => {
+      const stored = localStorage.getItem('activeEmergency')
+      if (stored && !activeEmergency) {
+        try {
+          setActiveEmergency(JSON.parse(stored))
+        } catch {
+          localStorage.removeItem('activeEmergency')
+        }
       }
     }
 
-    const handleEmergency = () => {
-      const updated = localStorage.getItem('activeEmergency')
-      if (updated) setActiveEmergency(JSON.parse(updated))
-    }
-
-    window.addEventListener('emergencyTriggered', handleEmergency)
-    return () => window.removeEventListener('emergencyTriggered', handleEmergency)
-  }, [])
-
-  // Re-check localStorage whenever page location changes
-  // This ensures the banner shows immediately after triggering on the same page
-  useEffect(() => {
-    const stored = localStorage.getItem('activeEmergency')
-    if (stored && !activeEmergency) {
-      try {
-        setActiveEmergency(JSON.parse(stored))
-      } catch {
-        localStorage.removeItem('activeEmergency')
-      }
-    }
-  }, [location])
+    check() // run immediately on mount
+    const interval = setInterval(check, 1000) // check every 1 second
+    return () => clearInterval(interval)
+  }, [activeEmergency])
 
   // Poll the incident every 5 seconds to check for acknowledgements
   useEffect(() => {
