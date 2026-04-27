@@ -212,7 +212,7 @@ async function seedDemoAnalyticsData() {
     incidentsData.forEach((incident, index) => {
       const docRef = incidentsRef.doc(`incident_${index + 1}`)
       // Spread createdAt across past days so analytics charts show varied data
-      const daysAgo = index % 7
+      const daysAgo = index
       const createdAt = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000).toISOString()
       const updatedAt = incident.status === 'resolved'
         ? new Date(new Date(createdAt).getTime() + 5 * 60 * 1000).toISOString()
