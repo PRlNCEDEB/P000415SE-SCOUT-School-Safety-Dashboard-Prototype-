@@ -12,6 +12,7 @@ export default function Layout({ children }) {
   const [acknowledgedBy, setAcknowledgedBy] = useState([])
 
   // On mount, check localStorage for an active emergency
+  // Also listen for emergency triggered in the same tab
   useEffect(() => {
     const stored = localStorage.getItem('activeEmergency')
     if (stored) {
@@ -21,6 +22,14 @@ export default function Layout({ children }) {
         localStorage.removeItem('activeEmergency')
       }
     }
+
+    const handleEmergency = () => {
+      const updated = localStorage.getItem('activeEmergency')
+      if (updated) setActiveEmergency(JSON.parse(updated))
+    }
+
+    window.addEventListener('emergencyTriggered', handleEmergency)
+    return () => window.removeEventListener('emergencyTriggered', handleEmergency)
   }, [])
 
   // Poll the incident every 5 seconds to check for acknowledgements
