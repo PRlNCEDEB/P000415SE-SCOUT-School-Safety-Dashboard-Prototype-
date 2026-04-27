@@ -4,6 +4,7 @@ const router = express.Router()
 const sgMail = require('@sendgrid/mail')
 const twilio = require('twilio')
 const crypto = require('crypto')
+const admin = require('firebase-admin')
 const { getDb } = require('../db/firebase')
 
 const BACKEND_URL = process.env.BACKEND_URL || 'https://p000415se-scout-school-safety-dashboard-lo5f.onrender.com'
@@ -264,26 +265,19 @@ router.get('/acknowledge/:token', async (req, res) => {
       acknowledgedAt,
     })
 
-    // Add to incident's acknowledgedBy array
+    // Add to incident's acknowledgedBy array using arrayUnion
     if (notification.incidentId) {
       try {
         const incidentRef = db.collection('incidents').doc(notification.incidentId)
-        const incidentDoc = await incidentRef.get()
-        if (incidentDoc.exists) {
-          const existing = incidentDoc.data().acknowledgedBy || []
-          await incidentRef.update({
-            acknowledgedBy: [
-              ...existing,
-              {
-                name: notification.recipientName,
-                email: notification.recipientEmail,
-                role: notification.recipientRole,
-                acknowledgedAt,
-              }
-            ]
+        await incidentRef.update({
+          acknowledgedBy: admin.firestore.FieldValue.arrayUnion({
+            name: notification.recipientName,
+            email: notification.recipientEmail,
+            role: notification.recipientRole,
+            acknowledgedAt,
           })
-          console.log(`✅ Incident ${notification.incidentId} acknowledged by ${notification.recipientName}`)
-        }
+        })
+        console.log(`✅ Incident ${notification.incidentId} acknowledged by ${notification.recipientName}`)
       } catch (err) {
         console.error('Failed to update incident acknowledgedBy:', err.message)
       }
