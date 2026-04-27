@@ -32,6 +32,19 @@ export default function Layout({ children }) {
     return () => window.removeEventListener('emergencyTriggered', handleEmergency)
   }, [])
 
+  // Re-check localStorage whenever page location changes
+  // This ensures the banner shows immediately after triggering on the same page
+  useEffect(() => {
+    const stored = localStorage.getItem('activeEmergency')
+    if (stored && !activeEmergency) {
+      try {
+        setActiveEmergency(JSON.parse(stored))
+      } catch {
+        localStorage.removeItem('activeEmergency')
+      }
+    }
+  }, [location])
+
   // Poll the incident every 5 seconds to check for acknowledgements
   useEffect(() => {
     if (!activeEmergency?.incidentId) return
