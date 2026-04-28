@@ -51,6 +51,9 @@ export default function IncidentDetail() {
   const [statusUpdating, setStatusUpdating] = useState(false)
   const [statusError, setStatusError] = useState('')
 
+  // New — track who acknowledged
+  const [acknowledgedBy, setAcknowledgedBy] = useState([])
+
   useEffect(() => {
     let isActive = true
 
@@ -64,6 +67,7 @@ export default function IncidentDetail() {
         if (isActive) {
           setIncident(record)
           setStatus(record?.status || '')
+          setAcknowledgedBy(record?.acknowledgedBy || [])
         }
       } catch (err) {
         if (isActive) {
@@ -81,6 +85,24 @@ export default function IncidentDetail() {
     return () => {
       isActive = false
     }
+  }, [id])
+
+  // Poll every 5 seconds to check for new acknowledgements
+  useEffect(() => {
+    if (!id) return
+
+    const interval = setInterval(async () => {
+      try {
+        const record = await getIncidentById(id)
+        if (record?.acknowledgedBy?.length > 0) {
+          setAcknowledgedBy(record.acknowledgedBy)
+        }
+      } catch {
+        // silently ignore poll errors
+      }
+    }, 5000)
+
+    return () => clearInterval(interval)
   }, [id])
 
   const found = incident
@@ -121,6 +143,19 @@ export default function IncidentDetail() {
       >
         ← Back to Incidents
       </button>
+
+      {/* Help is on the way banner */}
+      {acknowledgedBy.length > 0 && (
+        <div className="bg-green-50 border border-green-300 rounded-xl px-5 py-4 mb-4 flex items-start gap-3">
+          <span className="text-2xl">✅</span>
+          <div>
+            <p className="font-semibold text-green-800">Help is on the way!</p>
+            <p className="text-sm text-green-600 mt-0.5">
+              {acknowledgedBy.length} person{acknowledgedBy.length > 1 ? 's have' : ' has'} acknowledged this alert and are responding.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Header */}
       <div className="bg-white border border-gray-200 rounded-xl p-5 mb-4">
@@ -166,6 +201,29 @@ export default function IncidentDetail() {
           {found.description || 'No additional description provided for this incident.'}
         </p>
       </div>
+
+      {/* Acknowledged By — only shown if someone has responded */}
+      {acknowledgedBy.length > 0 && (
+        <div className="bg-white border border-green-200 rounded-xl p-5 mb-4">
+          <h2 className="font-semibold text-gray-900 mb-3">Acknowledged By</h2>
+          <div className="space-y-2">
+            {acknowledgedBy.map((ack, idx) => (
+              <div key={idx} className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="text-green-500">✅</span>
+                  <div>
+                    <p className="text-gray-800 font-medium">{ack.name}</p>
+                    <p className="text-xs text-gray-400">{ack.role} · {ack.email}</p>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-400">
+                  {new Date(ack.acknowledgedAt).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Notification Status */}
       <div className="bg-white border border-gray-200 rounded-xl p-5 mb-4">

@@ -2,7 +2,7 @@ const notificationRecipients = [
   {
     id: 'classroom-teacher',
     name: 'Jordan Classroom Teacher',
-    email: 'classroom.teacher@school.edu',
+    email: 'east.horng27@gmail.com',       // TODO: replace with real email
     phone: '+61400000011',
     role: 'classroom_teacher',
     active: true,
@@ -10,7 +10,7 @@ const notificationRecipients = [
   {
     id: 'leading-teacher',
     name: 'Taylor Leading Teacher',
-    email: 'leading.teacher@school.edu',
+    email: 'east.horng27@gmail.com',       // TODO: replace with real email
     phone: '+61400000012',
     role: 'leading_teacher',
     active: true,
@@ -18,8 +18,8 @@ const notificationRecipients = [
   {
     id: 'first-aid-officer',
     name: 'Casey First Aid Officer',
-    email: 'firstaid@school.edu',
-    phone: '+61400000013',
+    email: 'east.horng27@gmail.com',       // TODO: replace with real email
+    phone: '+61400000013',              // TODO: replace with real phone
     role: 'first_aid_officer',
     active: true,
   },
@@ -42,7 +42,7 @@ const notificationRecipients = [
   {
     id: 'principal',
     name: 'Riley Principal',
-    email: 'principal@school.edu',
+    email: 'east.horng27@gmail.com',       // TODO: replace with real email
     phone: '+61400000016',
     role: 'principal',
     active: true,
@@ -50,8 +50,8 @@ const notificationRecipients = [
   {
     id: 'maintenance-facilities',
     name: 'Sam Facilities Lead',
-    email: 'facilities@school.edu',
-    phone: '+61400000017',
+    email: 'debprince21@gmail.com',     // using developer's email for the time being
+    phone: '+61400000017',              // TODO: replace with real phone
     role: 'maintenance_facilities',
     active: true,
   },
@@ -63,25 +63,38 @@ const notificationRecipients = [
     role: 'relevant_staff',
     active: true,
   },
+
+  // ── New roles added for emergency routing ─────────────────────────────────
+  {
+    id: 'fire-warden',
+    name: 'Fire Warden',
+    email: 'debprince21@gmail.com',     // using developer's email for the time being
+    phone: '+61400000019',              // TODO: replace with real phone
+    role: 'fire_warden',
+    active: true,
+  },
+  {
+    id: 'security-officer',
+    name: 'Security Officer',
+    email: 'debprince21@gmail.com',     // using developer's email for the time being
+    phone: '+61400000020',              // TODO: replace with real phone
+    role: 'security_officer',
+    active: true,
+  },
 ]
 
 const notificationRouting = [
-  {
-    id: 'emergency-natural-disaster',
-    alertScope: 'emergency',
-    alertType: 'Natural Disaster',
-    priority: 'critical',
-    channels: ['sms', 'email'],
-    roles: ['principal', 'assistant_principal', 'leading_teacher', 'first_aid_officer'],
-    active: true,
-  },
+
+  // ── Emergency alerts — each type now notifies the correct roles ────────────
+
   {
     id: 'emergency-fire',
     alertScope: 'emergency',
     alertType: 'Fire',
     priority: 'critical',
     channels: ['sms', 'email'],
-    roles: ['principal', 'assistant_principal', 'leading_teacher', 'first_aid_officer'],
+    // fire_warden responds, principal is informed
+    roles: ['fire_warden', 'principal'],
     active: true,
   },
   {
@@ -90,9 +103,23 @@ const notificationRouting = [
     alertType: 'Threat',
     priority: 'critical',
     channels: ['sms', 'email'],
-    roles: ['principal', 'assistant_principal', 'leading_teacher', 'first_aid_officer'],
+    // security_officer responds, principal is informed
+    roles: ['security_officer', 'principal'],
     active: true,
   },
+  {
+    id: 'emergency-natural-disaster',
+    alertScope: 'emergency',
+    alertType: 'Natural Disaster',
+    priority: 'critical',
+    channels: ['sms', 'email'],
+    // first_aid_officer and maintenance_facilities respond, principal is informed
+    roles: ['first_aid_officer', 'maintenance_facilities', 'principal'],
+    active: true,
+  },
+
+  // ── General alerts — unchanged ─────────────────────────────────────────────
+
   {
     id: 'general-medical',
     alertScope: 'general',

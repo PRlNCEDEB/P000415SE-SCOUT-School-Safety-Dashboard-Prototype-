@@ -154,6 +154,12 @@ export default function Incidents() {
               <span className={`text-xs px-2 py-0.5 rounded ${statusColors[i.status]}`}>
                 {i.status}
               </span>
+              {/* Acknowledged badge — only shown if someone has responded */}
+              {i.acknowledgedBy && i.acknowledgedBy.length > 0 && (
+                <span className="text-xs px-2 py-0.5 rounded bg-green-100 text-green-700 font-medium">
+                  ✅ Responded
+                </span>
+              )}
               <span className="text-gray-400">›</span>
             </div>
           ))

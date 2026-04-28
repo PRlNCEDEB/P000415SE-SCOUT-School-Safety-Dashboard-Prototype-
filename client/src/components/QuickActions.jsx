@@ -9,7 +9,7 @@ const emergencyTypes = [
 ]
 
 export default function QuickActions() {
-  const { isAdmin } = useAuth()
+  const { isAdmin, currentUser } = useAuth()
   const [logs, setLogs] = useState([])
   const [feedback, setFeedback] = useState(null)
   const [showConfirm, setShowConfirm] = useState(false)
@@ -54,6 +54,7 @@ export default function QuickActions() {
     setCustomMessage('')
   }
 
+  // Creates the incident record and returns the full incident object (with id)
   const createIncidentRecord = async (typeValue, description) => {
     const mappedType = typeValue === 'Natural Disaster'
       ? 'weather'
@@ -62,15 +63,19 @@ export default function QuickActions() {
         : 'lockdown'
 
     try {
-      await incidentAPI.create({
+      const incident = await incidentAPI.create({
         type: mappedType,
         priority: 'critical',
         title: `${typeValue} alert`,
         location: editForm.location || 'Dashboard quick action',
         description: description || `${typeValue} emergency triggered from dashboard.`,
+        triggeredByName: currentUser?.name || 'Unknown',
+        triggeredById: currentUser?.id || null,
       })
+      return incident  // return full incident so we can get the id
     } catch (err) {
       console.error('Failed to create incident record:', err)
+      return null
     }
   }
 
@@ -84,6 +89,11 @@ export default function QuickActions() {
     setCodeError('')
 
     try {
+      // Step 1: Create incident FIRST so we have the incidentId
+      const incident = await createIncidentRecord(selectedType.value, customMessage || editForm.description)
+      const incidentId = incident?.id || null
+
+      // Step 2: Send emergency notification, passing incidentId
       const data = await apiCall('/notifications/emergency', {
         method: 'POST',
         body: JSON.stringify({
@@ -91,10 +101,20 @@ export default function QuickActions() {
           emergencyType: selectedType.value,
           location: editForm.location || '',
           message: customMessage || `Emergency alert triggered for ${selectedType.value}. All relevant staff have been notified.`,
+          incidentId,  // link notification to incident
         }),
       })
 
       if (data.success) {
+        // Store active emergency in localStorage so Layout can show the banner
+        if (incidentId) {
+          localStorage.setItem('activeEmergency', JSON.stringify({
+            incidentId,
+            emergencyType: selectedType.value,
+            triggeredAt: new Date().toISOString(),
+          }))
+        }
+
         const newLog = {
           id: Date.now().toString(),
           button: '1',
@@ -106,7 +126,6 @@ export default function QuickActions() {
           location: editForm.location,
         }
 
-        await createIncidentRecord(selectedType.value, customMessage || editForm.description)
         setLogs(prev => [newLog, ...prev])
         setShowKeypad(false)
         setShowResult(data)
@@ -141,6 +160,8 @@ export default function QuickActions() {
         title: 'General alert',
         location: 'Dashboard quick action',
         description: 'General quick action triggered from dashboard.',
+        triggeredByName: currentUser?.name || 'Unknown',
+        triggeredById: currentUser?.id || null,
       })
     } catch (err) {
       console.error('Failed to create general incident record:', err)
