@@ -5,7 +5,7 @@ import { getIncidentById } from '../api/client'
 
 export default function Layout({ children }) {
   const location = useLocation()
-  const { currentUser, logout, isAdmin } = useAuth()
+  const { currentUser, userRole, logout, isAdmin } = useAuth()
 
   // Active emergency banner state
   const [activeEmergency, setActiveEmergency] = useState(null)
@@ -150,11 +150,11 @@ export default function Layout({ children }) {
         <div className="p-3 border-t border-gray-200">
           <div className="px-3 py-2 mb-1">
             <div className="flex items-center justify-between mb-0.5">
-              <p className="text-sm font-medium text-gray-800">{currentUser.name}</p>
+              <p className="text-sm font-medium text-gray-800">{currentUser.displayName || currentUser.name}</p>
               <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                 isAdmin ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'
               }`}>
-                {currentUser.role}
+                {userRole || currentUser.role}
               </span>
             </div>
             <p className="text-xs text-gray-400">{currentUser.email}</p>
