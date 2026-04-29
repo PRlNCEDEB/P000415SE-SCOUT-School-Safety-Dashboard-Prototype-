@@ -23,7 +23,7 @@ const users = [
   },
 ]
 
-async function seed() {
+async function seedDemoUsers() {
   initFirebase()
   const db = getDb()
 
@@ -50,12 +50,16 @@ async function seed() {
 
     console.log(`Created user: ${user.email} (${user.role})`)
   }
-
   console.log('Seeding complete.')
-  process.exit(0)
 }
 
-seed().catch(err => {
-  console.error('Seed failed:', err)
-  process.exit(1)
-})
+if (require.main === module) {
+  seedDemoUsers()
+    .then(() => process.exit(0))
+    .catch(err => {
+      console.error('Seed failed:', err)
+      process.exit(1)
+    })
+}
+
+module.exports = { seedDemoUsers }

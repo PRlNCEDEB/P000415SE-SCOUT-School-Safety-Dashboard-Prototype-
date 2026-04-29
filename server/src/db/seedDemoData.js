@@ -19,7 +19,7 @@ async function upsertCollection(collectionName, docs) {
   }
 }
 
-async function seed() {
+async function seedDemoNotificationData() {
   initFirebase()
 
   await upsertCollection('notificationRecipients', notificationRecipients)
@@ -29,7 +29,11 @@ async function seed() {
   console.log(`Seeded ${notificationRouting.length} routing rules into notificationRouting collection.`)
 }
 
-seed().catch(error => {
-  console.error('Failed to seed demo data:', error)
-  process.exit(1)
-})
+if (require.main === module) {
+  seedDemoNotificationData().catch(error => {
+    console.error('Failed to seed demo data:', error)
+    process.exit(1)
+  })
+}
+
+module.exports = { seedDemoNotificationData }

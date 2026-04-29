@@ -28,9 +28,6 @@ server/.env
 # Secrets
 server/firebase-service-account.json
 
-# Markdown source files
-*.md
-
 # Local files
 *.local
 src.zip
@@ -46,3 +43,9 @@ Thumbs.db
 *.njsproj
 *.sln
 *.sw?
+
+# Local agent/tool folders
+.agents/
+.claude/
+.junie/
+skills-lock.json
