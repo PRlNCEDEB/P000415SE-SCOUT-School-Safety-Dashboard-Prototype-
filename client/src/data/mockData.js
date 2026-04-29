@@ -1,3 +1,33 @@
+// ── MOCK_USERS — mirrors the real users collection in Firestore ──
+// Emails and roles match exactly what's stored in the DB (role is lowercase).
+// Roles are normalised to title-case in Login.jsx before being passed to AuthContext.
+export const MOCK_USERS = [
+  {
+    uid: 'admin',
+    email: 'admin@school.edu',
+    password: 'password123',
+    displayName: 'Admin User',
+    role: 'admin',
+    photoURL: null,
+  },
+  {
+    uid: 'mock-user-001',
+    email: 'user@school.edu',
+    password: 'password123',
+    displayName: 'Staff User',
+    role: 'user',
+    photoURL: null,
+  },
+  {
+    uid: 'murali',
+    email: 'murali@school.edu',
+    password: 'password123',
+    displayName: 'Murali',
+    role: 'admin',
+    photoURL: null,
+  },
+]
+
 export const incidents = [
   {
     id: '1',

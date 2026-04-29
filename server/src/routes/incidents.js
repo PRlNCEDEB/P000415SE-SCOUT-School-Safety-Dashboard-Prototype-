@@ -1,5 +1,6 @@
 const express = require('express')
 const { docToObject, formatTimestamp, getDb, snapshotToArray } = require('../db/firebase')
+const { invalidateAnalyticsCache } = require('../analyticsCache')
 
 const router = express.Router()
 
@@ -93,6 +94,7 @@ router.post('/', async (req, res, next) => {
 
     const doc = await docRef.get()
     const incident = { id: doc.id, ...doc.data() }
+    invalidateAnalyticsCache()
     res.status(201).json(toIncidentResponse(incident))
   } catch (error) {
     next(error)
@@ -104,6 +106,7 @@ router.patch('/:id/status', async (req, res, next) => {
     const { status } = req.body
     const now = new Date().toISOString()
     await getDb().collection('incidents').doc(req.params.id).update({ status, updatedAt: now })
+    invalidateAnalyticsCache()
     res.json({ success: true })
   } catch (error) {
     next(error)

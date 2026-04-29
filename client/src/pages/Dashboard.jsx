@@ -20,7 +20,7 @@ const statusColors = {
 }
 
 const typeIcons = {
-   medical: '🏥',
+  medical: '🏥',
   behaviour: '⚠️',
   fire: '🔥',
   lockdown: '🔒',
@@ -50,9 +50,10 @@ export default function Dashboard() {
     }
 
     fetchIncidents()
+
   }, [])
 
-  const active = incidents.filter(incident => incident.status !== 'archived')
+  const active = incidents.filter(incident => incident.status !== 'archived' && incident.status !== 'resolved')
   const critical = active.filter(incident => incident.priority === 'critical').length
   const high = active.filter(incident => incident.priority === 'high').length
   const unacked = active.filter(incident => incident.status === 'triggered')
@@ -71,7 +72,7 @@ export default function Dashboard() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-sm text-gray-500">Welcome back, {currentUser?.name || currentUser?.email || 'Admin'}</p>
+          <p className="text-sm text-gray-500">Welcome back, {currentUser?.displayName || currentUser?.name || currentUser?.email || 'Admin'}</p>
         </div>
         <button
           onClick={() => navigate('/submit')}
@@ -86,7 +87,7 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <StatCard label="Active Incidents" value={active.length} color="text-gray-700" icon="🚨" />
+        <StatCard label="Active Incidents" value={active.length} color="text-gray-700" icon="🚨" />
         <StatCard label="Critical" value={critical} color="text-red-600" icon="⚡" />
         <StatCard label="High Priority" value={high} color="text-orange-600" icon="🚩" />
         <StatCard label="Avg Response" value="4.2m" color="text-blue-600" icon="⏱️" />
