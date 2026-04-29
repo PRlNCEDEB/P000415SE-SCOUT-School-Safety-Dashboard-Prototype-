@@ -8,12 +8,20 @@ const emergencyTypes = [
   { value: 'Threat', icon: '🛡️', desc: 'Security threat or lockdown' },
 ]
 
+const action2Types = [
+  { value: 'general', label: 'General', icon: '📢', desc: 'General incident or school-wide notice' },
+  { value: 'behaviour', label: 'Behaviour', icon: '⚠️', desc: 'Student behaviour and conduct incidents' },
+  { value: 'medical', label: 'Medical', icon: '🏥', desc: 'Health and first-aid incidents' },
+  { value: 'maintenance', label: 'Maintenance', icon: '🔧', desc: 'Facilities and maintenance issues' },
+]
+
 export default function QuickActions() {
   const { isAdmin, currentUser } = useAuth()
   const [logs, setLogs] = useState([])
   const [feedback, setFeedback] = useState(null)
   const [showConfirm, setShowConfirm] = useState(false)
   const [showCategory, setShowCategory] = useState(false)
+  const [showAction2Category, setShowAction2Category] = useState(false)
   const [showKeypad, setShowKeypad] = useState(false)
   const [selectedType, setSelectedType] = useState(null)
   const [code, setCode] = useState('')
@@ -143,34 +151,69 @@ export default function QuickActions() {
   }
 
   const handleAction2 = async () => {
-    const newLog = {
-      id: Date.now().toString(),
-      button: '2',
-      emergencyType: null,
-      actions: ['Email', 'Record'],
-      timestamp: new Date().toLocaleTimeString(),
-      title: '',
-      description: '',
-      location: '',
-    }
+    setShowAction2Category(true)
+  }
+
+  const handleAction2CategorySelect = async (selectedAction2Type) => {
+    setShowAction2Category(false)
+    setLoading(true)
+    setCodeError('')
 
     try {
-      await incidentAPI.create({
-        type: 'general',
+      const incident = await incidentAPI.create({
+        type: selectedAction2Type.value,
         priority: 'medium',
-        title: 'General alert',
-        location: 'Dashboard quick action',
-        description: 'General quick action triggered from dashboard.',
+        title: `${selectedAction2Type.label} alert`,
+        location: editForm.location || 'Dashboard quick action',
+        description: `${selectedAction2Type.label} quick action triggered from dashboard.`,
         triggeredByName: currentUser?.name || 'Unknown',
         triggeredById: currentUser?.id || null,
       })
-    } catch (err) {
-      console.error('Failed to create general incident record:', err)
-    }
 
-    setLogs(prev => [newLog, ...prev])
-    setFeedback({ button: '2', actions: 'Email + Record' })
-    setTimeout(() => setFeedback(null), 3000)
+      const incidentId = incident?.id || null
+
+      const data = await apiCall('/notifications/emergency', {
+        method: 'POST',
+        body: JSON.stringify({
+          code: '000',
+          emergencyType: selectedAction2Type.label,
+          location: editForm.location || '',
+          message: `${selectedAction2Type.label} quick action triggered from dashboard.`,
+          incidentId,
+          incidentTitle: `${selectedAction2Type.label} alert`,
+        }),
+      })
+
+      const newLog = {
+        id: Date.now().toString(),
+        button: '2',
+        emergencyType: selectedAction2Type.label,
+        actions: ['Email', 'SMS', 'Record'],
+        timestamp: new Date().toLocaleTimeString(),
+        title: `${selectedAction2Type.label} alert`,
+        description: `${selectedAction2Type.label} quick action triggered from dashboard.`,
+        location: editForm.location || 'Dashboard quick action',
+      }
+
+      if (incidentId) {
+        localStorage.setItem('activeEmergency', JSON.stringify({
+          incidentId,
+          emergencyType: selectedAction2Type.label,
+          triggeredAt: new Date().toISOString(),
+        }))
+        window.dispatchEvent(new Event('emergencyTriggered'))
+      }
+
+      setLogs(prev => [newLog, ...prev])
+      setShowResult(data)
+      setFeedback({ button: '2', actions: 'Email + SMS + Record' })
+      setTimeout(() => setFeedback(null), 3000)
+    } catch (err) {
+      console.error('Failed to create incident or send notifications for action 2:', err)
+      setCodeError('Could not create the incident or send notifications. Please try again.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleSaveEdit = () => {
@@ -208,7 +251,8 @@ export default function QuickActions() {
         >
           <div className="text-4xl font-bold text-gray-700 mb-3 text-center">2</div>
           <div className="space-y-1">
-             <p className="text-xs text-gray-600">📧 Send Email</p>
+            <p className="text-xs text-gray-600">📧 Send Email</p>
+            <p className="text-xs text-gray-600">📱 Send SMS</p>
             <p className="text-xs text-gray-600">🗄️ Create Record</p>
           </div>
         </button>
@@ -324,6 +368,34 @@ export default function QuickActions() {
                   <span className="text-sm font-semibold text-gray-600">{type.icon}</span>
                   <div>
                     <p className="text-sm font-semibold text-gray-800">{type.value}</p>
+                    <p className="text-xs text-gray-400">{type.desc}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAction2Category && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black bg-opacity-40" onClick={() => setShowAction2Category(false)} />
+          <div className="relative bg-white border border-gray-200 rounded-xl p-6 max-w-md w-full shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="text-lg font-bold text-gray-900">Select Incident Category</h4>
+              <button onClick={() => setShowAction2Category(false)} className="text-gray-400 hover:text-gray-600">X</button>
+            </div>
+            <p className="text-sm text-gray-500 mb-4">Choose the category for this incident. No passcode is required.</p>
+            <div className="space-y-2">
+              {action2Types.map(type => (
+                <button
+                  key={type.value}
+                  onClick={() => handleAction2CategorySelect(type)}
+                  className="w-full flex items-center gap-3 p-4 border-2 border-gray-200 rounded-xl hover:border-green-400 hover:bg-green-50 transition-all text-left"
+                >
+                  <span className="text-sm font-semibold text-gray-600">{type.icon}</span>
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800">{type.label}</p>
                     <p className="text-xs text-gray-400">{type.desc}</p>
                   </div>
                 </button>
