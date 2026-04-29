@@ -11,17 +11,24 @@ export default function Layout({ children }) {
   const [activeEmergency, setActiveEmergency] = useState(null)
   const [acknowledgedBy, setAcknowledgedBy] = useState([])
 
-  // On mount, check localStorage for an active emergency
+  // Check localStorage every second for active emergency
+  // This ensures the banner appears on the same page without needing to navigate
   useEffect(() => {
-    const stored = localStorage.getItem('activeEmergency')
-    if (stored) {
-      try {
-        setActiveEmergency(JSON.parse(stored))
-      } catch {
-        localStorage.removeItem('activeEmergency')
+    const check = () => {
+      const stored = localStorage.getItem('activeEmergency')
+      if (stored && !activeEmergency) {
+        try {
+          setActiveEmergency(JSON.parse(stored))
+        } catch {
+          localStorage.removeItem('activeEmergency')
+        }
       }
     }
-  }, [])
+
+    check() // run immediately on mount
+    const interval = setInterval(check, 1000) // check every 1 second
+    return () => clearInterval(interval)
+  }, [activeEmergency])
 
   // Poll the incident every 5 seconds to check for acknowledgements
   useEffect(() => {

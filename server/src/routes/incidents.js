@@ -25,6 +25,7 @@ function toIncidentResponse(incident) {
     timestamp: incident.createdAt ? formatTimestamp(incident.createdAt) : '',
     triggeredByName: incident.triggeredByName || 'Unknown reporter',
     description: incident.description || '',
+    acknowledgedBy: incident.acknowledgedBy || [],  // ← added
     notifications: [],
   }
 }
@@ -58,8 +59,8 @@ router.get('/:id', async (req, res, next) => {
 
     const notifications = snapshotToArray(notificationsSnapshot).map(notification => ({
       recipientName: notification.recipientName || 'Unknown recipient',
-      sms: notification.smsStatus || 'pending',
-      email: notification.emailStatus || 'pending',
+      sms: notification.sms || notification.smsStatus || 'pending',      // ← fixed
+      email: notification.email || notification.emailStatus || 'pending', // ← fixed
     }))
 
     res.json({

@@ -113,6 +113,7 @@ export default function QuickActions() {
             emergencyType: selectedType.value,
             triggeredAt: new Date().toISOString(),
           }))
+          window.dispatchEvent(new Event('emergencyTriggered')) // 
         }
 
         const newLog = {

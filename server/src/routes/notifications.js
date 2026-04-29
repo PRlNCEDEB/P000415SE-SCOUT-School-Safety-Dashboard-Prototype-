@@ -275,7 +275,9 @@ router.get('/acknowledge/:token', async (req, res) => {
             email: notification.recipientEmail,
             role: notification.recipientRole,
             acknowledgedAt,
-          })
+          }),
+          status: 'acknowledged',
+          updatedAt: new Date().toISOString(),
         })
         console.log(`✅ Incident ${notification.incidentId} acknowledged by ${notification.recipientName}`)
       } catch (err) {
