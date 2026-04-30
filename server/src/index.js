@@ -5,7 +5,8 @@ require('dotenv').config()
 const express = require('express')
 const cors = require('cors')
 const { initFirebase } = require('./db/firebase')
-// different route modules for each feature area
+const { seedDemoAnalyticsData } = require('./db/seedDemoAnalytics')
+
 const authRoutes = require('./routes/auth')
 const incidentRoutes = require('./routes/incidents')
 const notificationRoutes = require('./routes/notifications')
@@ -17,13 +18,16 @@ const PORT = process.env.PORT || 5000
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:3000'], //allow frontend dev servers to access the API
-  credentials: true,//allow cookies to be sent for authentication
+  origin: ['http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173', 'https://p000415-se-scout-school-safety-dash.vercel.app'],
+  credentials: true,
 }))
 app.use(express.json())//parse JSON request bodies
 
 // ── Initialise Firebase ───────────────────────────────────────────────────────
 initFirebase()
+
+// ── Seed analytics data (runs once) ───────────────────────────────────────────
+seedDemoAnalyticsData().catch(err => console.error('Failed to seed analytics:', err))
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/api/auth', authRoutes)

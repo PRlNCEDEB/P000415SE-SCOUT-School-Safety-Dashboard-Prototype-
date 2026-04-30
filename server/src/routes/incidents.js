@@ -1,5 +1,6 @@
 const express = require('express')
 const { docToObject, formatTimestamp, getDb, snapshotToArray } = require('../db/firebase')
+const { invalidateAnalyticsCache } = require('../analyticsCache')
 
 const router = express.Router()
 
@@ -26,6 +27,7 @@ function toIncidentResponse(incident) {
     timestamp: incident.createdAt ? formatTimestamp(incident.createdAt) : '',
     triggeredByName: incident.triggeredByName || 'Unknown reporter',
     description: incident.description || '',
+    acknowledgedBy: incident.acknowledgedBy || [],  // ← added
     notifications: [],
   }
 }
@@ -60,8 +62,8 @@ router.get('/:id', async (req, res, next) => {
     //converts each notification into a smaller response object
     const notifications = snapshotToArray(notificationsSnapshot).map(notification => ({
       recipientName: notification.recipientName || 'Unknown recipient',
-      sms: notification.smsStatus || 'pending',
-      email: notification.emailStatus || 'pending',
+      sms: notification.sms || notification.smsStatus || 'pending',      // ← fixed
+      email: notification.email || notification.emailStatus || 'pending', // ← fixed
     }))
     //returns the incident details
     res.json({
@@ -75,4 +77,45 @@ router.get('/:id', async (req, res, next) => {
   }
 })
 
+router.post('/', async (req, res, next) => {
+  try {
+    const { type, priority, status, title, location, description, triggeredByName, triggeredById } = req.body
+    const now = new Date().toISOString()
+
+    const docRef = await getDb().collection('incidents').add({
+      type: type || 'general',
+      priority: priority || 'low',
+      status: status || 'triggered',
+      title: title || 'Untitled incident',
+      location: location || 'Unknown',
+      description: description || '',
+      triggeredByName: triggeredByName || 'Unknown',
+      triggeredById: triggeredById || null,
+      createdAt: now,
+      updatedAt: now,
+    })
+
+    const doc = await docRef.get()
+    const incident = { id: doc.id, ...doc.data() }
+    invalidateAnalyticsCache()
+    res.status(201).json(toIncidentResponse(incident))
+  } catch (error) {
+    next(error)
+  }
+})
+
+router.patch('/:id/status', async (req, res, next) => {
+  try {
+    const { status } = req.body
+    const now = new Date().toISOString()
+    await getDb().collection('incidents').doc(req.params.id).update({ status, updatedAt: now })
+    invalidateAnalyticsCache()
+    res.json({ success: true })
+  } catch (error) {
+    next(error)
+  }
+})
+
 module.exports = router
+module.exports.getSortValue = getSortValue
+module.exports.toIncidentResponse = toIncidentResponse

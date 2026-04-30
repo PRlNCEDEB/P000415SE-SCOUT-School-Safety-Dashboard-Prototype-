@@ -1,5 +1,8 @@
 import { useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
 import QuickActions from '../components/QuickActions'
+import { incidentAPI } from '../api/client'
+import { useAuth } from '../context/AuthContext'
 
 const priorityColors = {
   critical: 'bg-red-100 text-red-700',
@@ -17,7 +20,7 @@ const statusColors = {
 }
 
 const typeIcons = {
-   medical: '🏥',
+  medical: '🏥',
   behaviour: '⚠️',
   fire: '🔥',
   lockdown: '🔒',
@@ -26,21 +29,50 @@ const typeIcons = {
   general: '📢',
 }
 
-export default function Dashboard({ incidents, onSubmitAlert }) {
+export default function Dashboard() {
   const navigate = useNavigate()
+  const { currentUser } = useAuth()
+  const [incidents, setIncidents] = useState([])
+  const [loading, setLoading] = useState(true)
 
-  const active = incidents.filter(incident => incident.status !== 'archived')
+  useEffect(() => {
+    const fetchIncidents = async () => {
+      try {
+        setLoading(true)
+        const data = await incidentAPI.list()
+        setIncidents(data)
+      } catch (error) {
+        console.error('Failed to fetch incidents:', error)
+        setIncidents([])
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchIncidents()
+
+  }, [])
+
+  const active = incidents.filter(incident => incident.status !== 'archived' && incident.status !== 'resolved')
   const critical = active.filter(incident => incident.priority === 'critical').length
   const high = active.filter(incident => incident.priority === 'high').length
   const unacked = active.filter(incident => incident.status === 'triggered')
   const recent = incidents.filter(incident => incident.status !== 'triggered')
+
+  if (loading) {
+    return (
+      <div className="p-6 max-w-5xl mx-auto">
+        <p className="text-gray-500 text-center py-10">Loading incidents...</p>
+      </div>
+    )
+  }
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-sm text-gray-500">Welcome back, Admin</p>
+          <p className="text-sm text-gray-500">Welcome back, {currentUser?.displayName || currentUser?.name || currentUser?.email || 'Admin'}</p>
         </div>
         <button
           onClick={() => navigate('/submit')}
@@ -51,11 +83,11 @@ export default function Dashboard({ incidents, onSubmitAlert }) {
       </div>
 
       <div className="bg-white border border-gray-200 rounded-xl p-5 mb-6">
-        <QuickActions onSubmitAlert={onSubmitAlert} />
+        <QuickActions />
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <StatCard label="Active Incidents" value={active.length} color="text-gray-700" icon="🚨" />
+        <StatCard label="Active Incidents" value={active.length} color="text-gray-700" icon="🚨" />
         <StatCard label="Critical" value={critical} color="text-red-600" icon="⚡" />
         <StatCard label="High Priority" value={high} color="text-orange-600" icon="🚩" />
         <StatCard label="Avg Response" value="4.2m" color="text-blue-600" icon="⏱️" />

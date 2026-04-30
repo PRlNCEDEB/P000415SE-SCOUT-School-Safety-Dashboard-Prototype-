@@ -1,7 +1,59 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getIncidentById } from '../api/client'
+import { getIncidentById, incidentAPI } from '../api/client'
 import { useAuth } from '../context/AuthContext'
+
+const progressSteps = [
+  { key: 'triggered', label: 'Unacknowledged' },
+  { key: 'acknowledged', label: 'Acknowledged' },
+  { key: 'in-progress', label: 'In Progress' },
+  { key: 'resolved', label: 'Resolved' },
+]
+
+const statusStepIndex = {
+  triggered: 0,
+  acknowledged: 1,
+  'in-progress': 2,
+  resolved: 3,
+  archived: 3,
+}
+
+function normalizeUsers(list) {
+  if (!Array.isArray(list)) return []
+
+  return [...new Set(list
+    .map(item => {
+      if (typeof item === 'string') return item.trim()
+      if (!item || typeof item !== 'object') return ''
+
+      return (
+        item.name ||
+        item.displayName ||
+        item.userName ||
+        item.fullName ||
+        item.acknowledgedByName ||
+        item.inProgressByName ||
+        ''
+      ).trim()
+    })
+    .filter(Boolean))]
+}
+
+function extractUsersFromHistory(history, statuses) {
+  if (!Array.isArray(history)) return []
+
+  return [...new Set(history
+    .filter(entry => statuses.includes(entry?.status || entry?.toStatus || entry?.newStatus))
+    .map(entry => (
+      entry?.userName ||
+      entry?.actorName ||
+      entry?.updatedByName ||
+      entry?.displayName ||
+      entry?.name ||
+      ''
+    ).trim())
+    .filter(Boolean))]
+}
 
 const priorityColors = {
   critical: 'bg-red-100 text-red-700',
@@ -40,14 +92,22 @@ const nextLabel = {
   'in-progress': 'Mark Resolved',
 }
 
-export default function IncidentDetail({ incidents, onUpdateIncidentStatus }) {
+export default function IncidentDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { isAdmin } = useAuth()
+  const { currentUser, isAdmin } = useAuth()
   const [incident, setIncident] = useState(null)
   const [status, setStatus] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [statusUpdating, setStatusUpdating] = useState(false)
+  const [statusError, setStatusError] = useState('')
+  const [showProgressDetails, setShowProgressDetails] = useState(false)
+  const [acknowledgedUsers, setAcknowledgedUsers] = useState([])
+  const [inProgressUsers, setInProgressUsers] = useState([])
+
+  // New — track who acknowledged
+  const [acknowledgedBy, setAcknowledgedBy] = useState([])
 
   useEffect(() => {
     let isActive = true
@@ -62,6 +122,31 @@ export default function IncidentDetail({ incidents, onUpdateIncidentStatus }) {
         if (isActive) {
           setIncident(record)
           setStatus(record?.status || '')
+
+          const acknowledged = normalizeUsers([
+            ...(record?.acknowledgedUsers || []),
+            ...(record?.acknowledgedBy || []),
+            ...(record?.ackUsers || []),
+            ...(record?.acknowledgements || []),
+          ])
+          const acknowledgedFromHistory = extractUsersFromHistory(
+            record?.statusHistory,
+            ['acknowledged']
+          )
+
+          const inProgress = normalizeUsers([
+            ...(record?.inProgressUsers || []),
+            ...(record?.inProgressBy || []),
+            ...(record?.workingUsers || []),
+            ...(record?.responders || []),
+          ])
+          const inProgressFromHistory = extractUsersFromHistory(
+            record?.statusHistory,
+            ['in-progress', 'in_progress']
+          )
+
+          setAcknowledgedUsers([...new Set([...acknowledged, ...acknowledgedFromHistory])])
+          setInProgressUsers([...new Set([...inProgress, ...inProgressFromHistory])])
         }
       } catch (err) {
         if (isActive) {
@@ -79,6 +164,24 @@ export default function IncidentDetail({ incidents, onUpdateIncidentStatus }) {
     return () => {
       isActive = false
     }
+  }, [id])
+
+  // Poll every 5 seconds to check for new acknowledgements
+  useEffect(() => {
+    if (!id) return
+
+    const interval = setInterval(async () => {
+      try {
+        const record = await getIncidentById(id)
+        if (record?.acknowledgedBy?.length > 0) {
+          setAcknowledgedBy(record.acknowledgedBy)
+        }
+      } catch {
+        // silently ignore poll errors
+      }
+    }, 5000)
+
+    return () => clearInterval(interval)
   }, [id])
 
   const found = incident
@@ -109,6 +212,8 @@ export default function IncidentDetail({ incidents, onUpdateIncidentStatus }) {
     )
   }
 
+  const currentStepIndex = statusStepIndex[status] ?? 0
+
   return (
     <div className="p-6 max-w-3xl mx-auto">
 
@@ -119,6 +224,19 @@ export default function IncidentDetail({ incidents, onUpdateIncidentStatus }) {
       >
         ← Back to Incidents
       </button>
+
+      {/* Help is on the way banner */}
+      {acknowledgedBy.length > 0 && (
+        <div className="bg-green-50 border border-green-300 rounded-xl px-5 py-4 mb-4 flex items-start gap-3">
+          <span className="text-2xl">✅</span>
+          <div>
+            <p className="font-semibold text-green-800">Help is on the way!</p>
+            <p className="text-sm text-green-600 mt-0.5">
+              {acknowledgedBy.length} person{acknowledgedBy.length > 1 ? 's have' : ' has'} acknowledged this alert and are responding.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Header */}
       <div className="bg-white border border-gray-200 rounded-xl p-5 mb-4">
@@ -157,6 +275,92 @@ export default function IncidentDetail({ incidents, onUpdateIncidentStatus }) {
         </div>
       </div>
 
+      {/* Ticket Progress */}
+      <div className="bg-white border border-gray-200 rounded-xl p-5 mb-4">
+        <h2 className="font-semibold text-gray-900 mb-4">Ticket Progress</h2>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {progressSteps.map((step, idx) => {
+            const isCompleted = idx <= currentStepIndex
+            const isCurrent = idx === currentStepIndex
+
+            return (
+              <div
+                key={step.key}
+                className={`rounded-lg border px-3 py-2 ${
+                  isCurrent
+                    ? 'border-red-300 bg-red-50'
+                    : isCompleted
+                      ? 'border-green-200 bg-green-50'
+                      : 'border-gray-200 bg-gray-50'
+                }`}
+              >
+                <p
+                  className={`text-xs font-semibold uppercase tracking-wide ${
+                    isCurrent
+                      ? 'text-red-700'
+                      : isCompleted
+                        ? 'text-green-700'
+                        : 'text-gray-500'
+                  }`}
+                >
+                  Step {idx + 1}
+                </p>
+                <p
+                  className={`text-sm mt-1 ${
+                    isCurrent
+                      ? 'text-red-700'
+                      : isCompleted
+                        ? 'text-green-700'
+                        : 'text-gray-500'
+                  }`}
+                >
+                  {step.label}
+                </p>
+              </div>
+            )
+          })}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setShowProgressDetails(prev => !prev)}
+          className="mt-4 text-sm text-blue-600 hover:text-blue-700 hover:underline"
+        >
+          {showProgressDetails ? 'Hide details' : 'More details'}
+        </button>
+
+        {showProgressDetails && (
+          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+              <p className="text-xs text-gray-500 uppercase tracking-wide mb-2">Acknowledged by</p>
+              {acknowledgedUsers.length > 0 ? (
+                <ul className="space-y-1">
+                  {acknowledgedUsers.map(name => (
+                    <li key={name} className="text-sm text-gray-800">• {name}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-gray-500">No users have acknowledged this ticket yet.</p>
+              )}
+            </div>
+
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+              <p className="text-xs text-gray-500 uppercase tracking-wide mb-2">In progress by</p>
+              {inProgressUsers.length > 0 ? (
+                <ul className="space-y-1">
+                  {inProgressUsers.map(name => (
+                    <li key={name} className="text-sm text-gray-800">• {name}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-gray-500">No users are currently marked in-progress.</p>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Description */}
       <div className="bg-white border border-gray-200 rounded-xl p-5 mb-4">
         <h2 className="font-semibold text-gray-900 mb-2">Description</h2>
@@ -164,6 +368,29 @@ export default function IncidentDetail({ incidents, onUpdateIncidentStatus }) {
           {found.description || 'No additional description provided for this incident.'}
         </p>
       </div>
+
+      {/* Acknowledged By — only shown if someone has responded */}
+      {acknowledgedBy.length > 0 && (
+        <div className="bg-white border border-green-200 rounded-xl p-5 mb-4">
+          <h2 className="font-semibold text-gray-900 mb-3">Acknowledged By</h2>
+          <div className="space-y-2">
+            {acknowledgedBy.map((ack, idx) => (
+              <div key={idx} className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="text-green-500">✅</span>
+                  <div>
+                    <p className="text-gray-800 font-medium">{ack.name}</p>
+                    <p className="text-xs text-gray-400">{ack.role} · {ack.email}</p>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-400">
+                  {new Date(ack.acknowledgedAt).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Notification Status */}
       <div className="bg-white border border-gray-200 rounded-xl p-5 mb-4">
@@ -192,18 +419,38 @@ export default function IncidentDetail({ incidents, onUpdateIncidentStatus }) {
       {/* Action Button — admin only */}
       {isAdmin ? (
         nextStatus[status] && (
-          <button
-            // TODO: Persist status transition to backend before updating the UI.
-            // const handleStatusUpdate = async () => {
-            //   call backend
-            //   update UI on success
-            //   show error on failure
-            // }
-            onClick={() => onUpdateIncidentStatus(found.id, nextStatus[status])} // onClick={handleStatusUpdate}
-            className="w-full py-3 bg-red-600 text-white font-medium rounded-xl hover:bg-red-700 transition-colors"
-          >
-            {nextLabel[status]}
-          </button>
+          <>
+            {statusError && (
+              <p className="text-sm text-red-500 mb-2 text-center">{statusError}</p>
+            )}
+            <button
+              disabled={statusUpdating}
+              onClick={async () => {
+                setStatusUpdating(true)
+                setStatusError('')
+                try {
+                  const upcomingStatus = nextStatus[status]
+                  await incidentAPI.updateStatus(found.id, upcomingStatus)
+                  setStatus(upcomingStatus)
+
+                  if (currentUser?.name && upcomingStatus === 'acknowledged') {
+                    setAcknowledgedUsers(prev => prev.includes(currentUser.name) ? prev : [...prev, currentUser.name])
+                  }
+
+                  if (currentUser?.name && upcomingStatus === 'in-progress') {
+                    setInProgressUsers(prev => prev.includes(currentUser.name) ? prev : [...prev, currentUser.name])
+                  }
+                } catch (err) {
+                  setStatusError(err.message || 'Failed to update status. Please try again.')
+                } finally {
+                  setStatusUpdating(false)
+                }
+              }}
+              className="w-full py-3 bg-red-600 text-white font-medium rounded-xl hover:bg-red-700 transition-colors disabled:opacity-50"
+            >
+              {statusUpdating ? 'Updating...' : nextLabel[status]}
+            </button>
+          </>
         )
       ) : (
         <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 flex items-center gap-2 text-sm text-gray-500">

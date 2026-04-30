@@ -1,11 +1,15 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { MOCK_USERS } from '../data/mockData'
 
-const demoAccounts = [
-  { name: 'Admin User', email: 'admin@school.edu', role: 'admin', color: 'bg-red-100 text-red-700' },
-  { name: 'Staff User', email: 'user@school.edu', role: 'user', color: 'bg-blue-100 text-blue-700' },
-]
+// Demo account quick-fill buttons — kept in sync with MOCK_USERS
+const demoAccounts = MOCK_USERS.map(u => ({
+  name: u.displayName,
+  email: u.email,
+  role: u.role,
+  color: u.role === 'admin' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700',
+}))
 
 export default function Login() {
   const [email, setEmail] = useState('')
@@ -20,15 +24,39 @@ export default function Login() {
     setError('')
     setLoading(true)
     await new Promise(resolve => setTimeout(resolve, 400))
-    const result = login(email, password)
-    setLoading(false)
 
-    if (result.success) {
-      navigate('/dashboard')
+    // Match against MOCK_USERS (same source as main branch)
+    const matched = MOCK_USERS.find(
+      u => u.email.toLowerCase() === email.trim().toLowerCase() && u.password === password
+    )
+
+    if (!matched) {
+      setError('Invalid email or password.')
+      setLoading(false)
       return
     }
 
-    setError(result.message)
+    // Build the user object AuthContext expects (matches main branch shape)
+    const mockFirebaseUser = {
+      uid: matched.uid,
+      email: matched.email,
+      displayName: matched.displayName,
+      name: matched.displayName,
+      photoURL: matched.photoURL ?? null,
+    }
+
+    // Normalise role to title-case so isAdmin check ('Admin') works
+    // regardless of how the role is stored (Firestore uses lowercase 'admin')
+    const normalisedRole = matched.role.charAt(0).toUpperCase() + matched.role.slice(1)
+
+    try {
+      await login(mockFirebaseUser, normalisedRole)
+      navigate('/dashboard')
+    } catch (err) {
+      setError('Login failed: ' + err.message)
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (

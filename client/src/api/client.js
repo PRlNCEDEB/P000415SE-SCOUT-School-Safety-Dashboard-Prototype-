@@ -30,6 +30,8 @@ async function request(path, options = {}) {
   return response.json()
 }
 
+export const apiCall = request
+
 export async function getIncidents() {
   const data = await request('/incidents')
   return data.incidents || []
@@ -38,4 +40,26 @@ export async function getIncidents() {
 export async function getIncidentById(id) {
   const data = await request(`/incidents/${id}`)
   return data.incident || null
+}
+
+export const incidentAPI = {
+  create: data =>
+    request('/incidents', { method: 'POST', body: JSON.stringify(data) }),
+  list: () => request('/incidents').then(data => data.incidents ?? data),
+  updateStatus: (id, status) =>
+    request(`/incidents/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+}
+
+export const notificationsAPI = {
+  list: () => request('/notifications').then(data => data.notifications ?? data),
+}
+
+export const analyticsAPI = {
+  summary: () => request('/analytics/summary'),
+  byType: () => request('/analytics/by-type'),
+  statusBreakdown: () => request('/analytics/status-breakdown'),
+  byLocation: () => request('/analytics/by-location'),
+  thisWeek: () => request('/analytics/this-week'),
+  responseTimeTrend: () => request('/analytics/response-time-trend'),
+  all: () => request('/analytics/all'),
 }
