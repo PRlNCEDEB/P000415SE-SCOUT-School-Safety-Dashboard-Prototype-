@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "nodemon src/index.js",
     "start": "node src/index.js",
-    "seed:demo": "node src/db/seedDemoData.js"
+    "seed:demo": "node src/db/seedDemoData.js",
+    "seed:emulator": "node src/db/seedEmulatorData.js"
   },
   "keywords": [],
   "author": "",
