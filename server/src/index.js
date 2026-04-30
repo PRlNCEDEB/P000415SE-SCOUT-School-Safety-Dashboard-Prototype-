@@ -6,6 +6,7 @@ const express = require('express')
 const cors = require('cors')
 const { initFirebase } = require('./db/firebase')
 const { seedDemoAnalyticsData } = require('./db/seedDemoAnalytics')
+const { seedEmulatorData } = require('./db/seedEmulatorData')
 
 const authRoutes = require('./routes/auth')
 const incidentRoutes = require('./routes/incidents')
@@ -27,7 +28,11 @@ app.use(express.json())//parse JSON request bodies
 initFirebase()
 
 // ── Seed analytics data (runs once) ───────────────────────────────────────────
-seedDemoAnalyticsData().catch(err => console.error('Failed to seed analytics:', err))
+if (process.env.FIRESTORE_EMULATOR_HOST) {
+  seedEmulatorData().catch(err => console.error('Failed to seed emulator data:', err))
+} else {
+  seedDemoAnalyticsData().catch(err => console.error('Failed to seed analytics:', err))
+}
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/api/auth', authRoutes)
