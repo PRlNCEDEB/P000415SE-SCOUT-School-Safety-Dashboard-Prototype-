@@ -3,15 +3,16 @@ const path = require('path')
 const fs = require('fs')
 
 let db
-
+//returns the Firestore database instance, or throws an error if initFirebase() has not been called
 function getDb() {
   if (!db) {
     throw new Error('Firebase not initialised. Call initFirebase() first.')
   }
   return db
 }
-
+//initialises the Firebase app and Firestore database connection
 function initFirebase() {
+  //if Firebase has already been initialised, return the existing instance
   if (admin.apps.length > 0) {
     db = admin.firestore()
     return db
