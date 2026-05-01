@@ -5,7 +5,7 @@ import { getIncidentById } from '../api/client'
 
 export default function Layout({ children }) {
   const location = useLocation()
-  const { currentUser, userRole, logout, isAdmin } = useAuth()
+  const { currentUser, userRole, logout, isAdmin, isCompanyAdmin, isSchoolAdmin, authLoading } = useAuth()
 
   // Active emergency banner state
   const [activeEmergency, setActiveEmergency] = useState(null)
@@ -60,11 +60,14 @@ export default function Layout({ children }) {
     return <Navigate to="/login" replace />
   }
 
+  // While role is still loading, keep analytics as allowed=true so it doesn't
+  // flash "Admin access required" before the role resolves.
+  const roleResolved = !authLoading && userRole !== null
   const navItems = [
     { path: '/dashboard', label: 'Dashboard', icon: 'D', allowed: true },
     { path: '/incidents', label: 'Incidents', icon: 'I', allowed: true },
     { path: '/submit', label: 'Submit Alert', icon: '+', allowed: true },
-    { path: '/analytics', label: 'Analytics', icon: 'A', allowed: isAdmin },
+    { path: '/analytics', label: 'Analytics', icon: 'A', allowed: !roleResolved || isAdmin },
     { path: '/notifications', label: 'Notifications', icon: 'N', allowed: true },
   ]
 
@@ -159,7 +162,11 @@ export default function Layout({ children }) {
             <div className="flex items-center justify-between mb-0.5">
               <p className="text-sm font-medium text-gray-800">{currentUser.displayName || currentUser.name}</p>
               <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                isAdmin ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'
+                isCompanyAdmin
+                  ? 'bg-red-100 text-red-700'
+                  : isSchoolAdmin
+                  ? 'bg-purple-100 text-purple-700'
+                  : 'bg-blue-100 text-blue-700'
               }`}>
                 {userRole || currentUser.role}
               </span>

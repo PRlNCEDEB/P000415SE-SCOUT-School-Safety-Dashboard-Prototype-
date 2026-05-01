@@ -10,7 +10,7 @@ import {
 const PIE_COLORS = ['#22c55e', '#3b82f6', '#ef4444', '#9ca3af']
 
 export default function Analytics() {
-  const { isAdmin } = useAuth()
+  const { isAdmin, isCompanyAdmin, userRole, authLoading } = useAuth()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -51,7 +51,19 @@ export default function Analytics() {
     fetchAnalytics()
   }, [isAdmin])
 
-  // RBAC guard — redirect non-admins (matches main branch pattern)
+  // Wait for role to be resolved before deciding access.
+  // userRole is null briefly after authLoading clears (backend fetch in flight).
+  if (authLoading || userRole === null) {
+    return (
+      <div className="p-6 max-w-5xl mx-auto">
+        <div className="text-center py-12">
+          <p className="text-gray-500">Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // RBAC guard — redirect Staff (non-admins) only once role is confirmed
   if (!isAdmin) {
     return <Navigate to="/dashboard" replace />
   }
@@ -102,7 +114,7 @@ export default function Analytics() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div className={`grid gap-4 mb-6 ${isCompanyAdmin ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-1 md:grid-cols-3'}`}>
         <SummaryCard
           label="Total Incidents"
           value={summary.totalIncidents.toString()}
@@ -115,12 +127,15 @@ export default function Analytics() {
           icon="✅"
           color="text-green-600"
         />
-        <SummaryCard
-          label="Avg Response"
-          value={`${summary.avgResponseTime}m`}
-          icon="⏱️"
-          color="text-blue-600"
-        />
+        {/* Avg Response: Company Admin only */}
+        {isCompanyAdmin && (
+          <SummaryCard
+            label="Avg Response"
+            value={`${summary.avgResponseTime}m`}
+            icon="⏱️"
+            color="text-blue-600"
+          />
+        )}
         <SummaryCard
           label="This Week"
           value={summary.thisWeekIncidents.toString()}
@@ -179,32 +194,34 @@ export default function Analytics() {
 
       </div>
 
-      {/* Row 2 — Line + Bar */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+      {/* Row 2 — Line (Company Admin only) + Bar */}
+      <div className={`grid grid-cols-1 gap-4 mb-4 ${isCompanyAdmin ? 'md:grid-cols-2' : ''}`}>
 
-        {/* Avg Response Time Trend */}
-        <div className="bg-white border border-gray-200 rounded-xl p-5">
-          <h2 className="font-semibold text-gray-900 mb-4">Avg Response Time (minutes)</h2>
-          {responseTimeData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={220}>
-              <LineChart data={responseTimeData} margin={{ top: 0, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="week" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Line
-                  type="monotone"
-                  dataKey="avgMinutes"
-                  stroke="#3b82f6"
-                  strokeWidth={2}
-                  dot={{ r: 4 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          ) : (
-            <p className="text-gray-400 text-center py-10">No data available</p>
-          )}
-        </div>
+        {/* Avg Response Time Trend — Company Admin only */}
+        {isCompanyAdmin && (
+          <div className="bg-white border border-gray-200 rounded-xl p-5">
+            <h2 className="font-semibold text-gray-900 mb-4">Avg Response Time (minutes)</h2>
+            {responseTimeData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={220}>
+                <LineChart data={responseTimeData} margin={{ top: 0, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis dataKey="week" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} />
+                  <Tooltip />
+                  <Line
+                    type="monotone"
+                    dataKey="avgMinutes"
+                    stroke="#3b82f6"
+                    strokeWidth={2}
+                    dot={{ r: 4 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="text-gray-400 text-center py-10">No data available</p>
+            )}
+          </div>
+        )}
 
         {/* Incidents by Location */}
         <div className="bg-white border border-gray-200 rounded-xl p-5">
