@@ -133,8 +133,8 @@ export default function Dashboard() {
       {/* ── Role scope notice ── */}
       <ScopeNotice role={userRole} />
 
-      {/* ── Quick Actions (Company Admin & School Admin only) ── */}
-      {!isStaff && (
+      {/* ── Quick Actions (Staff & School Admin only, not Company Admin) ── */}
+      {!isCompanyAdmin && (
         <div className="bg-white border border-gray-200 rounded-xl p-5 mb-6">
           <QuickActions />
         </div>

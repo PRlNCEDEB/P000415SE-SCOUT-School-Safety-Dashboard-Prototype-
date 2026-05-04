@@ -16,7 +16,7 @@ const action2Types = [
 ]
 
 export default function QuickActions() {
-  const { isAdmin, currentUser } = useAuth()
+  const { isAdmin, isCompanyAdmin, currentUser } = useAuth()
   const [logs, setLogs] = useState([])
   const [feedback, setFeedback] = useState(null)
   const [showConfirm, setShowConfirm] = useState(false)
@@ -221,6 +221,8 @@ export default function QuickActions() {
     setEditingId(null)
     setEditForm({ title: '', description: '', location: '' })
   }
+
+  if (isCompanyAdmin) return null
 
   return (
     <div className="space-y-4">
