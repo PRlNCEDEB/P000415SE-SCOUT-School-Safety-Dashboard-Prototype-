@@ -7,6 +7,9 @@
     "dev": "nodemon src/index.js",
     "start": "node src/index.js",
     "seed:demo": "node src/db/seedDemoData.js",
+    "test": "node tests/incidents.test.js && node tests/incidents.integration.test.js",
+    "test:unit": "node tests/incidents.test.js",
+    "test:integration": "node tests/incidents.integration.test.js"
     "seed:emulator": "node src/db/seedEmulatorData.js"
   },
   "keywords": [],
