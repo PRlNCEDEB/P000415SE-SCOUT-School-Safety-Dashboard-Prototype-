@@ -6,9 +6,8 @@ export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null)
   const [userRole, setUserRole] = useState(null)
 
-  // login(mockUser, role) — matches main branch AuthContext API.
+  // login(mockUser, role) — accepts 'company_admin' | 'school_admin' | 'staff'
   // mockUser is a plain object with uid, email, displayName, photoURL.
-  // role is a string: 'Admin' | 'User'
   async function login(mockUser, role) {
     setCurrentUser(mockUser)
     setUserRole(role)
@@ -19,14 +18,22 @@ export function AuthProvider({ children }) {
     setUserRole(null)
   }
 
+  // Role check helpers
+  const isCompanyAdmin = userRole === 'company_admin'
+  const isSchoolAdmin = userRole === 'school_admin'
+  const isStaff = userRole === 'staff'
+  const isAdmin = isCompanyAdmin || isSchoolAdmin
+
   return (
     <AuthContext.Provider value={{
       currentUser,
       userRole,
       login,
       logout,
-      isAdmin: userRole === 'Admin',
-      isUser: userRole === 'User',
+      isCompanyAdmin,
+      isSchoolAdmin,
+      isStaff,
+      isAdmin,
     }}>
       {children}
     </AuthContext.Provider>

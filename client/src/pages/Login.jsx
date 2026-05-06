@@ -8,7 +8,7 @@ const demoAccounts = MOCK_USERS.map(u => ({
   name: u.displayName,
   email: u.email,
   role: u.role,
-  color: u.role === 'admin' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700',
+  color: u.role === 'company_admin' || u.role === 'school_admin' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700',
 }))
 
 export default function Login() {
@@ -45,12 +45,9 @@ export default function Login() {
       photoURL: matched.photoURL ?? null,
     }
 
-    // Normalise role to title-case so isAdmin check ('Admin') works
-    // regardless of how the role is stored (Firestore uses lowercase 'admin')
-    const normalisedRole = matched.role.charAt(0).toUpperCase() + matched.role.slice(1)
-
+    // Role is already in the correct format ('company_admin', 'school_admin', 'staff')
     try {
-      await login(mockFirebaseUser, normalisedRole)
+      await login(mockFirebaseUser, matched.role)
       navigate('/dashboard')
     } catch (err) {
       setError('Login failed: ' + err.message)
