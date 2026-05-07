@@ -7,7 +7,9 @@ const crypto = require('crypto')
 const admin = require('firebase-admin')
 const { getDb } = require('../db/firebase')
 
-const BACKEND_URL = process.env.BACKEND_URL || 'https://p000415se-scout-school-safety-dashboard-lo5f.onrender.com'
+const BACKEND_URL = process.env.NODE_ENV === 'production'
+  ? 'https://p000415se-scout-school-safety-dashboard-lo5f.onrender.com'
+  : 'http://localhost:5000'
 
 // Lazily initialise clients so missing env vars don't crash the server at startup
 function getSgMail() {
@@ -52,6 +54,116 @@ async function getRecipientsForEmergency(emergencyType) {
 
   console.log(`👥 Found ${recipients.length} recipient(s): ${recipients.map(r => r.name).join(', ')}`)
   return recipients
+}
+
+// Query Firestore users collection to get all admin users
+async function getAdminUsers() {
+  const db = getDb()
+
+  const adminSnapshot = await db.collection('users')
+    .where('role', '==', 'admin')
+    .get()
+
+  const admins = adminSnapshot.docs
+    .map(doc => ({ id: doc.id, ...doc.data() }))
+    .filter(a => a.email) // only include admins with a valid email
+
+  console.log(`👔 Found ${admins.length} admin(s): ${admins.map(a => a.name).join(', ')}`)
+  return admins
+}
+
+// Send a summary email to admins — no acknowledge button, just a record
+async function sendAdminSummaryEmail({ emergencyType, location, body, timestamp, incidentId, notifiedStaff }) {
+  const admins = await getAdminUsers()
+
+  if (admins.length === 0) {
+    console.warn('⚠️ No admin users found in users collection — skipping admin summary email')
+    return
+  }
+
+  const formattedTime = new Date(timestamp).toLocaleString('en-AU', {
+    timeZone: 'Australia/Melbourne',
+    dateStyle: 'full',
+    timeStyle: 'short',
+  })
+
+  const staffListHtml = notifiedStaff.map(r => `
+    <tr>
+      <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb; font-size: 14px;">${r.name}</td>
+      <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb; font-size: 14px;">${r.role}</td>
+      <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb; font-size: 14px; color: ${r.emailStatus === 'sent' ? '#16a34a' : '#dc2626'};">
+        ${r.emailStatus === 'sent' ? '✅ Sent' : '❌ Failed'}
+      </td>
+    </tr>
+  `).join('')
+
+  const subject = `📋 SCOUT Admin Summary: ${emergencyType} Emergency Alert`
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="background: #1e293b; padding: 20px; border-radius: 8px 8px 0 0;">
+        <h1 style="color: white; margin: 0; font-size: 20px;">📋 Emergency Alert Summary</h1>
+        <p style="color: #94a3b8; margin: 4px 0 0; font-size: 14px;">SCOUT School Safety Management System — Admin Record</p>
+      </div>
+      <div style="background: #fff; border: 1px solid #e5e7eb; padding: 24px; border-radius: 0 0 8px 8px;">
+
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">
+          <tr>
+            <td style="padding: 8px 12px; background: #f8fafc; font-weight: bold; font-size: 14px; width: 40%; border-bottom: 1px solid #e5e7eb;">Emergency Type</td>
+            <td style="padding: 8px 12px; font-size: 14px; color: #dc2626; font-weight: bold; border-bottom: 1px solid #e5e7eb;">${emergencyType}</td>
+          </tr>
+          ${location ? `
+          <tr>
+            <td style="padding: 8px 12px; background: #f8fafc; font-weight: bold; font-size: 14px; border-bottom: 1px solid #e5e7eb;">Location</td>
+            <td style="padding: 8px 12px; font-size: 14px; border-bottom: 1px solid #e5e7eb;">📍 ${location}</td>
+          </tr>` : ''}
+          <tr>
+            <td style="padding: 8px 12px; background: #f8fafc; font-weight: bold; font-size: 14px; border-bottom: 1px solid #e5e7eb;">Date & Time</td>
+            <td style="padding: 8px 12px; font-size: 14px; border-bottom: 1px solid #e5e7eb;">🕐 ${formattedTime}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 12px; background: #f8fafc; font-weight: bold; font-size: 14px; border-bottom: 1px solid #e5e7eb;">Incident ID</td>
+            <td style="padding: 8px 12px; font-size: 14px; font-family: monospace; border-bottom: 1px solid #e5e7eb;">${incidentId || 'N/A'}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 12px; background: #f8fafc; font-weight: bold; font-size: 14px;">Message</td>
+            <td style="padding: 8px 12px; font-size: 14px;">${body}</td>
+          </tr>
+        </table>
+
+        <h3 style="font-size: 15px; color: #1e293b; margin: 0 0 8px;">Staff Notified</h3>
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">
+          <tr style="background: #f8fafc;">
+            <th style="padding: 8px 12px; text-align: left; font-size: 13px; border-bottom: 1px solid #e5e7eb;">Name</th>
+            <th style="padding: 8px 12px; text-align: left; font-size: 13px; border-bottom: 1px solid #e5e7eb;">Role</th>
+            <th style="padding: 8px 12px; text-align: left; font-size: 13px; border-bottom: 1px solid #e5e7eb;">Email Status</th>
+          </tr>
+          ${staffListHtml}
+        </table>
+
+        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+        <p style="color: #9ca3af; font-size: 12px;">
+          This is an automated summary for administrative records. No action is required from you.
+          This email was sent by the SCOUT School Safety System.
+        </p>
+      </div>
+    </div>
+  `
+
+  for (const adminUser of admins) {
+    try {
+      await getSgMail().send({
+        to: adminUser.email,
+        from: process.env.FROM_EMAIL,
+        subject,
+        text: `Emergency Alert Summary — ${emergencyType} at ${location || 'Unknown location'} on ${formattedTime}. Incident ID: ${incidentId || 'N/A'}. Staff notified: ${notifiedStaff.map(r => r.name).join(', ')}`,
+        html,
+      })
+      console.log(`📧 Admin summary email sent to ${adminUser.name} (${adminUser.email})`)
+    } catch (err) {
+      console.error(`❌ Admin summary email failed for ${adminUser.name}:`, err.message)
+    }
+  }
 }
 
 // POST /api/notifications/emergency
@@ -200,6 +312,20 @@ router.post('/emergency', async (req, res) => {
     console.log(`💾 Saved ${results.length} notification log(s) to Firestore`)
   } catch (err) {
     console.error('Failed to save notification logs:', err.message)
+  }
+
+  // Send admin summary email (separate from responder emails, no acknowledge button)
+  try {
+    await sendAdminSummaryEmail({
+      emergencyType,
+      location,
+      body,
+      timestamp,
+      incidentId,
+      notifiedStaff: results,
+    })
+  } catch (err) {
+    console.error('Failed to send admin summary email:', err.message)
   }
 
   res.json({
