@@ -50,7 +50,20 @@ export default function Login() {
       await login(mockFirebaseUser, matched.role)
       navigate('/dashboard')
     } catch (err) {
-      setError('Login failed: ' + err.message)
+      // Map Firebase error codes to friendly messages
+      if (
+        err.code === 'auth/user-not-found' ||
+        err.code === 'auth/wrong-password' ||
+        err.code === 'auth/invalid-credential'
+      ) {
+        setError('Invalid email or password.')
+      } else if (err.code === 'auth/too-many-requests') {
+        setError('Too many failed attempts. Please try again later.')
+      } else if (err.code === 'auth/user-disabled') {
+        setError('This account has been disabled. Contact your Safety Manager.')
+      } else {
+        setError('Login failed. Please try again.')
+      }
     } finally {
       setLoading(false)
     }
@@ -115,32 +128,6 @@ export default function Login() {
               {loading ? 'Signing in...' : 'Sign in'}
             </button>
           </form>
-        </div>
-
-        <div className="mt-4 bg-white rounded-xl border border-gray-200 p-4">
-          <p className="text-xs font-semibold text-gray-700 mb-3">
-            Demo accounts, password: <code className="bg-gray-100 px-1 rounded">password123</code>
-          </p>
-          <div className="space-y-2">
-            {demoAccounts.map(account => (
-              <button
-                key={account.email}
-                onClick={() => {
-                  setEmail(account.email)
-                  setPassword('password123')
-                }}
-                className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-gray-50 border border-transparent hover:border-gray-200 transition-colors"
-              >
-                <div className="text-left">
-                  <p className="text-sm text-gray-800">{account.name}</p>
-                  <p className="text-xs text-gray-400">{account.email}</p>
-                </div>
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${account.color}`}>
-                  {account.role}
-                </span>
-              </button>
-            ))}
-          </div>
         </div>
       </div>
     </div>
