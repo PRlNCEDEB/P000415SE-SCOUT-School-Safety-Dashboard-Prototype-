@@ -1,6 +1,8 @@
 import { useNavigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import QuickActions from '../components/QuickActions'
+import { Link } from 'react-router-dom'
+import { incidents as MOCK_INCIDENTS } from '../data/mockData'
 import { incidentAPI } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 
@@ -37,7 +39,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     const fetchIncidents = async () => {
-      try {
+        try {
         setLoading(true)
         const data = await incidentAPI.list()
         // Staff only sees currently active (triggered) alerts
@@ -47,8 +49,11 @@ export default function Dashboard() {
 
         setIncidents(filtered)
       } catch (error) {
-        console.error('Failed to fetch incidents:', error)
-        setIncidents([])
+        console.warn('Failed to fetch incidents from API, falling back to local mock data:', error.message)
+        const fallback = isStaff
+          ? MOCK_INCIDENTS.filter(incident => incident.status === 'triggered')
+          : MOCK_INCIDENTS
+        setIncidents(fallback)
       } finally {
         setLoading(false)
       }
@@ -192,11 +197,21 @@ function StatCard({ label, value, color, icon }) {
 }
 
 function ShortcutCard({ title, description, to }) {
+  const icon = title && (
+    title.toLowerCase().includes('setup') ? '⚙️'
+    : title.toLowerCase().includes('live') ? '🚨'
+    : title.toLowerCase().includes('data') || title.toLowerCase().includes('insight') ? '📊'
+    : '🔗'
+  )
+
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-5 hover:shadow-md transition-shadow">
-      <h3 className="font-semibold text-gray-900 mb-1">{title}</h3>
-      <p className="text-sm text-gray-500 mb-4">{description}</p>
-      <a href={to} className="text-sm text-red-600 hover:underline">Open</a>
+    <div className="bg-white border border-gray-200 rounded-xl p-6 hover:shadow-lg transition-shadow flex flex-col min-h-40">
+      <div className="text-4xl mb-3">{icon}</div>
+      <h3 className="font-semibold text-lg text-gray-900">{title}</h3>
+      <p className="text-sm text-gray-500 mt-1 flex-1">{description}</p>
+      <div className="pt-4 text-right">
+        <Link to={to} className="text-sm text-red-600 hover:underline font-medium">Open →</Link>
+      </div>
     </div>
   )
 }
