@@ -13,6 +13,7 @@ const priorityColors = {
   low: 'bg-gray-100 text-gray-600',
 }
 
+// Status colors for the status badge on the right side of incident cards
 const statusColors = {
   triggered: 'bg-red-100 text-red-700',
   acknowledged: 'bg-blue-100 text-blue-700',
