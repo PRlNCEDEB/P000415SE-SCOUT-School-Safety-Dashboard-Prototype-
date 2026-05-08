@@ -106,7 +106,7 @@ export default function IncidentDetail() {
   const [acknowledgedUsers, setAcknowledgedUsers] = useState([])
   const [inProgressUsers, setInProgressUsers] = useState([])
 
-  // New — track who acknowledged
+  
   const [acknowledgedBy, setAcknowledgedBy] = useState([])
 
   useEffect(() => {
