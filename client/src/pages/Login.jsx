@@ -1,6 +1,15 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { MOCK_USERS } from '../data/mockData'
+
+// Demo account quick-fill buttons — kept in sync with MOCK_USERS
+const demoAccounts = MOCK_USERS.map(u => ({
+  name: u.displayName,
+  email: u.email,
+  role: u.role,
+  color: u.role === 'company_admin' || u.role === 'school_admin' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700',
+}))
 
 export default function Login() {
   const [email, setEmail] = useState('')
@@ -14,9 +23,31 @@ export default function Login() {
     event.preventDefault()
     setError('')
     setLoading(true)
+    await new Promise(resolve => setTimeout(resolve, 400))
 
+    // Match against MOCK_USERS (same source as main branch)
+    const matched = MOCK_USERS.find(
+      u => u.email.toLowerCase() === email.trim().toLowerCase() && u.password === password
+    )
+
+    if (!matched) {
+      setError('Invalid email or password.')
+      setLoading(false)
+      return
+    }
+
+    // Build the user object AuthContext expects (matches main branch shape)
+    const mockFirebaseUser = {
+      uid: matched.uid,
+      email: matched.email,
+      displayName: matched.displayName,
+      name: matched.displayName,
+      photoURL: matched.photoURL ?? null,
+    }
+
+    // Role is already in the correct format ('company_admin', 'school_admin', 'staff')
     try {
-      await login(email.trim(), password)
+      await login(mockFirebaseUser, matched.role)
       navigate('/dashboard')
     } catch (err) {
       // Map Firebase error codes to friendly messages

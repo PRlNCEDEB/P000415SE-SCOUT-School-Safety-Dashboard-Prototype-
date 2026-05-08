@@ -54,36 +54,13 @@ const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null)
-  const [userRole,    setUserRole]    = useState(null)
-  const [userSchoolId, setUserSchoolId] = useState(null)
-  const [authLoading, setAuthLoading] = useState(true)
+  const [userRole, setUserRole] = useState(null)
 
-  // Listen for Firebase auth state changes (handles page refresh automatically)
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        const { role, schoolId, name } = await fetchUserProfile(firebaseUser)
-        // Attach display name from Firestore if Firebase Auth doesn't have it
-        if (name && !firebaseUser.displayName) {
-          firebaseUser._profileName = name
-        }
-        setCurrentUser(firebaseUser)
-        setUserRole(role)
-        setUserSchoolId(schoolId)
-      } else {
-        setCurrentUser(null)
-        setUserRole(null)
-        setUserSchoolId(null)
-      }
-      setAuthLoading(false)
-    })
-    return unsubscribe
-  }, [])
-
-  // login — called from Login.jsx
-  async function login(email, password) {
-    await signInWithEmailAndPassword(auth, email, password)
-    // onAuthStateChanged fires automatically and sets currentUser + userRole
+  // login(mockUser, role) — accepts 'company_admin' | 'school_admin' | 'staff'
+  // mockUser is a plain object with uid, email, displayName, photoURL.
+  async function login(mockUser, role) {
+    setCurrentUser(mockUser)
+    setUserRole(role)
   }
 
   // logout
@@ -91,11 +68,10 @@ export function AuthProvider({ children }) {
     await signOut(auth)
   }
 
-  const isCompanyAdmin = userRole === 'Company Admin'
-  const isSchoolAdmin  = userRole === 'School Admin'
-  const isStaff        = userRole === 'Staff'
-
-  // Legacy helper: Company Admin or School Admin counts as "admin" for nav/route gating
+  // Role check helpers
+  const isCompanyAdmin = userRole === 'company_admin'
+  const isSchoolAdmin = userRole === 'school_admin'
+  const isStaff = userRole === 'staff'
   const isAdmin = isCompanyAdmin || isSchoolAdmin
 
   return (

@@ -1,6 +1,8 @@
 import { useNavigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import QuickActions from '../components/QuickActions'
+import { Link } from 'react-router-dom'
+import { incidents as MOCK_INCIDENTS } from '../data/mockData'
 import { incidentAPI } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 
@@ -11,6 +13,7 @@ const priorityColors = {
   low: 'bg-gray-100 text-gray-600',
 }
 
+// Status colors for the status badge on the right side of incident cards
 const statusColors = {
   triggered: 'bg-red-100 text-red-700',
   acknowledged: 'bg-blue-100 text-blue-700',
@@ -69,19 +72,27 @@ function ScopeNotice({ role }) {
 
 export default function Dashboard() {
   const navigate = useNavigate()
-  const { currentUser, userRole, isCompanyAdmin, isSchoolAdmin, isStaff } = useAuth()
+  const { currentUser, isStaff, isCompanyAdmin, isSchoolAdmin } = useAuth()
   const [incidents, setIncidents] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const fetchIncidents = async () => {
-      try {
+        try {
         setLoading(true)
         const data = await incidentAPI.list()
-        setIncidents(data)
+        // Staff only sees currently active (triggered) alerts
+        const filtered = isStaff
+          ? data.filter(incident => incident.status === 'triggered')
+          : data
+
+        setIncidents(filtered)
       } catch (error) {
-        console.error('Failed to fetch incidents:', error)
-        setIncidents([])
+        console.warn('Failed to fetch incidents from API, falling back to local mock data:', error.message)
+        const fallback = isStaff
+          ? MOCK_INCIDENTS.filter(incident => incident.status === 'triggered')
+          : MOCK_INCIDENTS
+        setIncidents(fallback)
       } finally {
         setLoading(false)
       }
@@ -89,7 +100,7 @@ export default function Dashboard() {
 
     fetchIncidents()
 
-  }, [])
+  }, [isStaff])
 
   const active   = incidents.filter(i => i.status !== 'archived' && i.status !== 'resolved')
   const critical = active.filter(i => i.priority === 'critical').length
@@ -116,22 +127,41 @@ export default function Dashboard() {
       {/* ── Header ── */}
       <div className="flex items-center justify-between mb-4">
         <div>
-          <div className="flex items-center gap-2 mb-0.5">
-            <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-            {userRole && <RoleBadge role={userRole} />}
-          </div>
-          <p className="text-sm text-gray-500">Welcome back, {displayName}</p>
+          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+          <p className="text-sm text-gray-500">Welcome back, {currentUser?.displayName || currentUser?.name || currentUser?.email}</p>
         </div>
-        <button
-          onClick={() => navigate('/submit')}
-          className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors"
-        >
-          ➕ Submit Alert
-        </button>
+        {(isSchoolAdmin || isStaff) && (
+          <button
+            onClick={() => navigate('/submit')}
+            className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors"
+          >
+            ➕ Submit Alert
+          </button>
+        )}
       </div>
 
-      {/* ── Role scope notice ── */}
-      <ScopeNotice role={userRole} />
+      {/* Role-specific top content */}
+      {isCompanyAdmin && (
+        <>
+          <div className="grid grid-cols-3 gap-4 mb-6">
+            <ShortcutCard title="SCOUT Setup / Config" description="System configuration and global settings" to="/setup" />
+            <ShortcutCard title="Live Operations" description="Manage incidents and responses" to="/incidents" />
+            <ShortcutCard title="Data & Insights" description="Analytics and reporting" to="/analytics" />
+          </div>
+
+          <QuickViewStrip incidents={incidents} />
+        </>
+      )}
+
+      {isSchoolAdmin && !isCompanyAdmin && (
+        <SchoolAdminStatus incidents={incidents} />
+      )}
+
+      {!isStaff && (
+        <div className="bg-white border border-gray-200 rounded-xl p-5 mb-6">
+          <QuickActions />
+        </div>
+      )}
 
       {/* ── Quick Actions (Staff & School Admin only, not Company Admin) ── */}
       {!isCompanyAdmin && (
@@ -231,6 +261,77 @@ function StatCard({ label, value, color, icon }) {
       <div className="mb-1 text-xs font-semibold text-gray-500">{icon}</div>
       <div className={`text-2xl font-semibold ${color}`}>{value}</div>
       <div className="text-xs text-gray-500">{label}</div>
+    </div>
+  )
+}
+
+function ShortcutCard({ title, description, to }) {
+  const icon = title && (
+    title.toLowerCase().includes('setup') ? '⚙️'
+    : title.toLowerCase().includes('live') ? '🚨'
+    : title.toLowerCase().includes('data') || title.toLowerCase().includes('insight') ? '📊'
+    : '🔗'
+  )
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl p-6 hover:shadow-lg transition-shadow flex flex-col min-h-40">
+      <div className="text-4xl mb-3">{icon}</div>
+      <h3 className="font-semibold text-lg text-gray-900">{title}</h3>
+      <p className="text-sm text-gray-500 mt-1 flex-1">{description}</p>
+      <div className="pt-4 text-right">
+        <Link to={to} className="text-sm text-red-600 hover:underline font-medium">Open →</Link>
+      </div>
+    </div>
+  )
+}
+
+function QuickViewStrip({ incidents }) {
+  const activeCount = incidents.filter(i => i.status !== 'archived' && i.status !== 'resolved').length
+  const unackedCount = incidents.filter(i => i.status === 'triggered').length
+  const notificationsToday = incidents.filter(i => i.notifications?.length > 0 && String(i.timestamp).includes('Today')).length
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl p-3 mb-6 flex items-center gap-4">
+      <div className="flex-1">
+        <div className="text-xs text-gray-500">Active alerts</div>
+        <div className="text-lg font-semibold">{activeCount}</div>
+      </div>
+      <div className="flex-1">
+        <div className="text-xs text-gray-500">Unacknowledged</div>
+        <div className="text-lg font-semibold">{unackedCount}</div>
+      </div>
+      <div className="flex-1">
+        <div className="text-xs text-gray-500">Notifications today</div>
+        <div className="text-lg font-semibold">{notificationsToday}</div>
+      </div>
+    </div>
+  )
+}
+
+function SchoolAdminStatus({ incidents }) {
+  const active = incidents.filter(i => i.status !== 'archived' && i.status !== 'resolved')
+  const unacked = active.filter(i => i.status === 'triggered')
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl p-6 mb-6">
+      <h2 className="text-lg font-bold text-gray-900 mb-2">School status</h2>
+      <p className="text-sm text-gray-600 mb-4">A friendly overview of your school's current safety status. This view is scoped to your school.</p>
+
+      <div className="grid grid-cols-2 gap-4 mb-4">
+        <div className="p-4 bg-gray-50 rounded-lg">
+          <div className="text-xs text-gray-500">Active alerts</div>
+          <div className="text-2xl font-semibold">{active.length}</div>
+        </div>
+        <div className="p-4 bg-gray-50 rounded-lg">
+          <div className="text-xs text-gray-500">Unacknowledged</div>
+          <div className="text-2xl font-semibold">{unacked.length}</div>
+        </div>
+      </div>
+
+      <div className="text-sm text-gray-700">
+        <p className="mb-2">First time here? Start by reviewing active alerts and, if you need to change school-level settings, use the <strong>Setup</strong> page (scoped to your school).</p>
+        <p className="text-xs text-gray-500">Only Company Admins can change system-wide settings.</p>
+      </div>
     </div>
   )
 }

@@ -5,7 +5,7 @@ import { getIncidentById } from '../api/client'
 
 export default function Layout({ children }) {
   const location = useLocation()
-  const { currentUser, userRole, logout, isAdmin, isCompanyAdmin, isSchoolAdmin, authLoading } = useAuth()
+  const { currentUser, userRole, logout, isCompanyAdmin, isSchoolAdmin, isStaff } = useAuth()
 
   // Active emergency banner state
   const [activeEmergency, setActiveEmergency] = useState(null)
@@ -60,16 +60,41 @@ export default function Layout({ children }) {
     return <Navigate to="/login" replace />
   }
 
-  // While role is still loading, keep analytics as allowed=true so it doesn't
-  // flash "Admin access required" before the role resolves.
-  const roleResolved = !authLoading && userRole !== null
-  const navItems = [
-    { path: '/dashboard', label: 'Dashboard', icon: 'D', allowed: true },
-    { path: '/incidents', label: 'Incidents', icon: 'I', allowed: true },
-    { path: '/submit', label: 'Submit Alert', icon: '+', allowed: true },
-    { path: '/analytics', label: 'Analytics', icon: 'A', allowed: !roleResolved || isAdmin },
-    { path: '/notifications', label: 'Notifications', icon: 'N', allowed: true },
+  // Define navigation sections with role-based visibility
+  const navigationSections = [
+    {
+      title: 'SCOUT Setup / Config',
+      visible: isCompanyAdmin || isSchoolAdmin,
+      items: [
+        { path: '/setup', label: 'Setup', icon: 'S', visible: isCompanyAdmin || isSchoolAdmin },
+      ],
+    },
+    {
+      title: 'Live Operations',
+      visible: true,
+      items: [
+        { path: '/dashboard', label: 'Dashboard', icon: 'D', visible: true },
+        { path: '/submit', label: 'Submit Alert', icon: '+', visible: isSchoolAdmin || isStaff },
+        { path: '/incidents', label: 'Incidents', icon: 'I', visible: isCompanyAdmin || isSchoolAdmin },
+      ],
+    },
+    {
+      title: 'Data & Insights',
+      visible: isCompanyAdmin || isSchoolAdmin,
+      items: [
+        { path: '/analytics', label: 'Analytics', icon: 'A', visible: isCompanyAdmin },
+        { path: '/notifications', label: 'Notifications', icon: 'N', visible: isCompanyAdmin || isSchoolAdmin },
+      ],
+    },
   ]
+
+  // Get role display label
+  const getRoleLabel = () => {
+    if (isCompanyAdmin) return 'Company Admin'
+    if (isSchoolAdmin) return 'School Admin'
+    if (isStaff) return 'Staff'
+    return userRole
+  }
 
   const isAcknowledged = acknowledgedBy.length > 0
   const firstAck = acknowledgedBy[0]
@@ -122,37 +147,34 @@ export default function Layout({ children }) {
           <span className="font-bold text-gray-900">SCOUT</span>
         </div>
 
-        <nav className="flex-1 p-3 space-y-1">
-          {navItems.map(item => {
-            if (!item.allowed) {
-              return (
-                <div
-                  key={item.path}
-                  className="flex items-center justify-between px-3 py-2 rounded-lg text-sm text-gray-300 cursor-not-allowed"
-                  title="Admin access required"
-                >
-                  <div className="flex items-center gap-3">
-                    <span>{item.icon}</span>
-                    {item.label}
-                  </div>
-                  <span>X</span>
-                </div>
-              )
-            }
+        <nav className="flex-1 p-3 space-y-4">
+          {navigationSections.map((section) => {
+            // Only show section if it has at least one visible item
+            const visibleItems = section.items.filter(item => item.visible)
+            if (visibleItems.length === 0) return null
 
             return (
-              <Link
-                key={item.path}
-                to={item.path}
-                className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
-                  location.pathname === item.path
-                    ? 'bg-red-50 text-red-600 font-medium'
-                    : 'text-gray-600 hover:bg-gray-100'
-                }`}
-              >
-                <span>{item.icon}</span>
-                {item.label}
-              </Link>
+              <div key={section.title}>
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide px-3 py-2">
+                  {section.title}
+                </h3>
+                <div className="space-y-1">
+                  {visibleItems.map(item => (
+                    <Link
+                      key={item.path}
+                      to={item.path}
+                      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+                        location.pathname === item.path
+                          ? 'bg-red-50 text-red-600 font-medium'
+                          : 'text-gray-600 hover:bg-gray-100'
+                      }`}
+                    >
+                      <span>{item.icon}</span>
+                      {item.label}
+                    </Link>
+                  ))}
+                </div>
+              </div>
             )
           })}
         </nav>
@@ -168,7 +190,7 @@ export default function Layout({ children }) {
                   ? 'bg-purple-100 text-purple-700'
                   : 'bg-blue-100 text-blue-700'
               }`}>
-                {userRole || currentUser.role}
+                {getRoleLabel()}
               </span>
             </div>
             <p className="text-xs text-gray-400">{currentUser.email}</p>
