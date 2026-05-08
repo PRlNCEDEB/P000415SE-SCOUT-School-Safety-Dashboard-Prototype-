@@ -7,9 +7,7 @@ const crypto = require('crypto')
 const admin = require('firebase-admin')
 const { getDb } = require('../db/firebase')
 
-const BACKEND_URL = process.env.NODE_ENV === 'production'
-  ? 'https://p000415se-scout-school-safety-dashboard-lo5f.onrender.com'
-  : 'http://localhost:5000'
+const BACKEND_URL = process.env.BACKEND_URL || 'https://p000415se-scout-school-safety-dashboard-lo5f.onrender.com'
 
 // Lazily initialise clients so missing env vars don't crash the server at startup
 function getSgMail() {
@@ -60,13 +58,11 @@ async function getRecipientsForEmergency(emergencyType) {
 async function getAdminUsers() {
   const db = getDb()
 
-  const adminSnapshot = await db.collection('users')
-    .where('role', '==', 'admin')
-    .get()
+  const usersSnapshot = await db.collection('users').get()
 
-  const admins = adminSnapshot.docs
+  const admins = usersSnapshot.docs
     .map(doc => ({ id: doc.id, ...doc.data() }))
-    .filter(a => a.email) // only include admins with a valid email
+    .filter(a => a.email && a.role && a.role.toLowerCase().includes('admin'))
 
   console.log(`👔 Found ${admins.length} admin(s): ${admins.map(a => a.name).join(', ')}`)
   return admins
