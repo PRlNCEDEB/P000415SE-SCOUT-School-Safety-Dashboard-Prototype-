@@ -184,7 +184,11 @@ export default function Layout({ children }) {
             <div className="flex items-center justify-between mb-0.5">
               <p className="text-sm font-medium text-gray-800">{currentUser.displayName || currentUser.name}</p>
               <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                isCompanyAdmin || isSchoolAdmin ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'
+                isCompanyAdmin
+                  ? 'bg-red-100 text-red-700'
+                  : isSchoolAdmin
+                  ? 'bg-purple-100 text-purple-700'
+                  : 'bg-blue-100 text-blue-700'
               }`}>
                 {getRoleLabel()}
               </span>

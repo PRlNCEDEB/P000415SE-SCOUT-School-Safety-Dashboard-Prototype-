@@ -37,23 +37,28 @@ export default function Incidents() {
   const [search, setSearch] = useState('')
 
   useEffect(() => {
+    //safety flag
     let isActive = true
-
+    //loads the list of incidents from the backend API
     async function loadIncidents() {
+      //reset error and set loading state
       setLoading(true)
       setError('')
 
       try {
+        //fetches the incident records from the backend API
         const records = await getIncidents()
-
+        //if the component is still mounted, updates the state with the loaded incidents
         if (isActive) {
           setIncidents(records)
         }
       } catch (err) {
+        //if there's an error and the component is still mounted, sets the error message to display
         if (isActive) {
           setError(err.message || 'Failed to load incidents.')
         }
       } finally {
+        //if the component is still mounted, sets loading to false to indicate that the loading process has completed
         if (isActive) {
           setLoading(false)
         }
@@ -61,7 +66,7 @@ export default function Incidents() {
     }
 
     loadIncidents()
-
+    //cleanup safety flag when component unmounts to prevent state updates on an unmounted component
     return () => {
       isActive = false
     }
