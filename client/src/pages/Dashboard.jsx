@@ -1,6 +1,9 @@
 import { useNavigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import QuickActions from '../components/QuickActions'
+import ShortcutCard from '../components/ShortcutCard'
+import QuickViewStrip from '../components/QuickViewStrip'
+import SchoolAdminStatus from '../components/SchoolAdminStatus'
 import { incidentAPI } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 
@@ -132,6 +135,36 @@ export default function Dashboard() {
 
       {/* ── Role scope notice ── */}
       <ScopeNotice role={userRole} />
+
+      {/* ── Company Admin: Shortcut cards + Quick View Strip ── */}
+      {isCompanyAdmin && (
+        <>
+          <div className="grid grid-cols-3 gap-4 mb-6">
+            <ShortcutCard
+              title="SCOUT Setup / Config"
+              description="System configuration and global settings"
+              to="/setup"
+            />
+            <ShortcutCard
+              title="Live Operations"
+              description="Manage incidents and responses"
+              to="/incidents"
+            />
+            <ShortcutCard
+              title="Data & Insights"
+              description="Analytics and reporting"
+              to="/analytics"
+            />
+          </div>
+
+          <QuickViewStrip incidents={incidents} />
+        </>
+      )}
+
+      {/* ── School Admin: High-level system status view ── */}
+      {isSchoolAdmin && !isCompanyAdmin && (
+        <SchoolAdminStatus incidents={incidents} />
+      )}
 
       {/* ── Quick Actions (Staff & School Admin only, not Company Admin) ── */}
       {!isCompanyAdmin && (
