@@ -1,60 +1,85 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Link, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { getIncidentById } from '../api/client'
 
 export default function Layout({ children }) {
   const location = useLocation()
-  const { currentUser, userRole, logout, isCompanyAdmin, isSchoolAdmin, isStaff, authLoading } = useAuth()
+  const { currentUser, userRole, logout, isCompanyAdmin, isSchoolAdmin, isStaff } = useAuth()
 
   // Active emergency banner state
   const [activeEmergency, setActiveEmergency] = useState(null)
   const [acknowledgedBy, setAcknowledgedBy] = useState([])
+  const [refreshingStatus, setRefreshingStatus] = useState(false)
+  const [refreshError, setRefreshError] = useState('')
 
-  // Check localStorage every second for active emergency
-  // This ensures the banner appears on the same page without needing to navigate
+  // Sync the active emergency banner without polling Firestore.
   useEffect(() => {
-    const check = () => {
+    const loadActiveEmergency = () => {
       const stored = localStorage.getItem('activeEmergency')
-      if (stored && !activeEmergency) {
-        try {
-          setActiveEmergency(JSON.parse(stored))
-        } catch {
-          localStorage.removeItem('activeEmergency')
-        }
+      if (!stored) {
+        setActiveEmergency(null)
+        setAcknowledgedBy([])
+        return
       }
-    }
 
-    check() // run immediately on mount
-    const interval = setInterval(check, 1000) // check every 1 second
-    return () => clearInterval(interval)
-  }, [activeEmergency])
-
-  // Poll the incident every 5 seconds to check for acknowledgements
-  useEffect(() => {
-    if (!activeEmergency?.incidentId) return
-
-    const poll = async () => {
       try {
-        const incident = await getIncidentById(activeEmergency.incidentId)
-        if (incident?.acknowledgedBy?.length > 0) {
-          setAcknowledgedBy(incident.acknowledgedBy)
-        }
-      } catch (err) {
-        console.error('Failed to poll incident acknowledgement:', err)
+        setActiveEmergency(JSON.parse(stored))
+      } catch {
+        localStorage.removeItem('activeEmergency')
       }
     }
 
-    poll()
-    const interval = setInterval(poll, 5000)
-    return () => clearInterval(interval)
-  }, [activeEmergency])
+    const handleStorage = event => {
+      if (event.key === 'activeEmergency') {
+        loadActiveEmergency()
+      }
+    }
+
+    loadActiveEmergency()
+    window.addEventListener('emergencyTriggered', loadActiveEmergency)
+    window.addEventListener('storage', handleStorage)
+
+    return () => {
+      window.removeEventListener('emergencyTriggered', loadActiveEmergency)
+      window.removeEventListener('storage', handleStorage)
+    }
+  }, [])
 
   const dismissBanner = () => {
     localStorage.removeItem('activeEmergency')
     setActiveEmergency(null)
     setAcknowledgedBy([])
+    setRefreshError('')
   }
+
+  const refreshEmergencyStatus = useCallback(async () => {
+    if (!activeEmergency?.incidentId || refreshingStatus) return
+
+    setRefreshingStatus(true)
+    setRefreshError('')
+
+    try {
+      const incident = await getIncidentById(activeEmergency.incidentId)
+      setAcknowledgedBy(incident?.acknowledgedBy || [])
+    } catch (err) {
+      console.error('Failed to refresh incident acknowledgement:', err)
+      setRefreshError('Could not refresh status.')
+    } finally {
+      setRefreshingStatus(false)
+    }
+  }, [activeEmergency?.incidentId, refreshingStatus])
+
+  useEffect(() => {
+    if (!activeEmergency?.incidentId) return
+
+    const refreshOnFocus = () => {
+      refreshEmergencyStatus()
+    }
+
+    window.addEventListener('focus', refreshOnFocus)
+    return () => window.removeEventListener('focus', refreshOnFocus)
+  }, [activeEmergency?.incidentId, refreshEmergencyStatus])
 
   if (!currentUser) {
     return <Navigate to="/login" replace />
@@ -64,9 +89,9 @@ export default function Layout({ children }) {
   const navigationSections = [
     {
       title: 'SCOUT Setup / Config',
-      visible: isCompanyAdmin,
+      visible: isCompanyAdmin || isSchoolAdmin,
       items: [
-        { path: '/setup', label: 'Setup', icon: 'S', visible: isCompanyAdmin },
+        { path: '/setup', label: 'Setup', icon: 'S', visible: isCompanyAdmin || isSchoolAdmin },
       ],
     },
     {
@@ -117,17 +142,29 @@ export default function Layout({ children }) {
                   <p className="text-white font-semibold text-sm">
                     {activeEmergency.emergencyType} Emergency Alert Sent
                   </p>
-                  <p className="text-white text-xs opacity-90">⏳ Waiting for acknowledgement...</p>
+                  <p className="text-white text-xs opacity-90">
+                    Waiting for acknowledgement. Use refresh to check status.
+                  </p>
+                  {refreshError && <p className="text-white text-xs opacity-90">{refreshError}</p>}
                 </div>
               </>
             )}
           </div>
-          <button
-            onClick={dismissBanner}
-            className="text-white text-xs opacity-75 hover:opacity-100 px-2 py-1 rounded hover:bg-white hover:bg-opacity-20 transition-colors"
-          >
-            ✕ Dismiss
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={refreshEmergencyStatus}
+              disabled={refreshingStatus}
+              className="text-white text-xs opacity-90 hover:opacity-100 px-2 py-1 rounded hover:bg-white hover:bg-opacity-20 transition-colors disabled:opacity-50"
+            >
+              {refreshingStatus ? 'Refreshing...' : 'Refresh Status'}
+            </button>
+            <button
+              onClick={dismissBanner}
+              className="text-white text-xs opacity-75 hover:opacity-100 px-2 py-1 rounded hover:bg-white hover:bg-opacity-20 transition-colors"
+            >
+              Dismiss
+            </button>
+          </div>
         </div>
       )}
 
