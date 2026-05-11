@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext'
 
 export default function Setup() {
   const { isCompanyAdmin, isSchoolAdmin } = useAuth()
+  const canEditSchoolSettings = isCompanyAdmin || isSchoolAdmin
   const [schoolName, setSchoolName] = useState('')
   const [systemValue, setSystemValue] = useState('')
 
@@ -15,9 +16,9 @@ export default function Setup() {
           <h3 className="font-semibold mb-2">Your School Settings</h3>
           <p className="text-sm text-gray-500 mb-4">These settings apply only to your school.</p>
           <label className="block text-xs text-gray-600 mb-1">School display name</label>
-          <input value={schoolName} onChange={e => setSchoolName(e.target.value)} className="w-full px-3 py-2 border rounded" />
+          <input value={schoolName} onChange={e => setSchoolName(e.target.value)} className="w-full px-3 py-2 border rounded" disabled={!canEditSchoolSettings} />
           <div className="mt-4">
-            <button className="px-3 py-2 bg-blue-600 text-white rounded">Save school settings</button>
+            <button className="px-3 py-2 bg-blue-600 text-white rounded" disabled={!canEditSchoolSettings}>Save school settings</button>
           </div>
         </div>
 

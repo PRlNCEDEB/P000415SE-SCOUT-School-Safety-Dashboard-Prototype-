@@ -108,6 +108,8 @@ export default function IncidentDetail() {
 
   // New — track who acknowledged
   const [acknowledgedBy, setAcknowledgedBy] = useState([])
+  const [refreshingStatus, setRefreshingStatus] = useState(false)
+  const [refreshError, setRefreshError] = useState('')
 
   useEffect(() => {
     let isActive = true
@@ -122,6 +124,7 @@ export default function IncidentDetail() {
         if (isActive) {
           setIncident(record)
           setStatus(record?.status || '')
+          setAcknowledgedBy(record?.acknowledgedBy || [])
 
           const acknowledged = normalizeUsers([
             ...(record?.acknowledgedUsers || []),
@@ -166,23 +169,23 @@ export default function IncidentDetail() {
     }
   }, [id])
 
-  // Poll every 5 seconds to check for new acknowledgements
-  useEffect(() => {
-    if (!id) return
+  const refreshIncidentStatus = async () => {
+    if (!id || refreshingStatus) return
 
-    const interval = setInterval(async () => {
-      try {
-        const record = await getIncidentById(id)
-        if (record?.acknowledgedBy?.length > 0) {
-          setAcknowledgedBy(record.acknowledgedBy)
-        }
-      } catch {
-        // silently ignore poll errors
-      }
-    }, 5000)
+    setRefreshingStatus(true)
+    setRefreshError('')
 
-    return () => clearInterval(interval)
-  }, [id])
+    try {
+      const record = await getIncidentById(id)
+      setIncident(record)
+      setStatus(record?.status || '')
+      setAcknowledgedBy(record?.acknowledgedBy || [])
+    } catch (err) {
+      setRefreshError(err.message || 'Failed to refresh incident status.')
+    } finally {
+      setRefreshingStatus(false)
+    }
+  }
 
   const found = incident
 
@@ -224,6 +227,22 @@ export default function IncidentDetail() {
       >
         ← Back to Incidents
       </button>
+
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <div>
+          <p className="text-sm font-medium text-gray-800">Acknowledgement status</p>
+          <p className="text-xs text-gray-500">Refresh only when you need the latest response update.</p>
+          {refreshError && <p className="text-xs text-red-500 mt-1">{refreshError}</p>}
+        </div>
+        <button
+          type="button"
+          onClick={refreshIncidentStatus}
+          disabled={refreshingStatus}
+          className="px-3 py-2 bg-white border border-gray-300 text-sm rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+        >
+          {refreshingStatus ? 'Refreshing...' : 'Refresh Status'}
+        </button>
+      </div>
 
       {/* Help is on the way banner */}
       {acknowledgedBy.length > 0 && (
