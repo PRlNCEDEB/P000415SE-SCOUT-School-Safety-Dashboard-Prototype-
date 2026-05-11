@@ -1,8 +1,49 @@
 const express = require('express')
+const admin = require('firebase-admin')
 const { docToObject, formatTimestamp, getDb, snapshotToArray } = require('../db/firebase')
 const { invalidateAnalyticsCache } = require('../analyticsCache')
 
 const router = express.Router()
+
+async function verifyToken(req, res, next) {
+  const authHeader = req.headers.authorization || ''
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null
+
+  if (!token) {
+    return res.status(401).json({ error: 'No token provided.' })
+  }
+
+  try {
+    req.user = await admin.auth().verifyIdToken(token)
+    next()
+  } catch {
+    return res.status(401).json({ error: 'Invalid or expired token.' })
+  }
+}
+
+async function getReporterProfile(decodedUser) {
+  const db = getDb()
+  const { uid, email, name } = decodedUser
+  let profile = null
+
+  const userDoc = await db.collection('users').doc(uid).get()
+  if (userDoc.exists) {
+    profile = userDoc.data()
+  } else if (email) {
+    const byEmail = await db.collection('users').where('email', '==', email).limit(1).get()
+    if (!byEmail.empty) {
+      profile = byEmail.docs[0].data()
+    }
+  }
+
+  return {
+    uid,
+    email: email || null,
+    name: profile?.name || name || email || 'Unknown',
+    role: profile?.role || null,
+    schoolId: profile?.schoolId || null,
+  }
+}
 
 function getSortValue(incident) {
   //tries to get a timestamp for sorting based on createdAt, updatedAt, or timestamp fields
@@ -77,10 +118,11 @@ router.get('/:id', async (req, res, next) => {
   }
 })
 
-router.post('/', async (req, res, next) => {
+router.post('/', verifyToken, async (req, res, next) => {
   try {
-    const { type, priority, status, title, location, description, triggeredByName, triggeredById } = req.body
+    const { type, priority, status, title, location, description } = req.body
     const now = new Date().toISOString()
+    const reporter = await getReporterProfile(req.user)
 
     const docRef = await getDb().collection('incidents').add({
       type: type || 'general',
@@ -89,8 +131,11 @@ router.post('/', async (req, res, next) => {
       title: title || 'Untitled incident',
       location: location || 'Unknown',
       description: description || '',
-      triggeredByName: triggeredByName || 'Unknown',
-      triggeredById: triggeredById || null,
+      triggeredByName: reporter.name,
+      triggeredById: reporter.uid,
+      triggeredByEmail: reporter.email,
+      triggeredByRole: reporter.role,
+      schoolId: reporter.schoolId,
       createdAt: now,
       updatedAt: now,
     })
