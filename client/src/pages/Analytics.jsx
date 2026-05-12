@@ -197,23 +197,38 @@ export default function Analytics() {
       {/* Row 2 — Line (Company Admin only) + Bar */}
       <div className={`grid grid-cols-1 gap-4 mb-4 ${isCompanyAdmin ? 'md:grid-cols-2' : ''}`}>
 
-        {/* Avg Response Time Trend — Company Admin only */}
+        {/* Response & Resolution Time Trend — Company Admin only */}
         {isCompanyAdmin && (
           <div className="bg-white border border-gray-200 rounded-xl p-5">
-            <h2 className="font-semibold text-gray-900 mb-4">Avg Response Time (minutes)</h2>
+            <h2 className="font-semibold text-gray-900 mb-1">Response &amp; Resolution Time (minutes)</h2>
+            <p className="text-xs text-gray-400 mb-3">Avg time from incident creation to acknowledgement vs full resolution</p>
             {responseTimeData.length > 0 ? (
               <ResponsiveContainer width="100%" height={220}>
                 <LineChart data={responseTimeData} margin={{ top: 0, right: 10, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                   <XAxis dataKey="week" tick={{ fontSize: 11 }} />
                   <YAxis tick={{ fontSize: 11 }} />
-                  <Tooltip />
+                  <Tooltip formatter={(value, name) => [
+                    `${value} min`,
+                    name === 'avgAckMinutes' ? 'Avg Acknowledgement' : 'Avg Resolution'
+                  ]} />
+                  <Legend formatter={(value) =>
+                    value === 'avgAckMinutes' ? 'Avg Acknowledgement Time' : 'Avg Resolution Time'
+                  } />
                   <Line
                     type="monotone"
-                    dataKey="avgMinutes"
+                    dataKey="avgAckMinutes"
                     stroke="#3b82f6"
                     strokeWidth={2}
                     dot={{ r: 4 }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="avgResolutionMinutes"
+                    stroke="#f97316"
+                    strokeWidth={2}
+                    dot={{ r: 4 }}
+                    strokeDasharray="5 3"
                   />
                 </LineChart>
               </ResponsiveContainer>
@@ -223,19 +238,37 @@ export default function Analytics() {
           </div>
         )}
 
-        {/* Incidents by Location */}
+        {/* Incidents by Location — Top 5 + Others donut */}
         <div className="bg-white border border-gray-200 rounded-xl p-5">
           <h2 className="font-semibold text-gray-900 mb-4">Incidents by Location</h2>
-          {locationData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={locationData} layout="vertical" margin={{ top: 0, right: 10, left: 80, bottom: 0 }}>
-                <XAxis type="number" tick={{ fontSize: 11 }} />
-                <YAxis dataKey="location" type="category" tick={{ fontSize: 10 }} />
-                <Tooltip />
-                <Bar dataKey="count" fill="#f97316" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
+          {locationData.length > 0 ? (() => {
+            const sorted = [...locationData].sort((a, b) => b.count - a.count)
+            const top5 = sorted.slice(0, 5)
+            const othersTotal = sorted.slice(5).reduce((sum, d) => sum + d.count, 0)
+            const chartData = othersTotal > 0 ? [...top5, { location: 'Others', count: othersTotal }] : top5
+            return (
+              <ResponsiveContainer width="100%" height={220}>
+                <PieChart>
+                  <Pie
+                    data={chartData}
+                    dataKey="count"
+                    nameKey="location"
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={55}
+                    outerRadius={85}
+                    paddingAngle={3}
+                  >
+                    {chartData.map((entry, index) => (
+                      <Cell key={index} fill={entry.location === 'Others' ? '#ec4899' : PIE_COLORS[index % PIE_COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value, name) => [value, name]} />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            )
+          })() : (
             <p className="text-gray-400 text-center py-10">No data available</p>
           )}
         </div>

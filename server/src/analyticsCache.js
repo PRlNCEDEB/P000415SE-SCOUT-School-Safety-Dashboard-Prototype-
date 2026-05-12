@@ -65,13 +65,16 @@ async function buildAnalytics() {
   })
   const statusBreakdown = Object.entries(statusCounts).map(([name, value]) => ({ name, value }))
 
-  // By location
+  // By location — normalise casing so e.g. "Dashboard quick action" and
+  // "Dashboard Quick Action" (legacy seed data) collapse into one entry
   const locationCounts = {}
   incidents.forEach(i => {
-    const loc = i.location || 'Unknown'
-    locationCounts[loc] = (locationCounts[loc] || 0) + 1
+    const raw = (i.location || 'Unknown').trim()
+    const key = raw.toLowerCase()
+    if (!locationCounts[key]) locationCounts[key] = { display: raw, count: 0 }
+    locationCounts[key].count++
   })
-  const locationData = Object.entries(locationCounts).map(([location, count]) => ({ location, count }))
+  const locationData = Object.values(locationCounts).map(({ display, count }) => ({ location: display, count }))
 
   // This week by day (Mon–Sun)
   const startOfWeek = new Date(now)
