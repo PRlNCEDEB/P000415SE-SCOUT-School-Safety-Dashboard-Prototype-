@@ -1,5 +1,6 @@
 const { getDb, initFirebase } = require('./firebase')
 const { notificationRecipients, notificationRouting } = require('./demoSeedData_notification')
+const { demoSchools } = require('./demoSchools')
 
 async function upsertCollection(collectionName, docs) {
   const db = getDb()
@@ -24,9 +25,11 @@ async function seedDemoNotificationData() {
 
   await upsertCollection('notificationRecipients', notificationRecipients)
   await upsertCollection('notificationRouting', notificationRouting)
+  await upsertCollection('schools', demoSchools)
 
   console.log(`Seeded ${notificationRecipients.length} demo notification recipients into notificationRecipients collection.`)
   console.log(`Seeded ${notificationRouting.length} routing rules into notificationRouting collection.`)
+  console.log(`Seeded ${demoSchools.length} demo schools into schools collection.`)
 }
 
 if (require.main === module) {

@@ -13,10 +13,11 @@ function makeDoc(id, data) {
   }
 }
 
-function createTestDb({ incidents = {}, notifications = {}, users = {} } = {}) {
+function createTestDb({ incidents = {}, notifications = {}, users = {}, schools = {} } = {}) {
   const incidentStore = new Map(Object.entries(incidents).map(([id, value]) => [id, { ...value }]))
   const notificationStore = new Map(Object.entries(notifications).map(([id, value]) => [id, { ...value }]))
   const userStore = new Map(Object.entries(users).map(([id, value]) => [id, { ...value }]))
+  const schoolStore = new Map(Object.entries(schools).map(([id, value]) => [id, { ...value }]))
 
   function makeQuery(store, filters = [], limitCount = null) {
     return {
@@ -29,6 +30,10 @@ function createTestDb({ incidents = {}, notifications = {}, users = {} } = {}) {
       async get() {
         let entries = [...store.entries()]
           .filter(([, record]) => filters.every(filter => {
+            if (filter.operator === 'array-contains') {
+              return Array.isArray(record[filter.field]) && record[filter.field].includes(filter.value)
+            }
+
             if (filter.operator !== '==') return false
             return record[filter.field] === filter.value
           }))
@@ -48,6 +53,9 @@ function createTestDb({ incidents = {}, notifications = {}, users = {} } = {}) {
     collection(name) {
       if (name === 'incidents') {
         return {
+          where(field, operator, value) {
+            return makeQuery(incidentStore).where(field, operator, value)
+          },
           async get() {
             return { docs: [...incidentStore.entries()].map(([id, record]) => makeDoc(id, record)) }
           },
@@ -97,12 +105,25 @@ function createTestDb({ incidents = {}, notifications = {}, users = {} } = {}) {
         }
       }
 
+      if (name === 'schools') {
+        return {
+          doc(id) {
+            return {
+              async get() {
+                return makeDoc(id, schoolStore.get(id))
+              },
+            }
+          },
+        }
+      }
+
       throw new Error(`Unexpected collection: ${name}`)
     },
     stores: {
       incidents: incidentStore,
       notifications: notificationStore,
       users: userStore,
+      schools: schoolStore,
     },
   }
 }
@@ -133,15 +154,34 @@ require.cache[firebaseAdminPath] = {
   exports: {
     auth: () => ({
       async verifyIdToken(token) {
-        if (token !== 'valid-token') {
+        const usersByToken = {
+          'valid-token': {
+            uid: 'admin-uid',
+            email: 'admin@school.edu',
+            name: 'Token Name',
+          },
+          'company-token': {
+            uid: 'company-uid',
+            email: 'company@scout.edu',
+            name: 'Company Admin',
+          },
+          'school-token': {
+            uid: 'school-admin-uid',
+            email: 'principal@school.edu',
+            name: 'School Admin',
+          },
+          'staff-token': {
+            uid: 'staff-uid',
+            email: 'staff@school.edu',
+            name: 'Staff User',
+          },
+        }
+
+        if (!usersByToken[token]) {
           throw new Error('Invalid token')
         }
 
-        return {
-          uid: 'admin-uid',
-          email: 'admin@school.edu',
-          name: 'Token Name',
-        }
+        return usersByToken[token]
       },
     }),
   },
@@ -182,22 +222,33 @@ test.beforeEach(() => {
 
 test('GET /api/incidents returns incidents sorted newest first', async () => {
   fakeDb = createTestDb({
+    users: {
+      'company-uid': {
+        name: 'Company Admin',
+        email: 'company@scout.edu',
+        role: 'companyAdmin',
+      },
+    },
     incidents: {
       older: {
         title: 'Older incident',
         status: 'triggered',
         createdAt: '2026-04-29T08:00:00.000Z',
+        schoolId: 'school_alpha',
       },
       newer: {
         title: 'Newer incident',
         status: 'acknowledged',
         createdAt: '2026-04-29T09:00:00.000Z',
+        schoolId: 'school_beta',
       },
     },
   })
 
   await withServer(createApp(), async baseUrl => {
-    const response = await fetch(`${baseUrl}/api/incidents`)
+    const response = await fetch(`${baseUrl}/api/incidents`, {
+      headers: { Authorization: 'Bearer company-token' },
+    })
     assert.equal(response.status, 200)
 
     const payload = await response.json()
@@ -209,6 +260,13 @@ test('GET /api/incidents returns incidents sorted newest first', async () => {
 
 test('GET /api/incidents/:id returns incident details and related notifications', async () => {
   fakeDb = createTestDb({
+    users: {
+      'company-uid': {
+        name: 'Company Admin',
+        email: 'company@scout.edu',
+        role: 'companyAdmin',
+      },
+    },
     incidents: {
       incident42: {
         title: 'Fire alarm triggered',
@@ -218,6 +276,7 @@ test('GET /api/incidents/:id returns incident details and related notifications'
         location: 'Block B',
         createdAt: '2026-04-29T10:00:00.000Z',
         triggeredByName: 'Admin User',
+        schoolId: 'school_alpha',
         description: 'Smoke detected near science lab.',
       },
     },
@@ -232,7 +291,9 @@ test('GET /api/incidents/:id returns incident details and related notifications'
   })
 
   await withServer(createApp(), async baseUrl => {
-    const response = await fetch(`${baseUrl}/api/incidents/incident42`)
+    const response = await fetch(`${baseUrl}/api/incidents/incident42`, {
+      headers: { Authorization: 'Bearer company-token' },
+    })
     assert.equal(response.status, 200)
 
     const payload = await response.json()
@@ -254,7 +315,12 @@ test('POST /api/incidents creates a new incident with authenticated reporter det
         name: 'Admin User',
         email: 'admin@school.edu',
         role: 'companyAdmin',
-        schoolId: 'school-alpha',
+        schoolId: 'school_alpha',
+      },
+    },
+    schools: {
+      school_alpha: {
+        name: 'Alpha School',
       },
     },
   })
@@ -287,7 +353,125 @@ test('POST /api/incidents creates a new incident with authenticated reporter det
     assert.equal(storedIncident.triggeredById, 'admin-uid')
     assert.equal(storedIncident.triggeredByEmail, 'admin@school.edu')
     assert.equal(storedIncident.triggeredByRole, 'companyAdmin')
-    assert.equal(storedIncident.schoolId, 'school-alpha')
+    assert.equal(storedIncident.schoolId, 'school_alpha')
+    assert.equal(storedIncident.schoolName, 'Alpha School')
+    assert.deepEqual(storedIncident.assignedUserIds, [])
+    assert.deepEqual(storedIncident.assignedUserEmails, [])
+  })
+})
+
+test('GET /api/incidents scopes school admin to their school', async () => {
+  fakeDb = createTestDb({
+    users: {
+      'school-admin-uid': {
+        name: 'School Admin',
+        email: 'principal@school.edu',
+        role: 'schoolAdmin',
+        schoolId: 'school_alpha',
+      },
+    },
+    incidents: {
+      alpha: {
+        title: 'Alpha incident',
+        createdAt: '2026-04-29T09:00:00.000Z',
+        schoolId: 'school_alpha',
+      },
+      beta: {
+        title: 'Beta incident',
+        createdAt: '2026-04-29T10:00:00.000Z',
+        schoolId: 'school_beta',
+      },
+    },
+  })
+
+  await withServer(createApp(), async baseUrl => {
+    const response = await fetch(`${baseUrl}/api/incidents`, {
+      headers: { Authorization: 'Bearer school-token' },
+    })
+    assert.equal(response.status, 200)
+
+    const payload = await response.json()
+    assert.deepEqual(payload.incidents.map(incident => incident.id), ['alpha'])
+  })
+})
+
+test('GET /api/incidents scopes staff to submitted or assigned incidents', async () => {
+  fakeDb = createTestDb({
+    users: {
+      'staff-uid': {
+        name: 'Staff User',
+        email: 'staff@school.edu',
+        role: 'staff',
+        schoolId: 'school_alpha',
+      },
+    },
+    incidents: {
+      submitted: {
+        title: 'Submitted by staff',
+        createdAt: '2026-04-29T09:00:00.000Z',
+        triggeredById: 'staff-uid',
+        schoolId: 'school_alpha',
+      },
+      assignedById: {
+        title: 'Assigned by uid',
+        createdAt: '2026-04-29T10:00:00.000Z',
+        assignedUserIds: ['staff-uid'],
+        schoolId: 'school_alpha',
+      },
+      assignedByEmail: {
+        title: 'Assigned by email',
+        createdAt: '2026-04-29T11:00:00.000Z',
+        assignedUserEmails: ['staff@school.edu'],
+        schoolId: 'school_alpha',
+      },
+      unrelated: {
+        title: 'Unrelated incident',
+        createdAt: '2026-04-29T12:00:00.000Z',
+        schoolId: 'school_alpha',
+      },
+    },
+  })
+
+  await withServer(createApp(), async baseUrl => {
+    const response = await fetch(`${baseUrl}/api/incidents`, {
+      headers: { Authorization: 'Bearer staff-token' },
+    })
+    assert.equal(response.status, 200)
+
+    const payload = await response.json()
+    assert.deepEqual(payload.incidents.map(incident => incident.id), [
+      'assignedByEmail',
+      'assignedById',
+      'submitted',
+    ])
+  })
+})
+
+test('GET /api/incidents/:id prevents staff from opening unrelated incidents', async () => {
+  fakeDb = createTestDb({
+    users: {
+      'staff-uid': {
+        name: 'Staff User',
+        email: 'staff@school.edu',
+        role: 'staff',
+        schoolId: 'school_alpha',
+      },
+    },
+    incidents: {
+      unrelated: {
+        title: 'Unrelated incident',
+        createdAt: '2026-04-29T12:00:00.000Z',
+        schoolId: 'school_alpha',
+      },
+    },
+  })
+
+  await withServer(createApp(), async baseUrl => {
+    const response = await fetch(`${baseUrl}/api/incidents/unrelated`, {
+      headers: { Authorization: 'Bearer staff-token' },
+    })
+
+    assert.equal(response.status, 403)
   })
 })
 

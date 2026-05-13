@@ -21,7 +21,29 @@ async function verifyToken(req, res, next) {
   }
 }
 
-async function getReporterProfile(decodedUser) {
+function normaliseRole(role) {
+  return String(role || '').toLowerCase().replace(/[-_\s]/g, '')
+}
+
+function isCompanyAdmin(role) {
+  return ['companyadmin', 'admin'].includes(normaliseRole(role))
+}
+
+function isSchoolAdmin(role) {
+  return ['schooladmin', 'principal'].includes(normaliseRole(role))
+}
+
+async function getSchoolName(db, schoolId) {
+  if (!schoolId) return null
+
+  const schoolDoc = await db.collection('schools').doc(schoolId).get()
+  if (!schoolDoc.exists) return null
+
+  const school = schoolDoc.data()
+  return school?.name || null
+}
+
+async function getUserProfile(decodedUser) {
   const db = getDb()
   const { uid, email, name } = decodedUser
   let profile = null
@@ -42,7 +64,66 @@ async function getReporterProfile(decodedUser) {
     name: profile?.name || name || email || 'Unknown',
     role: profile?.role || null,
     schoolId: profile?.schoolId || null,
+    schoolName: profile?.schoolName || await getSchoolName(db, profile?.schoolId),
   }
+}
+
+async function getVisibleIncidents(profile) {
+  const db = getDb()
+
+  if (isCompanyAdmin(profile.role)) {
+    const snapshot = await db.collection('incidents').get()
+    return snapshotToArray(snapshot)
+  }
+
+  if (isSchoolAdmin(profile.role)) {
+    if (!profile.schoolId) return []
+
+    const snapshot = await db.collection('incidents')
+      .where('schoolId', '==', profile.schoolId)
+      .get()
+    return snapshotToArray(snapshot)
+  }
+
+  const incidentMap = new Map()
+  const addSnapshot = snapshot => {
+    snapshotToArray(snapshot).forEach(incident => {
+      incidentMap.set(incident.id, incident)
+    })
+  }
+
+  const submittedSnapshot = await db.collection('incidents')
+    .where('triggeredById', '==', profile.uid)
+    .get()
+  addSnapshot(submittedSnapshot)
+
+  const assignedByIdSnapshot = await db.collection('incidents')
+    .where('assignedUserIds', 'array-contains', profile.uid)
+    .get()
+  addSnapshot(assignedByIdSnapshot)
+
+  if (profile.email) {
+    const assignedByEmailSnapshot = await db.collection('incidents')
+      .where('assignedUserEmails', 'array-contains', profile.email)
+      .get()
+    addSnapshot(assignedByEmailSnapshot)
+  }
+
+  return [...incidentMap.values()]
+}
+
+function canReadIncident(profile, incident) {
+  if (isCompanyAdmin(profile.role)) return true
+  if (isSchoolAdmin(profile.role)) {
+    return Boolean(profile.schoolId && incident.schoolId === profile.schoolId)
+  }
+
+  const assignedUserIds = Array.isArray(incident.assignedUserIds) ? incident.assignedUserIds : []
+  const assignedUserEmails = Array.isArray(incident.assignedUserEmails) ? incident.assignedUserEmails : []
+
+  return incident.triggeredById === profile.uid ||
+    assignedUserIds.includes(profile.uid) ||
+    (profile.email && assignedUserEmails.includes(profile.email))
 }
 
 function getSortValue(incident) {
@@ -56,6 +137,13 @@ function getSortValue(incident) {
   const parsed = Date.parse(value)
   return Number.isNaN(parsed) ? 0 : parsed
 }
+
+function toIsoTimestamp(value) {
+  if (!value) return null
+  const date = value.toDate ? value.toDate() : new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date.toISOString()
+}
+
 //converts a raw Firestore incident into the response shape used by the frontend
 function toIncidentResponse(incident) {
   return {
@@ -65,19 +153,28 @@ function toIncidentResponse(incident) {
     status: incident.status || 'triggered',
     title: incident.title || 'Untitled incident',
     location: incident.location || 'Unknown location',
+    createdAt: toIsoTimestamp(incident.createdAt),
+    updatedAt: toIsoTimestamp(incident.updatedAt),
     timestamp: incident.createdAt ? formatTimestamp(incident.createdAt) : '',
     triggeredByName: incident.triggeredByName || 'Unknown reporter',
+    triggeredById: incident.triggeredById || null,
+    triggeredByEmail: incident.triggeredByEmail || null,
+    triggeredByRole: incident.triggeredByRole || null,
+    schoolId: incident.schoolId || null,
+    schoolName: incident.schoolName || null,
+    assignedUserIds: Array.isArray(incident.assignedUserIds) ? incident.assignedUserIds : [],
+    assignedUserEmails: Array.isArray(incident.assignedUserEmails) ? incident.assignedUserEmails : [],
     description: incident.description || '',
     acknowledgedBy: incident.acknowledgedBy || [],  // ← added
     notifications: [],
   }
 }
 
-router.get('/', async (req, res, next) => {
+router.get('/', verifyToken, async (req, res, next) => {
   try {
-    const snapshot = await getDb().collection('incidents').get()
+    const profile = await getUserProfile(req.user)
     //sorts incidents from newest to oldest based on createdAt, updatedAt, or timestamp and converts to response format
-    const incidents = snapshotToArray(snapshot)
+    const incidents = (await getVisibleIncidents(profile))
       .sort((left, right) => getSortValue(right) - getSortValue(left))
       .map(toIncidentResponse)
     //sends the result back as JSON
@@ -87,13 +184,18 @@ router.get('/', async (req, res, next) => {
   }
 })
 //gets a specific incident by ID
-router.get('/:id', async (req, res, next) => {
+router.get('/:id', verifyToken, async (req, res, next) => {
   try {
+    const profile = await getUserProfile(req.user)
     const doc = await getDb().collection('incidents').doc(req.params.id).get()
     const incident = docToObject(doc)
 
     if (!incident) {
       return res.status(404).json({ error: 'Incident not found.' })
+    }
+
+    if (!canReadIncident(profile, incident)) {
+      return res.status(403).json({ error: 'You do not have access to this incident.' })
     }
 
     const notificationsSnapshot = await getDb()
@@ -122,7 +224,7 @@ router.post('/', verifyToken, async (req, res, next) => {
   try {
     const { type, priority, status, title, location, description } = req.body
     const now = new Date().toISOString()
-    const reporter = await getReporterProfile(req.user)
+    const reporter = await getUserProfile(req.user)
 
     const docRef = await getDb().collection('incidents').add({
       type: type || 'general',
@@ -136,6 +238,9 @@ router.post('/', verifyToken, async (req, res, next) => {
       triggeredByEmail: reporter.email,
       triggeredByRole: reporter.role,
       schoolId: reporter.schoolId,
+      schoolName: reporter.schoolName,
+      assignedUserIds: [],
+      assignedUserEmails: [],
       createdAt: now,
       updatedAt: now,
     })
@@ -164,3 +269,4 @@ router.patch('/:id/status', async (req, res, next) => {
 module.exports = router
 module.exports.getSortValue = getSortValue
 module.exports.toIncidentResponse = toIncidentResponse
+module.exports.toIsoTimestamp = toIsoTimestamp
