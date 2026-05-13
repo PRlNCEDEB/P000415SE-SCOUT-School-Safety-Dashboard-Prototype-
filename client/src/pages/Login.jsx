@@ -9,18 +9,21 @@ const demoAccounts = [
     label: 'Company Admin',
     email: 'admin@scout.edu',
     password: DEMO_PASSWORD,
+    scope: 'SCOUT platform',
     badgeClass: 'bg-red-100 text-red-700',
   },
   {
     label: 'School Admin',
     email: 'schooladmin@school.edu',
     password: DEMO_PASSWORD,
+    scope: 'Alpha School',
     badgeClass: 'bg-purple-100 text-purple-700',
   },
   {
     label: 'Staff',
     email: 'staff@school.edu',
     password: DEMO_PASSWORD,
+    scope: 'Alpha School',
     badgeClass: 'bg-blue-100 text-blue-700',
   },
 ]
@@ -151,7 +154,7 @@ export default function Login() {
                 >
                   <span>
                     <span className="block text-sm font-medium text-gray-900">{account.label}</span>
-                    <span className="block text-xs text-gray-500">{account.email}</span>
+                    <span className="block text-xs text-gray-500">{account.email} - {account.scope}</span>
                   </span>
                   <span className={`text-xs px-2 py-0.5 rounded ${account.badgeClass}`}>
                     {account.label}

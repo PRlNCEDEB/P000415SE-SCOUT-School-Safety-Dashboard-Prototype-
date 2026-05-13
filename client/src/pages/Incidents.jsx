@@ -30,7 +30,7 @@ const typeIcons = {
 
 export default function Incidents() {
   const navigate = useNavigate()
-  const { isCompanyAdmin } = useAuth()
+  const { isCompanyAdmin, isSchoolAdmin } = useAuth()
   const [incidents, setIncidents] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -83,6 +83,13 @@ export default function Incidents() {
       .sort((left, right) => left.name.localeCompare(right.name))
   }, [incidents])
 
+  const schoolAdminSchoolName = useMemo(() => {
+    if (!isSchoolAdmin || isCompanyAdmin) return null
+
+    const incidentWithSchool = incidents.find(incident => incident.schoolName)
+    return incidentWithSchool?.schoolName || null
+  }, [incidents, isCompanyAdmin, isSchoolAdmin])
+
   const filtered = incidents.filter(incident => {
     const searchTerm = search.trim().toLowerCase()
     const searchableText = [
@@ -111,6 +118,7 @@ export default function Incidents() {
           <h1 className="text-2xl font-bold text-gray-900">Incident Log</h1>
           <p className="text-sm text-gray-500">
             {loading ? 'Loading incidents...' : `${incidents.length} total incidents`}
+            {schoolAdminSchoolName ? ` - ${schoolAdminSchoolName}` : ''}
           </p>
         </div>
         <button
@@ -187,7 +195,7 @@ export default function Incidents() {
                 <p className="text-sm text-gray-800 truncate">{incident.title}</p>
                 <p className="text-xs text-gray-500 truncate">
                   {incident.location} · {incident.timestamp} · {incident.triggeredByName}
-                  {incident.schoolName ? ` · ${incident.schoolName}` : ''}
+                  {isCompanyAdmin && incident.schoolName ? ` · ${incident.schoolName}` : ''}
                 </p>
               </div>
               <span className={`text-xs px-2 py-0.5 rounded ${priorityColors[incident.priority]}`}>
