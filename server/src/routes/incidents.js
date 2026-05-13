@@ -126,6 +126,31 @@ function canReadIncident(profile, incident) {
     (profile.email && assignedUserEmails.includes(profile.email))
 }
 
+function canUpdateIncidentStatus(profile, incident) {
+  return canReadIncident(profile, incident) && (isCompanyAdmin(profile.role) || isSchoolAdmin(profile.role))
+}
+
+function appendUniqueActor(list, profile, timestamp, timeField) {
+  const existing = Array.isArray(list) ? list : []
+  const alreadyRecorded = existing.some(actor =>
+    (profile.uid && actor.uid === profile.uid) ||
+    (profile.email && actor.email === profile.email)
+  )
+
+  if (alreadyRecorded) return existing
+
+  return [
+    ...existing,
+    {
+      uid: profile.uid,
+      name: profile.name,
+      email: profile.email,
+      role: profile.role,
+      [timeField]: timestamp,
+    },
+  ]
+}
+
 function getSortValue(incident) {
   //tries to get a timestamp for sorting based on createdAt, updatedAt, or timestamp fields
   const value = incident.createdAt || incident.updatedAt || incident.timestamp
@@ -166,6 +191,7 @@ function toIncidentResponse(incident) {
     assignedUserEmails: Array.isArray(incident.assignedUserEmails) ? incident.assignedUserEmails : [],
     description: incident.description || '',
     acknowledgedBy: incident.acknowledgedBy || [],  // ← added
+    inProgressBy: incident.inProgressBy || [],
     notifications: [],
   }
 }
@@ -254,13 +280,39 @@ router.post('/', verifyToken, async (req, res, next) => {
   }
 })
 
-router.patch('/:id/status', async (req, res, next) => {
+router.patch('/:id/status', verifyToken, async (req, res, next) => {
   try {
     const { status } = req.body
     const now = new Date().toISOString()
-    await getDb().collection('incidents').doc(req.params.id).update({ status, updatedAt: now })
+    const db = getDb()
+    const profile = await getUserProfile(req.user)
+    const docRef = db.collection('incidents').doc(req.params.id)
+    const doc = await docRef.get()
+    const incident = docToObject(doc)
+
+    if (!incident) {
+      return res.status(404).json({ error: 'Incident not found.' })
+    }
+
+    if (!canUpdateIncidentStatus(profile, incident)) {
+      return res.status(403).json({ error: 'You do not have permission to update this incident.' })
+    }
+
+    const updates = { status, updatedAt: now }
+
+    if (status === 'acknowledged') {
+      updates.acknowledgedBy = appendUniqueActor(incident.acknowledgedBy, profile, now, 'acknowledgedAt')
+    }
+
+    if (status === 'in-progress') {
+      updates.inProgressBy = appendUniqueActor(incident.inProgressBy, profile, now, 'inProgressAt')
+    }
+
+    await docRef.update(updates)
+    const updatedDoc = await docRef.get()
+    const updatedIncident = docToObject(updatedDoc)
     invalidateAnalyticsCache()
-    res.json({ success: true })
+    res.json({ success: true, incident: toIncidentResponse(updatedIncident) })
   } catch (error) {
     next(error)
   }

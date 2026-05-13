@@ -477,6 +477,13 @@ test('GET /api/incidents/:id prevents staff from opening unrelated incidents', a
 
 test('PATCH /api/incidents/:id/status updates incident status', async () => {
   fakeDb = createTestDb({
+    users: {
+      'admin-uid': {
+        name: 'Admin User',
+        email: 'admin@school.edu',
+        role: 'companyAdmin',
+      },
+    },
     incidents: {
       incident77: {
         title: 'Medical alert',
@@ -490,17 +497,21 @@ test('PATCH /api/incidents/:id/status updates incident status', async () => {
   await withServer(createApp(), async baseUrl => {
     const response = await fetch(`${baseUrl}/api/incidents/incident77/status`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'resolved' }),
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer valid-token' },
+      body: JSON.stringify({ status: 'acknowledged' }),
     })
 
     assert.equal(response.status, 200)
 
     const payload = await response.json()
-    assert.deepEqual(payload, { success: true })
+    assert.equal(payload.success, true)
+    assert.equal(payload.incident.status, 'acknowledged')
+    assert.equal(payload.incident.acknowledgedBy.length, 1)
+    assert.equal(payload.incident.acknowledgedBy[0].name, 'Admin User')
 
     const updated = fakeDb.stores.incidents.get('incident77')
-    assert.equal(updated.status, 'resolved')
+    assert.equal(updated.status, 'acknowledged')
     assert.equal(typeof updated.updatedAt, 'string')
+    assert.equal(updated.acknowledgedBy[0].email, 'admin@school.edu')
   })
 })

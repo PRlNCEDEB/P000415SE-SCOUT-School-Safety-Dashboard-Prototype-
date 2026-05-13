@@ -45,6 +45,7 @@ test('toIncidentResponse applies defaults for missing incident fields', () => {
   assert.deepEqual(response.assignedUserEmails, [])
   assert.equal(response.description, '')
   assert.deepEqual(response.acknowledgedBy, [])
+  assert.deepEqual(response.inProgressBy, [])
   assert.deepEqual(response.notifications, [])
   assert.equal(response.timestamp, '')
 })
@@ -74,6 +75,7 @@ test('toIncidentResponse preserves provided incident values', () => {
     assignedUserEmails: ['staff@school.edu'],
     description: 'Smoke detected near science lab.',
     acknowledgedBy: [{ name: 'Riley Principal' }],
+    inProgressBy: [{ name: 'School Admin' }],
   })
 
   assert.equal(response.id, 'incident-42')
@@ -93,6 +95,7 @@ test('toIncidentResponse preserves provided incident values', () => {
   assert.deepEqual(response.assignedUserEmails, ['staff@school.edu'])
   assert.equal(response.description, 'Smoke detected near science lab.')
   assert.deepEqual(response.acknowledgedBy, [{ name: 'Riley Principal' }])
+  assert.deepEqual(response.inProgressBy, [{ name: 'School Admin' }])
   assert.deepEqual(response.notifications, [])
   assert.equal(typeof response.timestamp, 'string')
   assert.notEqual(response.timestamp, '')
