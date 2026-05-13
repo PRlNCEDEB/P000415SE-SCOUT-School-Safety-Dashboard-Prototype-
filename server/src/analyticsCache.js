@@ -17,7 +17,8 @@ function toDate(val) {
   return isNaN(d) ? null : d
 }
 
-function getResponseTime(incident) {
+// Measures createdAt → updatedAt for resolved incidents (full resolution time)
+function getResolutionTime(incident) {
   if (incident.status !== 'resolved') return null
   const created = toDate(incident.createdAt)
   const updated = toDate(incident.updatedAt)
@@ -26,11 +27,27 @@ function getResponseTime(incident) {
   return mins > 0 ? mins : null
 }
 
+// Measures createdAt → acknowledgedAt (true first-response metric)
+function getAcknowledgementTime(incident) {
+  if (!incident.acknowledgedAt) return null
+  const created = toDate(incident.createdAt)
+  const acked = toDate(incident.acknowledgedAt)
+  if (!created || !acked) return null
+  const mins = (acked - created) / 60000
+  return mins > 0 ? mins : null
+}
+
 // ── Build analytics from Firestore ────────────────────────────────────────────
 async function buildAnalytics() {
   const db = getDb()
-  const snapshot = await db.collection('incidents').get()
-  const incidents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+
+  // Fetch incidents and notifications in parallel to minimise Firestore latency
+  const [incidentsSnapshot, notificationsSnapshot] = await Promise.all([
+    db.collection('incidents').get(),
+    db.collection('notifications').get(),
+  ])
+  const incidents = incidentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+  const notifications = notificationsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
 
   const now = new Date()
   const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
@@ -38,14 +55,22 @@ async function buildAnalytics() {
   // Summary metrics
   const totalIncidents = incidents.length
   const resolvedCount = incidents.filter(i => i.status === 'resolved').length
-  const allResponseTimes = incidents.map(getResponseTime).filter(v => v !== null)
-  const avgResponseTime = allResponseTimes.length > 0
-    ? parseFloat((allResponseTimes.reduce((sum, v) => sum + v, 0) / allResponseTimes.length).toFixed(1))
+
+  // Avg Response Time — uses acknowledgedAt (true first-response metric)
+  const allAckTimes = incidents.map(getAcknowledgementTime).filter(v => v !== null)
+  const avgResponseTime = allAckTimes.length > 0
+    ? parseFloat((allAckTimes.reduce((sum, v) => sum + v, 0) / allAckTimes.length).toFixed(1))
     : 0
+
   const thisWeekIncidents = incidents.filter(i => {
     const d = toDate(i.createdAt)
     return d && d >= weekAgo
   }).length
+
+  // Unacknowledged count — triggered with no acknowledgedBy entries
+  const unacknowledgedCount = incidents.filter(i =>
+    i.status === 'triggered' && (!i.acknowledgedBy || i.acknowledgedBy.length === 0)
+  ).length
 
   // Incidents by type
   const typeCounts = {}
@@ -55,8 +80,14 @@ async function buildAnalytics() {
   })
   const incidentsByType = Object.entries(typeCounts).map(([type, count]) => ({ type, count }))
 
-  // Status breakdown
-  const statusMap = { resolved: 'Resolved', acknowledged: 'Acknowledged', triggered: 'Triggered', archived: 'Archived' }
+  // Status breakdown — includes 'in-progress' so no incidents fall through as Unknown
+  const statusMap = {
+    resolved: 'Resolved',
+    acknowledged: 'Acknowledged',
+    'in-progress': 'In Progress',
+    triggered: 'Triggered',
+    archived: 'Archived',
+  }
   const statusCounts = {}
   Object.values(statusMap).forEach(s => { statusCounts[s] = 0 })
   incidents.forEach(i => {
@@ -91,9 +122,10 @@ async function buildAnalytics() {
   })
   const incidentsByDay = days.map(d => ({ day: d, incidents: dayCounts[d] }))
 
-  // Response time trend (last 4 weeks)
+  // Response & Resolution time trend (last 4 weeks)
+  // ack = createdAt → acknowledgedAt; resolution = createdAt → updatedAt (resolved only)
   const weekData = {}
-  for (let i = 0; i < 4; i++) weekData[`Week ${i + 1}`] = { total: 0, count: 0 }
+  for (let i = 0; i < 4; i++) weekData[`Week ${i + 1}`] = { ackTotal: 0, ackCount: 0, resTotal: 0, resCount: 0 }
   incidents.forEach(i => {
     const d = toDate(i.createdAt)
     if (!d) return
@@ -101,23 +133,32 @@ async function buildAnalytics() {
     if (weekNumber >= 1 && weekNumber <= 4) {
       const key = `Week ${5 - weekNumber}`
       if (weekData[key]) {
-        const rt = getResponseTime(i)
-        if (rt !== null) { weekData[key].total += rt; weekData[key].count++ }
+        const ack = getAcknowledgementTime(i)
+        if (ack !== null) { weekData[key].ackTotal += ack; weekData[key].ackCount++ }
+        const res = getResolutionTime(i)
+        if (res !== null) { weekData[key].resTotal += res; weekData[key].resCount++ }
       }
     }
   })
   const responseTimeData = Object.entries(weekData).map(([week, d]) => ({
     week,
-    avgMinutes: d.count > 0 ? parseFloat((d.total / d.count).toFixed(1)) : 0,
+    avgAckMinutes: d.ackCount > 0 ? parseFloat((d.ackTotal / d.ackCount).toFixed(1)) : 0,
+    avgResolutionMinutes: d.resCount > 0 ? parseFloat((d.resTotal / d.resCount).toFixed(1)) : 0,
   }))
 
+  // Failed alerts — count from notifications collection
+  const failedSms = notifications.filter(n => n.sms === 'failed').length
+  const failedEmail = notifications.filter(n => n.email === 'failed').length
+  const failedAlerts = { total: failedSms + failedEmail, sms: failedSms, email: failedEmail }
+
   return {
-    summary: { totalIncidents, resolvedCount, avgResponseTime, thisWeekIncidents },
+    summary: { totalIncidents, resolvedCount, avgResponseTime, thisWeekIncidents, unacknowledgedCount },
     incidentsByType,
     statusBreakdown,
     locationData,
     incidentsByDay,
     responseTimeData,
+    failedAlerts,
   }
 }
 
