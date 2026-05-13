@@ -17,7 +17,17 @@ async function setupFirestore() {
     email: 'admin@school.edu',
     passwordHash: 'demo-hash',
     role: 'admin',
+    schoolId: 'school_alpha',
+    schoolName: 'Alpha School',
     createdAt: new Date().toISOString(),
+  })
+
+  const schoolRef = db.collection('schools').doc('school_alpha')
+  batch.set(schoolRef, {
+    name: 'Alpha School',
+    active: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   })
 
   const incidentRef = db.collection('incidents').doc('incident-001')
@@ -30,6 +40,12 @@ async function setupFirestore() {
     status: 'triggered',
     triggeredById: 'admin',
     triggeredByName: 'Admin User',
+    triggeredByEmail: 'admin@school.edu',
+    triggeredByRole: 'admin',
+    schoolId: 'school_alpha',
+    schoolName: 'Alpha School',
+    assignedUserIds: [],
+    assignedUserEmails: [],
     acknowledgedBy: [],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),

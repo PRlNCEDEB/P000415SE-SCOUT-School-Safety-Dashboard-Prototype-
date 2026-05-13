@@ -55,6 +55,35 @@ function extractUsersFromHistory(history, statuses) {
     .filter(Boolean))]
 }
 
+function getProgressUsers(record) {
+  const acknowledged = normalizeUsers([
+    ...(record?.acknowledgedUsers || []),
+    ...(record?.acknowledgedBy || []),
+    ...(record?.ackUsers || []),
+    ...(record?.acknowledgements || []),
+  ])
+  const acknowledgedFromHistory = extractUsersFromHistory(
+    record?.statusHistory,
+    ['acknowledged']
+  )
+
+  const inProgress = normalizeUsers([
+    ...(record?.inProgressUsers || []),
+    ...(record?.inProgressBy || []),
+    ...(record?.workingUsers || []),
+    ...(record?.responders || []),
+  ])
+  const inProgressFromHistory = extractUsersFromHistory(
+    record?.statusHistory,
+    ['in-progress', 'in_progress']
+  )
+
+  return {
+    acknowledgedUsers: [...new Set([...acknowledged, ...acknowledgedFromHistory])],
+    inProgressUsers: [...new Set([...inProgress, ...inProgressFromHistory])],
+  }
+}
+
 const priorityColors = {
   critical: 'bg-red-100 text-red-700',
   high: 'bg-orange-100 text-orange-700',
@@ -95,7 +124,7 @@ const nextLabel = {
 export default function IncidentDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { currentUser, isAdmin } = useAuth()
+  const { isAdmin } = useAuth()
   const [incident, setIncident] = useState(null)
   const [status, setStatus] = useState('')
   const [loading, setLoading] = useState(true)
@@ -125,31 +154,9 @@ export default function IncidentDetail() {
           setIncident(record)
           setStatus(record?.status || '')
           setAcknowledgedBy(record?.acknowledgedBy || [])
-
-          const acknowledged = normalizeUsers([
-            ...(record?.acknowledgedUsers || []),
-            ...(record?.acknowledgedBy || []),
-            ...(record?.ackUsers || []),
-            ...(record?.acknowledgements || []),
-          ])
-          const acknowledgedFromHistory = extractUsersFromHistory(
-            record?.statusHistory,
-            ['acknowledged']
-          )
-
-          const inProgress = normalizeUsers([
-            ...(record?.inProgressUsers || []),
-            ...(record?.inProgressBy || []),
-            ...(record?.workingUsers || []),
-            ...(record?.responders || []),
-          ])
-          const inProgressFromHistory = extractUsersFromHistory(
-            record?.statusHistory,
-            ['in-progress', 'in_progress']
-          )
-
-          setAcknowledgedUsers([...new Set([...acknowledged, ...acknowledgedFromHistory])])
-          setInProgressUsers([...new Set([...inProgress, ...inProgressFromHistory])])
+          const progressUsers = getProgressUsers(record)
+          setAcknowledgedUsers(progressUsers.acknowledgedUsers)
+          setInProgressUsers(progressUsers.inProgressUsers)
         }
       } catch (err) {
         if (isActive) {
@@ -180,6 +187,9 @@ export default function IncidentDetail() {
       setIncident(record)
       setStatus(record?.status || '')
       setAcknowledgedBy(record?.acknowledgedBy || [])
+      const progressUsers = getProgressUsers(record)
+      setAcknowledgedUsers(progressUsers.acknowledgedUsers)
+      setInProgressUsers(progressUsers.inProgressUsers)
     } catch (err) {
       setRefreshError(err.message || 'Failed to refresh incident status.')
     } finally {
@@ -449,15 +459,18 @@ export default function IncidentDetail() {
                 setStatusError('')
                 try {
                   const upcomingStatus = nextStatus[status]
-                  await incidentAPI.updateStatus(found.id, upcomingStatus)
-                  setStatus(upcomingStatus)
+                  const result = await incidentAPI.updateStatus(found.id, upcomingStatus)
+                  const updatedIncident = result?.incident
 
-                  if (currentUser?.name && upcomingStatus === 'acknowledged') {
-                    setAcknowledgedUsers(prev => prev.includes(currentUser.name) ? prev : [...prev, currentUser.name])
-                  }
-
-                  if (currentUser?.name && upcomingStatus === 'in-progress') {
-                    setInProgressUsers(prev => prev.includes(currentUser.name) ? prev : [...prev, currentUser.name])
+                  if (updatedIncident) {
+                    setIncident(updatedIncident)
+                    setStatus(updatedIncident.status || upcomingStatus)
+                    setAcknowledgedBy(updatedIncident.acknowledgedBy || [])
+                    const progressUsers = getProgressUsers(updatedIncident)
+                    setAcknowledgedUsers(progressUsers.acknowledgedUsers)
+                    setInProgressUsers(progressUsers.inProgressUsers)
+                  } else {
+                    setStatus(upcomingStatus)
                   }
                 } catch (err) {
                   setStatusError(err.message || 'Failed to update status. Please try again.')

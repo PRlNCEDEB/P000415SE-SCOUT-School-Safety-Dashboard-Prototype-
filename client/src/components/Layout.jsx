@@ -100,7 +100,7 @@ export default function Layout({ children }) {
       items: [
         { path: '/dashboard', label: 'Dashboard', icon: 'D', visible: true },
         { path: '/submit', label: 'Submit Alert', icon: '+', visible: isSchoolAdmin || isStaff },
-        { path: '/incidents', label: 'Incidents', icon: 'I', visible: isCompanyAdmin || isSchoolAdmin },
+        { path: '/incidents', label: 'Incidents', icon: 'I', visible: isCompanyAdmin || isSchoolAdmin || isStaff },
       ],
     },
     {
