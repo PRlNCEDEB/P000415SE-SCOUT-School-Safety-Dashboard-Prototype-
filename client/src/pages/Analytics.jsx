@@ -7,7 +7,7 @@ import {
   PieChart, Pie, Cell, LineChart, Line, CartesianGrid, Legend
 } from 'recharts'
 
-const PIE_COLORS = ['#22c55e', '#3b82f6', '#ef4444', '#9ca3af']
+const PIE_COLORS = ['#22c55e', '#3b82f6', '#ef4444', '#9ca3af', '#f97316']
 
 export default function Analytics() {
   const { isAdmin, isCompanyAdmin, userRole, authLoading } = useAuth()
@@ -26,6 +26,8 @@ export default function Analytics() {
   const [locationData, setLocationData] = useState([])
   const [incidentsByDay, setIncidentsByDay] = useState([])
   const [responseTimeData, setResponseTimeData] = useState([])
+  const [failedAlerts, setFailedAlerts] = useState({ total: 0, sms: 0, email: 0 })
+  const [unacknowledgedCount, setUnacknowledgedCount] = useState(0)
 
   const fetchAnalytics = async () => {
     setLoading(true)
@@ -38,6 +40,8 @@ export default function Analytics() {
       setLocationData(data.locationData)
       setIncidentsByDay(data.incidentsByDay)
       setResponseTimeData(data.responseTimeData)
+      setFailedAlerts(data.failedAlerts || { total: 0, sms: 0, email: 0 })
+      setUnacknowledgedCount(data.summary?.unacknowledgedCount ?? 0)
     } catch (err) {
       setError(err.message || 'Failed to load analytics data')
     } finally {
@@ -151,9 +155,15 @@ export default function Analytics() {
         <div className="bg-white border border-gray-200 rounded-xl p-5">
           <h2 className="font-semibold text-gray-900 mb-4">Incidents by Type</h2>
           {incidentsByType.length > 0 ? (
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={incidentsByType} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-                <XAxis dataKey="type" tick={{ fontSize: 11 }} />
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={incidentsByType} margin={{ top: 0, right: 0, left: -20, bottom: 40 }}>
+                <XAxis
+                  dataKey="type"
+                  tick={{ fontSize: 11 }}
+                  angle={-35}
+                  textAnchor="end"
+                  interval={0}
+                />
                 <YAxis tick={{ fontSize: 11 }} />
                 <Tooltip />
                 <Bar dataKey="count" fill="#ef4444" radius={[4, 4, 0, 0]} />
@@ -166,7 +176,18 @@ export default function Analytics() {
 
         {/* Status Breakdown */}
         <div className="bg-white border border-gray-200 rounded-xl p-5">
-          <h2 className="font-semibold text-gray-900 mb-4">Status Breakdown</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-gray-900">Status Breakdown</h2>
+            {unacknowledgedCount > 0 ? (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">
+                ⚠️ {unacknowledgedCount} unacknowledged
+              </span>
+            ) : (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">
+                ✅ All acknowledged
+              </span>
+            )}
+          </div>
           {statusBreakdown.length > 0 ? (
             <ResponsiveContainer width="100%" height={220}>
               <PieChart>
@@ -292,6 +313,42 @@ export default function Analytics() {
           <p className="text-gray-400 text-center py-10">No data available</p>
         )}
       </div>
+
+      {/* Row 4 — Failed Alerts (Company Admin only) */}
+      {isCompanyAdmin && (
+        <div className="bg-white border border-gray-200 rounded-xl p-5 mt-4">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-gray-900">Failed Alerts</h2>
+            {failedAlerts.total > 0 ? (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-medium">
+                ❌ {failedAlerts.total} failed
+              </span>
+            ) : (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">
+                ✅ No failures
+              </span>
+            )}
+          </div>
+          {failedAlerts.total > 0 ? (
+            <ResponsiveContainer width="100%" height={160}>
+              <BarChart
+                data={[{ name: 'Failures', sms: failedAlerts.sms, email: failedAlerts.email }]}
+                margin={{ top: 0, right: 10, left: -20, bottom: 0 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                <YAxis tick={{ fontSize: 12 }} allowDecimals={false} />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="sms" name="SMS Failed" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="email" name="Email Failed" fill="#f97316" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <p className="text-gray-400 text-center py-8 text-sm">All notifications delivered successfully.</p>
+          )}
+        </div>
+      )}
 
     </div>
   )
