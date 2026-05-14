@@ -2,6 +2,32 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
+const DEMO_PASSWORD = 'password123'
+
+const demoAccounts = [
+  {
+    label: 'Company Admin',
+    email: 'admin@scout.edu',
+    password: DEMO_PASSWORD,
+    scope: 'SCOUT platform',
+    badgeClass: 'bg-red-100 text-red-700',
+  },
+  {
+    label: 'School Admin',
+    email: 'schooladmin@school.edu',
+    password: DEMO_PASSWORD,
+    scope: 'Alpha School',
+    badgeClass: 'bg-purple-100 text-purple-700',
+  },
+  {
+    label: 'Staff',
+    email: 'staff@school.edu',
+    password: DEMO_PASSWORD,
+    scope: 'Alpha School',
+    badgeClass: 'bg-blue-100 text-blue-700',
+  },
+]
+
 export default function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -10,32 +36,49 @@ export default function Login() {
   const { login } = useAuth()
   const navigate = useNavigate()
 
-  const handleLogin = async (event) => {
-    event.preventDefault()
+  function getLoginErrorMessage(err) {
+    if (
+      err.code === 'auth/user-not-found' ||
+      err.code === 'auth/wrong-password' ||
+      err.code === 'auth/invalid-credential'
+    ) {
+      return 'Invalid email or password.'
+    }
+
+    if (err.code === 'auth/too-many-requests') {
+      return 'Too many failed attempts. Please try again later.'
+    }
+
+    if (err.code === 'auth/user-disabled') {
+      return 'This account has been disabled. Contact your Safety Manager.'
+    }
+
+    return 'Login failed. Please try again.'
+  }
+
+  const signIn = async (loginEmail, loginPassword) => {
     setError('')
     setLoading(true)
 
     try {
-      await login(email.trim(), password)
+      await login(loginEmail.trim(), loginPassword)
       navigate('/dashboard')
     } catch (err) {
-      // Map Firebase error codes to friendly messages
-      if (
-        err.code === 'auth/user-not-found' ||
-        err.code === 'auth/wrong-password' ||
-        err.code === 'auth/invalid-credential'
-      ) {
-        setError('Invalid email or password.')
-      } else if (err.code === 'auth/too-many-requests') {
-        setError('Too many failed attempts. Please try again later.')
-      } else if (err.code === 'auth/user-disabled') {
-        setError('This account has been disabled. Contact your Safety Manager.')
-      } else {
-        setError('Login failed. Please try again.')
-      }
+      setError(getLoginErrorMessage(err))
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleLogin = async (event) => {
+    event.preventDefault()
+    await signIn(email, password)
+  }
+
+  const handleDemoLogin = async (account) => {
+    setEmail(account.email)
+    setPassword(account.password)
+    await signIn(account.email, account.password)
   }
 
   return (
@@ -97,6 +140,29 @@ export default function Login() {
               {loading ? 'Signing in...' : 'Sign in'}
             </button>
           </form>
+
+          <div className="mt-5 pt-5 border-t border-gray-100">
+            <p className="text-xs font-medium text-gray-500 mb-2">Quick demo login</p>
+            <div className="grid gap-2">
+              {demoAccounts.map(account => (
+                <button
+                  key={account.email}
+                  type="button"
+                  disabled={loading}
+                  onClick={() => handleDemoLogin(account)}
+                  className="w-full flex items-center justify-between gap-3 px-3 py-2 border border-gray-200 rounded-lg text-left hover:bg-gray-50 transition-colors disabled:opacity-60"
+                >
+                  <span>
+                    <span className="block text-sm font-medium text-gray-900">{account.label}</span>
+                    <span className="block text-xs text-gray-500">{account.email} - {account.scope}</span>
+                  </span>
+                  <span className={`text-xs px-2 py-0.5 rounded ${account.badgeClass}`}>
+                    {account.label}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </div>

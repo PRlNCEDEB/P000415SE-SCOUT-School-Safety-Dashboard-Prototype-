@@ -1,5 +1,4 @@
 const { initFirebase } = require('./firebase')
-const { seedDemoUsers } = require('./seedDemousers')
 const { seedDemoNotificationData } = require('./seedDemoData')
 const { seedDemoAnalyticsData } = require('./seedDemoAnalytics')
 
@@ -8,7 +7,6 @@ async function seedEmulatorData() {
 
   console.log('Seeding Firebase emulator data...')
 
-  await seedDemoUsers()
   await seedDemoNotificationData()
   await seedDemoAnalyticsData()
 

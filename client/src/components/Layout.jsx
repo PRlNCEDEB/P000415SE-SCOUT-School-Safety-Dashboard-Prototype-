@@ -1,74 +1,116 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Link, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { getIncidentById } from '../api/client'
 
 export default function Layout({ children }) {
   const location = useLocation()
-  const { currentUser, userRole, logout, isAdmin, isCompanyAdmin, isSchoolAdmin, authLoading } = useAuth()
+  const { currentUser, userRole, logout, isCompanyAdmin, isSchoolAdmin, isStaff } = useAuth()
 
   // Active emergency banner state
   const [activeEmergency, setActiveEmergency] = useState(null)
   const [acknowledgedBy, setAcknowledgedBy] = useState([])
+  const [refreshingStatus, setRefreshingStatus] = useState(false)
+  const [refreshError, setRefreshError] = useState('')
 
-  // Check localStorage every second for active emergency
-  // This ensures the banner appears on the same page without needing to navigate
+  // Sync the active emergency banner without polling Firestore.
   useEffect(() => {
-    const check = () => {
+    const loadActiveEmergency = () => {
       const stored = localStorage.getItem('activeEmergency')
-      if (stored && !activeEmergency) {
-        try {
-          setActiveEmergency(JSON.parse(stored))
-        } catch {
-          localStorage.removeItem('activeEmergency')
-        }
+      if (!stored) {
+        setActiveEmergency(null)
+        setAcknowledgedBy([])
+        return
       }
-    }
 
-    check() // run immediately on mount
-    const interval = setInterval(check, 1000) // check every 1 second
-    return () => clearInterval(interval)
-  }, [activeEmergency])
-
-  // Poll the incident every 5 seconds to check for acknowledgements
-  useEffect(() => {
-    if (!activeEmergency?.incidentId) return
-
-    const poll = async () => {
       try {
-        const incident = await getIncidentById(activeEmergency.incidentId)
-        if (incident?.acknowledgedBy?.length > 0) {
-          setAcknowledgedBy(incident.acknowledgedBy)
-        }
-      } catch (err) {
-        console.error('Failed to poll incident acknowledgement:', err)
+        setActiveEmergency(JSON.parse(stored))
+      } catch {
+        localStorage.removeItem('activeEmergency')
       }
     }
 
-    poll()
-    const interval = setInterval(poll, 5000)
-    return () => clearInterval(interval)
-  }, [activeEmergency])
+    const handleStorage = event => {
+      if (event.key === 'activeEmergency') {
+        loadActiveEmergency()
+      }
+    }
+
+    loadActiveEmergency()
+    window.addEventListener('emergencyTriggered', loadActiveEmergency)
+    window.addEventListener('storage', handleStorage)
+
+    return () => {
+      window.removeEventListener('emergencyTriggered', loadActiveEmergency)
+      window.removeEventListener('storage', handleStorage)
+    }
+  }, [])
 
   const dismissBanner = () => {
     localStorage.removeItem('activeEmergency')
     setActiveEmergency(null)
     setAcknowledgedBy([])
+    setRefreshError('')
   }
+
+  const refreshEmergencyStatus = useCallback(async () => {
+    if (!activeEmergency?.incidentId || refreshingStatus) return
+
+    setRefreshingStatus(true)
+    setRefreshError('')
+
+    try {
+      const incident = await getIncidentById(activeEmergency.incidentId)
+      setAcknowledgedBy(incident?.acknowledgedBy || [])
+    } catch (err) {
+      console.error('Failed to refresh incident acknowledgement:', err)
+      setRefreshError('Could not refresh status.')
+    } finally {
+      setRefreshingStatus(false)
+    }
+  }, [activeEmergency?.incidentId, refreshingStatus])
+
+  useEffect(() => {
+    if (!activeEmergency?.incidentId) return
+
+    const refreshOnFocus = () => {
+      refreshEmergencyStatus()
+    }
+
+    window.addEventListener('focus', refreshOnFocus)
+    return () => window.removeEventListener('focus', refreshOnFocus)
+  }, [activeEmergency?.incidentId, refreshEmergencyStatus])
 
   if (!currentUser) {
     return <Navigate to="/login" replace />
   }
 
-  // While role is still loading, keep analytics as allowed=true so it doesn't
-  // flash "Admin access required" before the role resolves.
-  const roleResolved = !authLoading && userRole !== null
-  const navItems = [
-    { path: '/dashboard', label: 'Dashboard', icon: 'D', allowed: true },
-    { path: '/incidents', label: 'Incidents', icon: 'I', allowed: true },
-    { path: '/submit', label: 'Submit Alert', icon: '+', allowed: true },
-    { path: '/analytics', label: 'Analytics', icon: 'A', allowed: !roleResolved || isAdmin },
-    { path: '/notifications', label: 'Notifications', icon: 'N', allowed: true },
+  // Role-based navigation sections with visibility control
+  const navigationSections = [
+    {
+      title: 'SCOUT Setup / Config',
+      visible: isCompanyAdmin || isSchoolAdmin,
+      items: [
+        { path: '/setup', label: 'Setup', icon: 'S', visible: isCompanyAdmin || isSchoolAdmin },
+      ],
+    },
+    {
+      title: 'Live Operations',
+      visible: true,
+      items: [
+        { path: '/dashboard', label: 'Dashboard', icon: 'D', visible: true },
+        { path: '/submit', label: 'Submit Alert', icon: '+', visible: isSchoolAdmin || isStaff },
+        { path: '/incidents', label: 'Incidents', icon: 'I', visible: isCompanyAdmin || isSchoolAdmin || isStaff },
+      ],
+    },
+    {
+      title: 'Data & Insights',
+      visible: isCompanyAdmin || isSchoolAdmin,
+      items: [
+        { path: '/analytics', label: 'Analytics', icon: 'A', visible: isCompanyAdmin },
+        { path: '/notifications', label: 'Notifications', icon: 'N', visible: isCompanyAdmin || isSchoolAdmin },
+      ],
+    },
   ]
 
   const isAcknowledged = acknowledgedBy.length > 0
@@ -100,17 +142,29 @@ export default function Layout({ children }) {
                   <p className="text-white font-semibold text-sm">
                     {activeEmergency.emergencyType} Emergency Alert Sent
                   </p>
-                  <p className="text-white text-xs opacity-90">⏳ Waiting for acknowledgement...</p>
+                  <p className="text-white text-xs opacity-90">
+                    Waiting for acknowledgement. Use refresh to check status.
+                  </p>
+                  {refreshError && <p className="text-white text-xs opacity-90">{refreshError}</p>}
                 </div>
               </>
             )}
           </div>
-          <button
-            onClick={dismissBanner}
-            className="text-white text-xs opacity-75 hover:opacity-100 px-2 py-1 rounded hover:bg-white hover:bg-opacity-20 transition-colors"
-          >
-            ✕ Dismiss
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={refreshEmergencyStatus}
+              disabled={refreshingStatus}
+              className="text-white text-xs opacity-90 hover:opacity-100 px-2 py-1 rounded hover:bg-white hover:bg-opacity-20 transition-colors disabled:opacity-50"
+            >
+              {refreshingStatus ? 'Refreshing...' : 'Refresh Status'}
+            </button>
+            <button
+              onClick={dismissBanner}
+              className="text-white text-xs opacity-75 hover:opacity-100 px-2 py-1 rounded hover:bg-white hover:bg-opacity-20 transition-colors"
+            >
+              Dismiss
+            </button>
+          </div>
         </div>
       )}
 
@@ -122,37 +176,34 @@ export default function Layout({ children }) {
           <span className="font-bold text-gray-900">SCOUT</span>
         </div>
 
-        <nav className="flex-1 p-3 space-y-1">
-          {navItems.map(item => {
-            if (!item.allowed) {
-              return (
-                <div
-                  key={item.path}
-                  className="flex items-center justify-between px-3 py-2 rounded-lg text-sm text-gray-300 cursor-not-allowed"
-                  title="Admin access required"
-                >
-                  <div className="flex items-center gap-3">
-                    <span>{item.icon}</span>
-                    {item.label}
-                  </div>
-                  <span>X</span>
-                </div>
-              )
-            }
+        <nav className="flex-1 p-3 space-y-4">
+          {navigationSections.map((section) => {
+            // Only show section if it has at least one visible item
+            const visibleItems = section.items.filter(item => item.visible)
+            if (visibleItems.length === 0) return null
 
             return (
-              <Link
-                key={item.path}
-                to={item.path}
-                className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
-                  location.pathname === item.path
-                    ? 'bg-red-50 text-red-600 font-medium'
-                    : 'text-gray-600 hover:bg-gray-100'
-                }`}
-              >
-                <span>{item.icon}</span>
-                {item.label}
-              </Link>
+              <div key={section.title}>
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide px-3 py-2">
+                  {section.title}
+                </h3>
+                <div className="space-y-1">
+                  {visibleItems.map(item => (
+                    <Link
+                      key={item.path}
+                      to={item.path}
+                      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+                        location.pathname === item.path
+                          ? 'bg-red-50 text-red-600 font-medium'
+                          : 'text-gray-600 hover:bg-gray-100'
+                      }`}
+                    >
+                      <span>{item.icon}</span>
+                      {item.label}
+                    </Link>
+                  ))}
+                </div>
+              </div>
             )
           })}
         </nav>

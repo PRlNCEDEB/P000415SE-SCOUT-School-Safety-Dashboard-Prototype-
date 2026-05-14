@@ -77,8 +77,9 @@ export default function QuickActions() {
         title: `${typeValue} alert`,
         location: editForm.location || 'Dashboard quick action',
         description: description || `${typeValue} emergency triggered from dashboard.`,
-        triggeredByName: currentUser?.name || 'Unknown',
-        triggeredById: currentUser?.id || null,
+        triggeredByName: currentUser?.displayName ||
+          currentUser?._profileName || 'Unknown',
+        triggeredById: currentUser?.uid || null,
       })
       return incident  // return full incident so we can get the id
     } catch (err) {
@@ -241,7 +242,7 @@ export default function QuickActions() {
           </span>
           <div className="text-4xl font-bold text-red-700 mb-3 text-center">1</div>
           <div className="space-y-1">
-             <p className="text-xs text-red-700">📧 Send Email</p>
+            <p className="text-xs text-red-700">📧 Send Email</p>
             <p className="text-xs text-red-700">📱 Send SMS</p>
             <p className="text-xs text-red-700">🗄️ Create Record</p>
           </div>
@@ -262,7 +263,7 @@ export default function QuickActions() {
 
       {feedback && (
         <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3 flex items-center gap-2">
-         <span className="text-green-600">✅</span>
+          <span className="text-green-600">✅</span>
           <div>
             <p className="text-sm font-semibold text-green-900">Action {feedback.button} triggered</p>
             <p className="text-xs text-green-700">{feedback.actions} completed</p>
@@ -280,9 +281,8 @@ export default function QuickActions() {
           <div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100 overflow-hidden">
             {logs.map(log => (
               <div key={log.id} className="px-4 py-3 flex items-start gap-3">
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold shrink-0 ${
-                  log.button === '1' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
-                }`}>
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold shrink-0 ${log.button === '1' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
+                  }`}>
                   {log.button}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -322,7 +322,7 @@ export default function QuickActions() {
           <div className="absolute inset-0 bg-black bg-opacity-40" onClick={() => setShowConfirm(false)} />
           <div className="relative bg-white border-2 border-red-500 rounded-xl p-6 max-w-md w-full shadow-xl">
             <div className="flex items-start gap-3 mb-4">
-               <div className="p-2 bg-red-100 rounded-lg">⚠️</div>
+              <div className="p-2 bg-red-100 rounded-lg">⚠️</div>
               <div>
                 <h4 className="font-semibold text-gray-900">Emergency Alert Confirmation</h4>
                 <p className="text-sm text-gray-500 mt-1">
@@ -458,9 +458,8 @@ export default function QuickActions() {
               <button
                 onClick={handleCodeSubmit}
                 disabled={loading || code.length !== 3}
-                className={`flex-1 py-2.5 text-sm rounded-lg font-semibold transition-colors ${
-                  loading || code.length !== 3 ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-red-600 text-white hover:bg-red-700'
-                }`}
+                className={`flex-1 py-2.5 text-sm rounded-lg font-semibold transition-colors ${loading || code.length !== 3 ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-red-600 text-white hover:bg-red-700'
+                  }`}
               >
                 {loading ? 'Sending...' : '🚨 Send Alert'}
               </button>
@@ -492,7 +491,7 @@ export default function QuickActions() {
                         📧 {result.emailStatus}
                       </span>
                       <span className={`text-xs px-2 py-0.5 rounded ${result.smsStatus === 'sent' ? 'bg-green-100 text-green-700' : result.smsStatus === 'skipped' ? 'bg-gray-100 text-gray-500' : 'bg-red-100 text-red-700'}`}>
-                       📱 {result.smsStatus}
+                        📱 {result.smsStatus}
                       </span>
                     </div>
                   </div>
@@ -563,7 +562,7 @@ export default function QuickActions() {
           </div>
         </div>
       )}
-      
+
     </div>
   )
 }

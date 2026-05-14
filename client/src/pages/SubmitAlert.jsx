@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { incidentAPI } from '../api/client'
+import { useAuth } from '../context/AuthContext'
 
 const alertTypes = [
   { value: 'medical', label: '🏥 Medical' },
@@ -35,6 +36,7 @@ export default function SubmitAlert() {
     location: '',
   })
   const [errors, setErrors] = useState({})
+  const { currentUser } = useAuth()
 
   // TODO: Keep basic client-side validation here, but also validate all alert fields again on the backend before saving.
   const validate = () => {
@@ -63,7 +65,14 @@ export default function SubmitAlert() {
 
     setIsSubmitting(true)
     try {
-      const createdIncident = await incidentAPI.create(form)
+      const createdIncident = await incidentAPI.create({
+        ...form,
+        triggeredByName:
+          currentUser?.displayName ||
+          currentUser?._profileName ||
+          'Unknown',
+        triggeredById: currentUser?.uid || null,
+      })
       navigate(`/incidents/${createdIncident.id}`)
     } catch (error) {
       console.error('Failed to submit alert:', error)
@@ -96,11 +105,10 @@ export default function SubmitAlert() {
                 key={t.value}
                 type="button"
                 onClick={() => handleChange('type', t.value)}
-                className={`px-3 py-2 rounded-lg text-sm border transition-colors text-left ${
-                  form.type === t.value
+                className={`px-3 py-2 rounded-lg text-sm border transition-colors text-left ${form.type === t.value
                     ? 'border-red-500 bg-red-50 text-red-700'
                     : 'border-gray-200 hover:bg-gray-50 text-gray-700'
-                }`}
+                  }`}
               >
                 {t.label}
               </button>
@@ -120,11 +128,10 @@ export default function SubmitAlert() {
                 key={p.value}
                 type="button"
                 onClick={() => handleChange('priority', p.value)}
-                className={`px-3 py-2 rounded-lg text-sm border transition-colors text-left ${
-                  form.priority === p.value
+                className={`px-3 py-2 rounded-lg text-sm border transition-colors text-left ${form.priority === p.value
                     ? 'border-red-500 bg-red-50 text-red-700'
                     : 'border-gray-200 hover:bg-gray-50 text-gray-700'
-                }`}
+                  }`}
               >
                 {p.label}
               </button>

@@ -8,6 +8,7 @@ import IncidentDetail from './pages/IncidentDetail'
 import SubmitAlert from './pages/SubmitAlert'
 import Analytics from './pages/Analytics'
 import Notifications from './pages/Notifications'
+import Setup from './pages/Setup'
 
 // ── PrivateRoute ──────────────────────────────────────────────────────────────
 // Blocks access to protected pages when the user is not authenticated.
@@ -49,6 +50,16 @@ function PublicRoute({ children }) {
   return children
 }
 
+function SetupRoute({ children }) {
+  const { isCompanyAdmin, isSchoolAdmin } = useAuth()
+
+  if (!isCompanyAdmin && !isSchoolAdmin) {
+    return <Navigate to="/dashboard" replace />
+  }
+
+  return children
+}
+
 function AppRoutes() {
   return (
     <Routes>
@@ -62,6 +73,7 @@ function AppRoutes() {
       <Route path="/incidents"       element={<PrivateRoute><Layout><Incidents /></Layout></PrivateRoute>} />
       <Route path="/incidents/:id"   element={<PrivateRoute><Layout><IncidentDetail /></Layout></PrivateRoute>} />
       <Route path="/submit"          element={<PrivateRoute><Layout><SubmitAlert /></Layout></PrivateRoute>} />
+      <Route path="/setup"           element={<PrivateRoute><SetupRoute><Layout><Setup /></Layout></SetupRoute></PrivateRoute>} />
       <Route path="/analytics"       element={<PrivateRoute><Layout><Analytics /></Layout></PrivateRoute>} />
       <Route path="/notifications"   element={<PrivateRoute><Layout><Notifications /></Layout></PrivateRoute>} />
 

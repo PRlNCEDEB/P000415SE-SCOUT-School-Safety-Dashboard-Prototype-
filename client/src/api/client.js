@@ -1,13 +1,18 @@
+import { auth } from '../firebase'
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'
 // Helper function to make API requests and handle errors
 async function request(path, options = {}) {
+  const token = await auth.currentUser?.getIdToken()
+
   //construct the full URL and make the fetch request with appropriate headers
   const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...options,
     headers: {
       'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(options.headers || {}),
     },
-    ...options,
   })
 
   if (!response.ok) {

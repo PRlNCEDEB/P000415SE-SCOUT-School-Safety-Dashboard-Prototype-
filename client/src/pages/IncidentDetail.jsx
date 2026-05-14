@@ -55,6 +55,35 @@ function extractUsersFromHistory(history, statuses) {
     .filter(Boolean))]
 }
 
+function getProgressUsers(record) {
+  const acknowledged = normalizeUsers([
+    ...(record?.acknowledgedUsers || []),
+    ...(record?.acknowledgedBy || []),
+    ...(record?.ackUsers || []),
+    ...(record?.acknowledgements || []),
+  ])
+  const acknowledgedFromHistory = extractUsersFromHistory(
+    record?.statusHistory,
+    ['acknowledged']
+  )
+
+  const inProgress = normalizeUsers([
+    ...(record?.inProgressUsers || []),
+    ...(record?.inProgressBy || []),
+    ...(record?.workingUsers || []),
+    ...(record?.responders || []),
+  ])
+  const inProgressFromHistory = extractUsersFromHistory(
+    record?.statusHistory,
+    ['in-progress', 'in_progress']
+  )
+
+  return {
+    acknowledgedUsers: [...new Set([...acknowledged, ...acknowledgedFromHistory])],
+    inProgressUsers: [...new Set([...inProgress, ...inProgressFromHistory])],
+  }
+}
+
 const priorityColors = {
   critical: 'bg-red-100 text-red-700',
   high: 'bg-orange-100 text-orange-700',
@@ -95,7 +124,7 @@ const nextLabel = {
 export default function IncidentDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { currentUser, isAdmin } = useAuth()
+  const { isAdmin } = useAuth()
   const [incident, setIncident] = useState(null)
   const [status, setStatus] = useState('')
   const [loading, setLoading] = useState(true)
@@ -108,6 +137,8 @@ export default function IncidentDetail() {
 
   // New — track who acknowledged
   const [acknowledgedBy, setAcknowledgedBy] = useState([])
+  const [refreshingStatus, setRefreshingStatus] = useState(false)
+  const [refreshError, setRefreshError] = useState('')
 
   useEffect(() => {
     let isActive = true
@@ -122,31 +153,10 @@ export default function IncidentDetail() {
         if (isActive) {
           setIncident(record)
           setStatus(record?.status || '')
-
-          const acknowledged = normalizeUsers([
-            ...(record?.acknowledgedUsers || []),
-            ...(record?.acknowledgedBy || []),
-            ...(record?.ackUsers || []),
-            ...(record?.acknowledgements || []),
-          ])
-          const acknowledgedFromHistory = extractUsersFromHistory(
-            record?.statusHistory,
-            ['acknowledged']
-          )
-
-          const inProgress = normalizeUsers([
-            ...(record?.inProgressUsers || []),
-            ...(record?.inProgressBy || []),
-            ...(record?.workingUsers || []),
-            ...(record?.responders || []),
-          ])
-          const inProgressFromHistory = extractUsersFromHistory(
-            record?.statusHistory,
-            ['in-progress', 'in_progress']
-          )
-
-          setAcknowledgedUsers([...new Set([...acknowledged, ...acknowledgedFromHistory])])
-          setInProgressUsers([...new Set([...inProgress, ...inProgressFromHistory])])
+          setAcknowledgedBy(record?.acknowledgedBy || [])
+          const progressUsers = getProgressUsers(record)
+          setAcknowledgedUsers(progressUsers.acknowledgedUsers)
+          setInProgressUsers(progressUsers.inProgressUsers)
         }
       } catch (err) {
         if (isActive) {
@@ -166,23 +176,26 @@ export default function IncidentDetail() {
     }
   }, [id])
 
-  // Poll every 5 seconds to check for new acknowledgements
-  useEffect(() => {
-    if (!id) return
+  const refreshIncidentStatus = async () => {
+    if (!id || refreshingStatus) return
 
-    const interval = setInterval(async () => {
-      try {
-        const record = await getIncidentById(id)
-        if (record?.acknowledgedBy?.length > 0) {
-          setAcknowledgedBy(record.acknowledgedBy)
-        }
-      } catch {
-        // silently ignore poll errors
-      }
-    }, 5000)
+    setRefreshingStatus(true)
+    setRefreshError('')
 
-    return () => clearInterval(interval)
-  }, [id])
+    try {
+      const record = await getIncidentById(id)
+      setIncident(record)
+      setStatus(record?.status || '')
+      setAcknowledgedBy(record?.acknowledgedBy || [])
+      const progressUsers = getProgressUsers(record)
+      setAcknowledgedUsers(progressUsers.acknowledgedUsers)
+      setInProgressUsers(progressUsers.inProgressUsers)
+    } catch (err) {
+      setRefreshError(err.message || 'Failed to refresh incident status.')
+    } finally {
+      setRefreshingStatus(false)
+    }
+  }
 
   const found = incident
 
@@ -224,6 +237,22 @@ export default function IncidentDetail() {
       >
         ← Back to Incidents
       </button>
+
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <div>
+          <p className="text-sm font-medium text-gray-800">Acknowledgement status</p>
+          <p className="text-xs text-gray-500">Refresh only when you need the latest response update.</p>
+          {refreshError && <p className="text-xs text-red-500 mt-1">{refreshError}</p>}
+        </div>
+        <button
+          type="button"
+          onClick={refreshIncidentStatus}
+          disabled={refreshingStatus}
+          className="px-3 py-2 bg-white border border-gray-300 text-sm rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+        >
+          {refreshingStatus ? 'Refreshing...' : 'Refresh Status'}
+        </button>
+      </div>
 
       {/* Help is on the way banner */}
       {acknowledgedBy.length > 0 && (
@@ -430,15 +459,18 @@ export default function IncidentDetail() {
                 setStatusError('')
                 try {
                   const upcomingStatus = nextStatus[status]
-                  await incidentAPI.updateStatus(found.id, upcomingStatus)
-                  setStatus(upcomingStatus)
+                  const result = await incidentAPI.updateStatus(found.id, upcomingStatus)
+                  const updatedIncident = result?.incident
 
-                  if (currentUser?.name && upcomingStatus === 'acknowledged') {
-                    setAcknowledgedUsers(prev => prev.includes(currentUser.name) ? prev : [...prev, currentUser.name])
-                  }
-
-                  if (currentUser?.name && upcomingStatus === 'in-progress') {
-                    setInProgressUsers(prev => prev.includes(currentUser.name) ? prev : [...prev, currentUser.name])
+                  if (updatedIncident) {
+                    setIncident(updatedIncident)
+                    setStatus(updatedIncident.status || upcomingStatus)
+                    setAcknowledgedBy(updatedIncident.acknowledgedBy || [])
+                    const progressUsers = getProgressUsers(updatedIncident)
+                    setAcknowledgedUsers(progressUsers.acknowledgedUsers)
+                    setInProgressUsers(progressUsers.inProgressUsers)
+                  } else {
+                    setStatus(upcomingStatus)
                   }
                 } catch (err) {
                   setStatusError(err.message || 'Failed to update status. Please try again.')

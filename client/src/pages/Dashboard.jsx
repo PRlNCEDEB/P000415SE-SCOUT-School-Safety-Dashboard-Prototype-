@@ -1,6 +1,9 @@
 import { useNavigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import QuickActions from '../components/QuickActions'
+import ShortcutCard from '../components/ShortcutCard'
+import QuickViewStrip from '../components/QuickViewStrip'
+import SchoolAdminStatus from '../components/SchoolAdminStatus'
 import { incidentAPI } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 
@@ -67,6 +70,19 @@ function ScopeNotice({ role }) {
   )
 }
 
+function isTodayIncident(incident) {
+  const rawDate = incident.createdAt || incident.updatedAt
+  if (!rawDate) return false
+
+  const incidentDate = new Date(rawDate)
+  if (Number.isNaN(incidentDate.getTime())) return false
+
+  const today = new Date()
+  return incidentDate.getFullYear() === today.getFullYear() &&
+    incidentDate.getMonth() === today.getMonth() &&
+    incidentDate.getDate() === today.getDate()
+}
+
 export default function Dashboard() {
   const navigate = useNavigate()
   const { currentUser, userRole, isCompanyAdmin, isSchoolAdmin, isStaff } = useAuth()
@@ -95,9 +111,9 @@ export default function Dashboard() {
   const critical = active.filter(i => i.priority === 'critical').length
   const high     = active.filter(i => i.priority === 'high').length
   const unacked  = active.filter(i => i.status === 'triggered')
-  const recent   = incidents.filter(i => i.status !== 'triggered')
+  const recent   = incidents.filter(i => i.status !== 'triggered' && isTodayIncident(i))
 
-  // Staff see only the last 5 recent incidents for a simplified view
+  // Staff see only the last 5 of today's recent incidents for a simplified view
   const recentToShow = isStaff ? recent.slice(0, 5) : recent
 
   const displayName = currentUser?.displayName || currentUser?.name || currentUser?.email || 'there'
@@ -132,6 +148,36 @@ export default function Dashboard() {
 
       {/* ── Role scope notice ── */}
       <ScopeNotice role={userRole} />
+
+      {/* ── Company Admin: Shortcut cards + Quick View Strip ── */}
+      {isCompanyAdmin && (
+        <>
+          <div className="grid grid-cols-3 gap-4 mb-6">
+            <ShortcutCard
+              title="SCOUT Setup / Config"
+              description="System configuration and global settings"
+              to="/setup"
+            />
+            <ShortcutCard
+              title="Live Operations"
+              description="Manage incidents and responses"
+              to="/incidents"
+            />
+            <ShortcutCard
+              title="Data & Insights"
+              description="Analytics and reporting"
+              to="/analytics"
+            />
+          </div>
+
+          <QuickViewStrip incidents={incidents} />
+        </>
+      )}
+
+      {/* ── School Admin: High-level system status view ── */}
+      {isSchoolAdmin && !isCompanyAdmin && (
+        <SchoolAdminStatus incidents={incidents} />
+      )}
 
       {/* ── Quick Actions (Staff & School Admin only, not Company Admin) ── */}
       {!isCompanyAdmin && (
@@ -188,7 +234,7 @@ export default function Dashboard() {
       <div>
         <div className="flex items-center justify-between mb-2">
           <h2 className="font-semibold text-gray-900">
-            {isStaff ? 'Recent Incidents' : 'All Recent Incidents'}
+            {isStaff ? "Today's Incidents" : "Today's Recent Incidents"}
           </h2>
           <button onClick={() => navigate('/incidents')} className="text-xs text-blue-600 hover:underline">
             View all
@@ -196,7 +242,7 @@ export default function Dashboard() {
         </div>
         <div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100 overflow-hidden">
           {recentToShow.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-8">No recent incidents.</p>
+            <p className="text-sm text-gray-400 text-center py-8">No incidents from today.</p>
           ) : (
             recentToShow.map(incident => (
               <div
