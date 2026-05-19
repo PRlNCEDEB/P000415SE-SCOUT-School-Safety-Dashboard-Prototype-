@@ -51,8 +51,8 @@ export const incidentAPI = {
   create: data =>
     request('/incidents', { method: 'POST', body: JSON.stringify(data) }),
   list: () => request('/incidents').then(data => data.incidents ?? data),
-  updateStatus: (id, status) =>
-    request(`/incidents/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+  updateStatus: (id, status, extra = {}) =>
+    request(`/incidents/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status, ...extra }) }),
 }
 
 export const notificationsAPI = {

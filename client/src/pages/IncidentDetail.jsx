@@ -124,7 +124,7 @@ const nextLabel = {
 export default function IncidentDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { isAdmin } = useAuth()
+  const { currentUser, userRole, isAdmin } = useAuth()
   const [incident, setIncident] = useState(null)
   const [status, setStatus] = useState('')
   const [loading, setLoading] = useState(true)
@@ -140,6 +140,32 @@ export default function IncidentDetail() {
   const [refreshingStatus, setRefreshingStatus] = useState(false)
   const [refreshError, setRefreshError] = useState('')
 
+  // Shared helper — apply a fresh record from the API to all state
+  function applyRecord(record) {
+    setIncident(record)
+    setStatus(record?.status || '')
+    setAcknowledgedBy(record?.acknowledgedBy || [])
+
+    const acknowledged = normalizeUsers([
+      ...(record?.acknowledgedUsers || []),
+      ...(record?.acknowledgedBy || []),
+      ...(record?.ackUsers || []),
+      ...(record?.acknowledgements || []),
+    ])
+    const acknowledgedFromHistory = extractUsersFromHistory(record?.statusHistory, ['acknowledged'])
+
+    const inProgress = normalizeUsers([
+      ...(record?.inProgressUsers || []),
+      ...(record?.inProgressBy || []),
+      ...(record?.workingUsers || []),
+      ...(record?.responders || []),
+    ])
+    const inProgressFromHistory = extractUsersFromHistory(record?.statusHistory, ['in-progress', 'in_progress'])
+
+    setAcknowledgedUsers([...new Set([...acknowledged, ...acknowledgedFromHistory])])
+    setInProgressUsers([...new Set([...inProgress, ...inProgressFromHistory])])
+  }
+
   useEffect(() => {
     let isActive = true
 
@@ -149,14 +175,8 @@ export default function IncidentDetail() {
 
       try {
         const record = await getIncidentById(id)
-
         if (isActive) {
-          setIncident(record)
-          setStatus(record?.status || '')
-          setAcknowledgedBy(record?.acknowledgedBy || [])
-          const progressUsers = getProgressUsers(record)
-          setAcknowledgedUsers(progressUsers.acknowledgedUsers)
-          setInProgressUsers(progressUsers.inProgressUsers)
+          applyRecord(record)
         }
       } catch (err) {
         if (isActive) {
@@ -170,10 +190,7 @@ export default function IncidentDetail() {
     }
 
     loadIncident()
-
-    return () => {
-      isActive = false
-    }
+    return () => { isActive = false }
   }, [id])
 
   const refreshIncidentStatus = async () => {
@@ -184,12 +201,7 @@ export default function IncidentDetail() {
 
     try {
       const record = await getIncidentById(id)
-      setIncident(record)
-      setStatus(record?.status || '')
-      setAcknowledgedBy(record?.acknowledgedBy || [])
-      const progressUsers = getProgressUsers(record)
-      setAcknowledgedUsers(progressUsers.acknowledgedUsers)
-      setInProgressUsers(progressUsers.inProgressUsers)
+      applyRecord(record)
     } catch (err) {
       setRefreshError(err.message || 'Failed to refresh incident status.')
     } finally {
@@ -459,18 +471,30 @@ export default function IncidentDetail() {
                 setStatusError('')
                 try {
                   const upcomingStatus = nextStatus[status]
-                  const result = await incidentAPI.updateStatus(found.id, upcomingStatus)
-                  const updatedIncident = result?.incident
+                  // Resolve the actor name: profile name → display name → email
+                  const actorName = currentUser?._profileName || currentUser?.displayName || currentUser?.email || ''
+                  const actorRole = userRole || ''
 
-                  if (updatedIncident) {
-                    setIncident(updatedIncident)
-                    setStatus(updatedIncident.status || upcomingStatus)
-                    setAcknowledgedBy(updatedIncident.acknowledgedBy || [])
-                    const progressUsers = getProgressUsers(updatedIncident)
-                    setAcknowledgedUsers(progressUsers.acknowledgedUsers)
-                    setInProgressUsers(progressUsers.inProgressUsers)
-                  } else {
-                    setStatus(upcomingStatus)
+                  await incidentAPI.updateStatus(found.id, upcomingStatus, {
+                    updatedByName: actorName,
+                    updatedByRole: actorRole,
+                  })
+
+                  // Optimistic update first so the UI feels instant
+                  setStatus(upcomingStatus)
+                  if (actorName && upcomingStatus === 'acknowledged') {
+                    setAcknowledgedUsers(prev => prev.includes(actorName) ? prev : [...prev, actorName])
+                  }
+                  if (actorName && upcomingStatus === 'in-progress') {
+                    setInProgressUsers(prev => prev.includes(actorName) ? prev : [...prev, actorName])
+                  }
+
+                  // Then re-fetch from Firestore so "More details" reflects the real stored data
+                  try {
+                    const fresh = await getIncidentById(found.id)
+                    applyRecord(fresh)
+                  } catch {
+                    // Optimistic state already applied — safe to swallow re-fetch error
                   }
                 } catch (err) {
                   setStatusError(err.message || 'Failed to update status. Please try again.')
