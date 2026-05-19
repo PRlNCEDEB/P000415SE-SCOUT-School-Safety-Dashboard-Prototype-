@@ -1,12 +1,12 @@
 import { auth } from '../firebase'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'
-// Helper function to make API requests and handle errors
-async function request(path, options = {}) {
-  const token = await auth.currentUser?.getIdToken()
 
-  //construct the full URL and make the fetch request with appropriate headers
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+async function sendRequest(path, options, forceRefreshToken = false) {
+  await auth.authStateReady?.()
+  const token = await auth.currentUser?.getIdToken(forceRefreshToken)
+
+  return fetch(`${API_BASE_URL}${path}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
@@ -14,6 +14,15 @@ async function request(path, options = {}) {
       ...(options.headers || {}),
     },
   })
+}
+
+// Helper function to make API requests and handle errors
+async function request(path, options = {}) {
+  let response = await sendRequest(path, options)
+
+  if (response.status === 401 && auth.currentUser) {
+    response = await sendRequest(path, options, true)
+  }
 
   if (!response.ok) {
     let message = 'Request failed.'

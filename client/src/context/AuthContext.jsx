@@ -12,13 +12,10 @@ const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000'
 function normaliseRole(raw) {
   switch ((raw || '').toLowerCase().replace(/[-_\s]/g, '')) {
     case 'companyadmin':
-    case 'admin':
       return 'Company Admin'
     case 'schooladmin':
-    case 'principal':
       return 'School Admin'
     case 'staff':
-    case 'user':
       return 'Staff'
     default:
       return 'Staff'
@@ -29,11 +26,22 @@ function normaliseRole(raw) {
 async function fetchUserProfile(firebaseUser) {
   try {
     const token = await firebaseUser.getIdToken()
-    const res = await fetch(`${API_BASE}/api/auth/role`, {
+    let res = await fetch(`${API_BASE}/api/auth/role`, {
       headers: { Authorization: `Bearer ${token}` },
     })
 
+    if (res.status === 401) {
+      const freshToken = await firebaseUser.getIdToken(true)
+      res = await fetch(`${API_BASE}/api/auth/role`, {
+        headers: { Authorization: `Bearer ${freshToken}` },
+      })
+    }
+
     if (!res.ok) {
+      if (res.status === 401) {
+        return { role: 'Staff', schoolId: null, name: null }
+      }
+
       return { role: 'Staff', schoolId: null, name: null }
     }
 
@@ -59,7 +67,9 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async firebaseUser => {
       if (firebaseUser) {
-        const { role, schoolId, name } = await fetchUserProfile(firebaseUser)
+        const profile = await fetchUserProfile(firebaseUser)
+
+        const { role, schoolId, name } = profile
 
         // Preserve name from profile if auth displayName is missing.
         if (name && !firebaseUser.displayName) {

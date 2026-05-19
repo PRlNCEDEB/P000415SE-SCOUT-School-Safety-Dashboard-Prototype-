@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, Navigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { getIncidents } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 
@@ -33,7 +33,7 @@ const ACTIVE_STATUSES = ['triggered', 'acknowledged', 'in-progress']
 
 export default function Incidents() {
   const navigate = useNavigate()
-  const { userRole, isAdmin, authLoading } = useAuth()
+  const { userRole, authLoading } = useAuth()
   const { isCompanyAdmin, isSchoolAdmin } = useAuth()
   const [incidents, setIncidents] = useState([])
   const [loading, setLoading] = useState(true)
@@ -44,6 +44,8 @@ export default function Incidents() {
   const [search, setSearch] = useState('')
 
   useEffect(() => {
+    if (authLoading || userRole === null) return
+
     let isActive = true
 
     async function loadIncidents() {
@@ -71,7 +73,7 @@ export default function Incidents() {
     return () => {
       isActive = false
     }
-  }, [])
+  }, [authLoading, userRole])
 
   // Wait for role to resolve before deciding access
   if (authLoading || userRole === null) {
@@ -80,11 +82,6 @@ export default function Incidents() {
         <div className="text-center py-12"><p className="text-gray-500">Loading...</p></div>
       </div>
     )
-  }
-
-  // Staff cannot access Incidents page
-  if (!isAdmin) {
-    return <Navigate to="/dashboard" replace />
   }
 
   const schoolOptions = useMemo(() => {
@@ -125,7 +122,7 @@ export default function Incidents() {
       filterStatus === 'all'
         ? true
         : filterStatus === 'active'
-          ? ACTIVE_STATUSES.includes(i.status)
+          ? ACTIVE_STATUSES.includes(incident.status)
           : incident.status === filterStatus
     const matchPriority = filterPriority === 'all' || incident.priority === filterPriority
     const matchSchool = !isCompanyAdmin || filterSchool === 'all' || incident.schoolId === filterSchool
@@ -149,12 +146,14 @@ export default function Incidents() {
           <h1 className="text-2xl font-bold text-gray-900">Incident Log</h1>
           <p className="text-sm text-gray-500">{subtitleText}</p>
         </div>
+        {!isCompanyAdmin && (
         <button
           onClick={() => navigate('/submit')}
           className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors"
         >
           ➕ Submit Alert
         </button>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-3 mb-4">
