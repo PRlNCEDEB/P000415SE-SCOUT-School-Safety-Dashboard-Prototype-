@@ -124,7 +124,7 @@ const nextLabel = {
 export default function IncidentDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { currentUser, userRole, isAdmin } = useAuth()
+  const { currentUser, userRole, isAdmin, authLoading } = useAuth()
   const [incident, setIncident] = useState(null)
   const [status, setStatus] = useState('')
   const [loading, setLoading] = useState(true)
@@ -167,6 +167,8 @@ export default function IncidentDetail() {
   }
 
   useEffect(() => {
+    if (authLoading || userRole === null) return
+
     let isActive = true
 
     async function loadIncident() {
@@ -191,7 +193,7 @@ export default function IncidentDetail() {
 
     loadIncident()
     return () => { isActive = false }
-  }, [id])
+  }, [authLoading, id, userRole])
 
   const refreshIncidentStatus = async () => {
     if (!id || refreshingStatus) return
@@ -211,7 +213,7 @@ export default function IncidentDetail() {
 
   const found = incident
 
-  if (loading) {
+  if (authLoading || userRole === null || loading) {
     return <div className="p-6 text-center text-gray-500">Loading incident...</div>
   }
 

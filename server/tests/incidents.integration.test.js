@@ -311,10 +311,10 @@ test('GET /api/incidents/:id returns incident details and related notifications'
 test('POST /api/incidents creates a new incident with authenticated reporter details', async () => {
   fakeDb = createTestDb({
     users: {
-      'admin-uid': {
-        name: 'Admin User',
-        email: 'admin@school.edu',
-        role: 'companyAdmin',
+      'school-admin-uid': {
+        name: 'School Admin',
+        email: 'principal@school.edu',
+        role: 'schoolAdmin',
         schoolId: 'school_alpha',
       },
     },
@@ -328,7 +328,7 @@ test('POST /api/incidents creates a new incident with authenticated reporter det
   await withServer(createApp(), async baseUrl => {
     const response = await fetch(`${baseUrl}/api/incidents`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer valid-token' },
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer school-token' },
       body: JSON.stringify({
         type: 'fire',
         priority: 'critical',
@@ -349,10 +349,10 @@ test('POST /api/incidents creates a new incident with authenticated reporter det
     const storedIncident = fakeDb.stores.incidents.get(payload.id)
     assert.equal(storedIncident.title, 'Fire alert')
     assert.equal(storedIncident.location, 'Block B')
-    assert.equal(storedIncident.triggeredByName, 'Admin User')
-    assert.equal(storedIncident.triggeredById, 'admin-uid')
-    assert.equal(storedIncident.triggeredByEmail, 'admin@school.edu')
-    assert.equal(storedIncident.triggeredByRole, 'companyAdmin')
+    assert.equal(storedIncident.triggeredByName, 'School Admin')
+    assert.equal(storedIncident.triggeredById, 'school-admin-uid')
+    assert.equal(storedIncident.triggeredByEmail, 'principal@school.edu')
+    assert.equal(storedIncident.triggeredByRole, 'schoolAdmin')
     assert.equal(storedIncident.schoolId, 'school_alpha')
     assert.equal(storedIncident.schoolName, 'Alpha School')
     assert.deepEqual(storedIncident.assignedUserIds, [])

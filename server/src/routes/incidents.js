@@ -1,4 +1,5 @@
 const express = require('express')
+const admin = require('firebase-admin')
 const { docToObject, formatTimestamp, getDb, snapshotToArray } = require('../db/firebase')
 const { invalidateAnalyticsCache } = require('../analyticsCache')
 
@@ -15,7 +16,8 @@ async function verifyToken(req, res, next) {
   try {
     req.user = await admin.auth().verifyIdToken(token)
     next()
-  } catch {
+  } catch (err) {
+    console.error('Firebase token verification failed:', err.code, err.message)
     return res.status(401).json({ error: 'Invalid or expired token.' })
   }
 }
@@ -25,11 +27,15 @@ function normaliseRole(role) {
 }
 
 function isCompanyAdmin(role) {
-  return ['companyadmin', 'admin'].includes(normaliseRole(role))
+  return normaliseRole(role) === 'companyadmin'
 }
 
 function isSchoolAdmin(role) {
-  return ['schooladmin', 'principal'].includes(normaliseRole(role))
+  return normaliseRole(role) === 'schooladmin'
+}
+
+function canCreateIncident(role) {
+  return ['schooladmin', 'staff'].includes(normaliseRole(role))
 }
 
 async function getSchoolName(db, schoolId) {
@@ -250,6 +256,14 @@ router.post('/', verifyToken, async (req, res, next) => {
     const { type, priority, status, title, location, description } = req.body
     const now = new Date().toISOString()
     const reporter = await getUserProfile(req.user)
+
+    if (!canCreateIncident(reporter.role)) {
+      return res.status(403).json({ error: 'You do not have permission to submit incidents.' })
+    }
+
+    if (!reporter.schoolId) {
+      return res.status(403).json({ error: 'Your account is not assigned to a school.' })
+    }
 
     const docRef = await getDb().collection('incidents').add({
       type: type || 'general',

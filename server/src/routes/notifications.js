@@ -30,7 +30,7 @@ function normaliseRole(role) {
 }
 
 function canSendAlert(role) {
-  return ['staff', 'schooladmin', 'principal'].includes(normaliseRole(role))
+  return ['staff', 'schooladmin'].includes(normaliseRole(role))
 }
 
 async function getUserProfile(decodedUser) {
