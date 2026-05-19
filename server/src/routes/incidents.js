@@ -33,6 +33,10 @@ function isSchoolAdmin(role) {
   return ['schooladmin', 'principal'].includes(normaliseRole(role))
 }
 
+function canCreateIncident(role) {
+  return ['staff', 'schooladmin', 'principal'].includes(normaliseRole(role))
+}
+
 async function getSchoolName(db, schoolId) {
   if (!schoolId) return null
 
@@ -251,6 +255,14 @@ router.post('/', verifyToken, async (req, res, next) => {
     const { type, priority, status, title, location, description } = req.body
     const now = new Date().toISOString()
     const reporter = await getUserProfile(req.user)
+
+    if (!canCreateIncident(reporter.role)) {
+      return res.status(403).json({ error: 'You do not have permission to submit incidents.' })
+    }
+
+    if (!reporter.schoolId) {
+      return res.status(403).json({ error: 'Your account is not assigned to a school.' })
+    }
 
     const docRef = await getDb().collection('incidents').add({
       type: type || 'general',

@@ -6,8 +6,121 @@ const twilio = require('twilio')
 const crypto = require('crypto')
 const admin = require('firebase-admin')
 const { getDb } = require('../db/firebase')
+const { invalidateAnalyticsCache } = require('../analyticsCache')
 
 const BACKEND_URL = process.env.BACKEND_URL || 'https://p000415se-scout-school-safety-dashboard-lo5f.onrender.com'
+
+async function verifyToken(req, res, next) {
+  const authHeader = req.headers.authorization || ''
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null
+
+  if (!token) {
+    return res.status(401).json({ success: false, error: 'No token provided.' })
+  }
+
+  try {
+    req.user = await admin.auth().verifyIdToken(token)
+    next()
+  } catch {
+    return res.status(401).json({ success: false, error: 'Invalid or expired token.' })
+  }
+}
+
+function normaliseRole(role) {
+  return String(role || '').toLowerCase().replace(/[-_\s]/g, '')
+}
+
+function isCompanyAdmin(role) {
+  return ['companyadmin', 'admin'].includes(normaliseRole(role))
+}
+
+function isSchoolAdmin(role) {
+  return ['schooladmin', 'principal'].includes(normaliseRole(role))
+}
+
+function canSendAlert(role) {
+  return ['staff', 'schooladmin', 'principal'].includes(normaliseRole(role))
+}
+
+async function getSchoolName(db, schoolId) {
+  if (!schoolId) return null
+
+  const schoolDoc = await db.collection('schools').doc(schoolId).get()
+  if (!schoolDoc.exists) return null
+
+  return schoolDoc.data()?.name || null
+}
+
+async function getUserProfile(decodedUser) {
+  const db = getDb()
+  const { uid, email } = decodedUser
+  let profile = null
+
+  const userDoc = await db.collection('users').doc(uid).get()
+  if (userDoc.exists) {
+    profile = userDoc.data()
+  } else if (email) {
+    const byEmail = await db.collection('users').where('email', '==', email).limit(1).get()
+    if (!byEmail.empty) {
+      profile = byEmail.docs[0].data()
+    }
+  }
+
+  return {
+    uid,
+    email: email || null,
+    name: profile?.name || email || 'Unknown',
+    role: profile?.role || null,
+    schoolId: profile?.schoolId || null,
+    schoolName: profile?.schoolName || await getSchoolName(db, profile?.schoolId),
+  }
+}
+
+async function requireAlertSender(req, res, next) {
+  try {
+    const profile = await getUserProfile(req.user)
+
+    if (!profile.role || !canSendAlert(profile.role)) {
+      return res.status(403).json({
+        success: false,
+        error: 'You do not have permission to send alerts.',
+      })
+    }
+
+    if (!profile.schoolId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Your account is not assigned to a school.',
+      })
+    }
+
+    req.profile = profile
+    next()
+  } catch (error) {
+    console.error('Failed to verify alert sender:', error)
+    return res.status(500).json({ success: false, error: 'Failed to verify alert sender.' })
+  }
+}
+
+async function requireNotificationViewer(req, res, next) {
+  try {
+    const profile = await getUserProfile(req.user)
+
+    if (!isCompanyAdmin(profile.role) && !isSchoolAdmin(profile.role)) {
+      return res.status(403).json({ error: 'You do not have permission to view notification delivery data.' })
+    }
+
+    if (isSchoolAdmin(profile.role) && !profile.schoolId) {
+      return res.status(403).json({ error: 'Your account is not assigned to a school.' })
+    }
+
+    req.profile = profile
+    next()
+  } catch (error) {
+    console.error('Failed to verify notification viewer:', error)
+    return res.status(500).json({ error: 'Failed to verify notification viewer.' })
+  }
+}
 
 // Lazily initialise clients so missing env vars don't crash the server at startup
 function getSgMail() {
@@ -24,14 +137,19 @@ function getTwilioClient() {
 }
 
 // Query Firestore to get the correct recipients for a given emergency type
-async function getRecipientsForEmergency(emergencyType) {
+async function getRecipientsForEmergency(emergencyType, schoolId) {
   const db = getDb()
 
-  const routingSnapshot = await db.collection('notificationRouting')
+  let routingQuery = db.collection('notificationRouting')
     .where('alertScope', '==', 'emergency')
     .where('alertType', '==', emergencyType)
     .where('active', '==', true)
-    .get()
+
+  if (schoolId) {
+    routingQuery = routingQuery.where('schoolId', '==', schoolId)
+  }
+
+  const routingSnapshot = await routingQuery.get()
 
   if (routingSnapshot.empty) {
     console.warn(`⚠️ No routing rule found for emergency type: ${emergencyType}`)
@@ -42,9 +160,14 @@ async function getRecipientsForEmergency(emergencyType) {
   const roles = rule.roles
   console.log(`📋 Routing rule found for "${emergencyType}" → roles: ${roles.join(', ')}`)
 
-  const recipientsSnapshot = await db.collection('notificationRecipients')
+  let recipientsQuery = db.collection('notificationRecipients')
     .where('active', '==', true)
-    .get()
+
+  if (schoolId) {
+    recipientsQuery = recipientsQuery.where('schoolId', '==', schoolId)
+  }
+
+  const recipientsSnapshot = await recipientsQuery.get()
 
   const recipients = recipientsSnapshot.docs
     .map(doc => ({ id: doc.id, ...doc.data() }))
@@ -55,22 +178,26 @@ async function getRecipientsForEmergency(emergencyType) {
 }
 
 // Query Firestore users collection to get all admin users
-async function getAdminUsers() {
+async function getAdminUsers(schoolId) {
   const db = getDb()
 
   const usersSnapshot = await db.collection('users').get()
 
   const admins = usersSnapshot.docs
     .map(doc => ({ id: doc.id, ...doc.data() }))
-    .filter(a => a.email && a.role && a.role.toLowerCase().includes('admin'))
+    .filter(a => {
+      if (!a.email || !a.role) return false
+      if (isCompanyAdmin(a.role)) return true
+      return isSchoolAdmin(a.role) && schoolId && a.schoolId === schoolId
+    })
 
   console.log(`👔 Found ${admins.length} admin(s): ${admins.map(a => a.name).join(', ')}`)
   return admins
 }
 
 // Send a summary email to admins — no acknowledge button, just a record
-async function sendAdminSummaryEmail({ emergencyType, location, body, timestamp, incidentId, notifiedStaff }) {
-  const admins = await getAdminUsers()
+async function sendAdminSummaryEmail({ emergencyType, location, body, timestamp, incidentId, notifiedStaff, schoolId, schoolName }) {
+  const admins = await getAdminUsers(schoolId)
 
   if (admins.length === 0) {
     console.warn('⚠️ No admin users found in users collection — skipping admin summary email')
@@ -112,6 +239,11 @@ async function sendAdminSummaryEmail({ emergencyType, location, body, timestamp,
           <tr>
             <td style="padding: 8px 12px; background: #f8fafc; font-weight: bold; font-size: 14px; border-bottom: 1px solid #e5e7eb;">Location</td>
             <td style="padding: 8px 12px; font-size: 14px; border-bottom: 1px solid #e5e7eb;">📍 ${location}</td>
+          </tr>` : ''}
+          ${schoolName ? `
+          <tr>
+            <td style="padding: 8px 12px; background: #f8fafc; font-weight: bold; font-size: 14px; border-bottom: 1px solid #e5e7eb;">School</td>
+            <td style="padding: 8px 12px; font-size: 14px; border-bottom: 1px solid #e5e7eb;">${schoolName}</td>
           </tr>` : ''}
           <tr>
             <td style="padding: 8px 12px; background: #f8fafc; font-weight: bold; font-size: 14px; border-bottom: 1px solid #e5e7eb;">Date & Time</td>
@@ -162,8 +294,30 @@ async function sendAdminSummaryEmail({ emergencyType, location, body, timestamp,
   }
 }
 
+async function getNotificationSchoolContext(incidentId, senderProfile) {
+  const db = getDb()
+  let schoolId = senderProfile.schoolId || null
+  let schoolName = senderProfile.schoolName || null
+
+  if (incidentId) {
+    const incidentDoc = await db.collection('incidents').doc(incidentId).get()
+
+    if (incidentDoc.exists) {
+      const incident = incidentDoc.data()
+      schoolId = incident.schoolId || schoolId
+      schoolName = incident.schoolName || schoolName
+    }
+  }
+
+  if (!schoolName && schoolId) {
+    schoolName = await getSchoolName(db, schoolId)
+  }
+
+  return { schoolId, schoolName }
+}
+
 // POST /api/notifications/emergency
-router.post('/emergency', async (req, res) => {
+router.post('/emergency', verifyToken, requireAlertSender, async (req, res) => {
   const { code, emergencyType, location, message, incidentId } = req.body
 
   if (code !== '000') {
@@ -180,9 +334,11 @@ router.post('/emergency', async (req, res) => {
     })
   }
 
+  const { schoolId, schoolName } = await getNotificationSchoolContext(incidentId, req.profile)
+
   let recipients = []
   try {
-    recipients = await getRecipientsForEmergency(emergencyType)
+    recipients = await getRecipientsForEmergency(emergencyType, schoolId)
   } catch (err) {
     console.error('❌ Failed to fetch recipients from Firestore:', err.message)
     return res.status(500).json({ success: false, error: 'Failed to load recipients. Please try again.' })
@@ -291,6 +447,8 @@ router.post('/emergency', async (req, res) => {
       const ref = db.collection('notifications').doc()
       batch.set(ref, {
         incidentId: incidentId || null,
+        schoolId,
+        schoolName,
         incidentTitle: `${emergencyType}${location ? ' - ' + location : ''}`,
         type: emergencyType.toLowerCase(),
         recipientName: r.name,
@@ -305,6 +463,7 @@ router.post('/emergency', async (req, res) => {
       })
     }
     await batch.commit()
+    invalidateAnalyticsCache()
     console.log(`💾 Saved ${results.length} notification log(s) to Firestore`)
   } catch (err) {
     console.error('Failed to save notification logs:', err.message)
@@ -313,13 +472,15 @@ router.post('/emergency', async (req, res) => {
   // Send admin summary email (separate from responder emails, no acknowledge button)
   try {
     await sendAdminSummaryEmail({
-      emergencyType,
-      location,
-      body,
-      timestamp,
-      incidentId,
-      notifiedStaff: results,
-    })
+        emergencyType,
+        location,
+        body,
+        timestamp,
+        incidentId,
+        notifiedStaff: results,
+        schoolId,
+        schoolName,
+      })
   } catch (err) {
     console.error('Failed to send admin summary email:', err.message)
   }
@@ -447,11 +608,26 @@ router.get('/acknowledge/:token', async (req, res) => {
 })
 
 // GET /api/notifications — fetch delivery logs from Firestore
-router.get('/', async (req, res, next) => {
+router.get('/', verifyToken, requireNotificationViewer, async (req, res, next) => {
   try {
     const db = getDb()
-    const snapshot = await db.collection('notifications').orderBy('timestamp', 'desc').limit(100).get()
-    const notifications = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+    let snapshot
+
+    if (isSchoolAdmin(req.profile.role)) {
+      snapshot = await db.collection('notifications')
+        .where('schoolId', '==', req.profile.schoolId)
+        .get()
+    } else {
+      snapshot = await db.collection('notifications')
+        .orderBy('timestamp', 'desc')
+        .limit(100)
+        .get()
+    }
+
+    const notifications = snapshot.docs
+      .map(doc => ({ id: doc.id, ...doc.data() }))
+      .sort((left, right) => Date.parse(right.timestamp || 0) - Date.parse(left.timestamp || 0))
+      .slice(0, 100)
     res.json({ notifications })
   } catch (err) {
     next(err)

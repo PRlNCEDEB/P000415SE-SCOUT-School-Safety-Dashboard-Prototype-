@@ -60,6 +60,20 @@ function SetupRoute({ children }) {
   return children
 }
 
+function SubmitRoute({ children }) {
+  const { isSchoolAdmin, isStaff, authLoading, userRole } = useAuth()
+
+  if (authLoading || userRole === null) {
+    return null
+  }
+
+  if (!isSchoolAdmin && !isStaff) {
+    return <Navigate to="/dashboard" replace />
+  }
+
+  return children
+}
+
 function AppRoutes() {
   return (
     <Routes>
@@ -72,7 +86,7 @@ function AppRoutes() {
       <Route path="/dashboard"       element={<PrivateRoute><Layout><Dashboard /></Layout></PrivateRoute>} />
       <Route path="/incidents"       element={<PrivateRoute><Layout><Incidents /></Layout></PrivateRoute>} />
       <Route path="/incidents/:id"   element={<PrivateRoute><Layout><IncidentDetail /></Layout></PrivateRoute>} />
-      <Route path="/submit"          element={<PrivateRoute><Layout><SubmitAlert /></Layout></PrivateRoute>} />
+      <Route path="/submit"          element={<PrivateRoute><SubmitRoute><Layout><SubmitAlert /></Layout></SubmitRoute></PrivateRoute>} />
       <Route path="/setup"           element={<PrivateRoute><SetupRoute><Layout><Setup /></Layout></SetupRoute></PrivateRoute>} />
       <Route path="/analytics"       element={<PrivateRoute><Layout><Analytics /></Layout></PrivateRoute>} />
       <Route path="/notifications"   element={<PrivateRoute><Layout><Notifications /></Layout></PrivateRoute>} />

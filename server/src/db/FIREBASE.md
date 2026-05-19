@@ -8,6 +8,8 @@ Fields:
 - `email`
 - `passwordHash`
 - `role`
+- `schoolId`
+- `schoolName`
 - `createdAt`
 
 ### incidents
@@ -20,6 +22,8 @@ Fields:
 - `type`
 - `priority`
 - `status`
+- `schoolId`
+- `schoolName`
 - `triggeredById`
 - `triggeredByName`
 - `createdAt`
@@ -32,6 +36,8 @@ Fields:
 - `incidentId`
 - `incidentTitle`
 - `incidentType`
+- `schoolId`
+- `schoolName`
 - `recipientName`
 - `recipientEmail`
 - `recipientPhone`
@@ -47,6 +53,8 @@ Fields:
 - `email`
 - `phone`
 - `role`
+- `schoolId`
+- `schoolName`
 - `active`
 - `createdAt`
 - `updatedAt`
@@ -60,6 +68,8 @@ Fields:
 - `priority`
 - `channels`
 - `roles`
+- `schoolId`
+- `schoolName`
 - `active`
 - `createdAt`
 - `updatedAt`
