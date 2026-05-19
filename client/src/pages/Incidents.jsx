@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Navigate } from 'react-router-dom'
 import { getIncidents } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 
@@ -28,13 +28,17 @@ const typeIcons = {
   general: '📢',
 }
 
+// Active statuses — what "active" view means
+const ACTIVE_STATUSES = ['triggered', 'acknowledged', 'in-progress']
+
 export default function Incidents() {
   const navigate = useNavigate()
+  const { userRole, isAdmin, authLoading } = useAuth()
   const { isCompanyAdmin, isSchoolAdmin } = useAuth()
   const [incidents, setIncidents] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [filterStatus, setFilterStatus] = useState('all')
+  const [filterStatus, setFilterStatus] = useState('active')
   const [filterPriority, setFilterPriority] = useState('all')
   const [filterSchool, setFilterSchool] = useState('all')
   const [search, setSearch] = useState('')
@@ -68,6 +72,20 @@ export default function Incidents() {
       isActive = false
     }
   }, [])
+
+  // Wait for role to resolve before deciding access
+  if (authLoading || userRole === null) {
+    return (
+      <div className="p-6 max-w-5xl mx-auto">
+        <div className="text-center py-12"><p className="text-gray-500">Loading...</p></div>
+      </div>
+    )
+  }
+
+  // Staff cannot access Incidents page
+  if (!isAdmin) {
+    return <Navigate to="/dashboard" replace />
+  }
 
   const schoolOptions = useMemo(() => {
     const options = new Map()
@@ -103,7 +121,12 @@ export default function Incidents() {
       .join(' ')
       .toLowerCase()
 
-    const matchStatus = filterStatus === 'all' || incident.status === filterStatus
+    const matchStatus =
+      filterStatus === 'all'
+        ? true
+        : filterStatus === 'active'
+          ? ACTIVE_STATUSES.includes(i.status)
+          : incident.status === filterStatus
     const matchPriority = filterPriority === 'all' || incident.priority === filterPriority
     const matchSchool = !isCompanyAdmin || filterSchool === 'all' || incident.schoolId === filterSchool
     const matchSearch = !searchTerm || searchableText.includes(searchTerm)
@@ -111,15 +134,20 @@ export default function Incidents() {
     return matchStatus && matchPriority && matchSchool && matchSearch
   })
 
+  const activeCount = incidents.filter(i => ACTIVE_STATUSES.includes(i.status)).length
+
+  const subtitleText = loading
+    ? 'Loading incidents...'
+    : filterStatus === 'active'
+      ? `${activeCount} active incident${activeCount !== 1 ? 's' : ''}`
+      : `${filtered.length} of ${incidents.length} incidents`
+
   return (
     <div className="p-6 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Incident Log</h1>
-          <p className="text-sm text-gray-500">
-            {loading ? 'Loading incidents...' : `${incidents.length} total incidents`}
-            {schoolAdminSchoolName ? ` - ${schoolAdminSchoolName}` : ''}
-          </p>
+          <p className="text-sm text-gray-500">{subtitleText}</p>
         </div>
         <button
           onClick={() => navigate('/submit')}
@@ -142,7 +170,8 @@ export default function Incidents() {
           onChange={event => setFilterStatus(event.target.value)}
           className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
         >
-          <option value="all">All Statuses</option>
+          <option value="active">Active Incidents</option>
+          <option value="all">All Incidents</option>
           <option value="triggered">Triggered</option>
           <option value="acknowledged">Acknowledged</option>
           <option value="in-progress">In Progress</option>

@@ -1,5 +1,4 @@
 const express = require('express')
-const admin = require('firebase-admin')
 const { docToObject, formatTimestamp, getDb, snapshotToArray } = require('../db/firebase')
 const { invalidateAnalyticsCache } = require('../analyticsCache')
 
@@ -282,7 +281,7 @@ router.post('/', verifyToken, async (req, res, next) => {
 
 router.patch('/:id/status', verifyToken, async (req, res, next) => {
   try {
-    const { status } = req.body
+    const { status, updatedByName, updatedByRole } = req.body
     const now = new Date().toISOString()
     const db = getDb()
     const profile = await getUserProfile(req.user)
