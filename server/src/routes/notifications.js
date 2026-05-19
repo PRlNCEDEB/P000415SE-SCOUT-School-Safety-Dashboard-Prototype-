@@ -9,6 +9,69 @@ const { getDb } = require('../db/firebase')
 
 const BACKEND_URL = process.env.BACKEND_URL || 'https://p000415se-scout-school-safety-dashboard-lo5f.onrender.com'
 
+async function verifyToken(req, res, next) {
+  const authHeader = req.headers.authorization || ''
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null
+
+  if (!token) {
+    return res.status(401).json({ success: false, error: 'No token provided.' })
+  }
+
+  try {
+    req.user = await admin.auth().verifyIdToken(token)
+    next()
+  } catch {
+    return res.status(401).json({ success: false, error: 'Invalid or expired token.' })
+  }
+}
+
+function normaliseRole(role) {
+  return String(role || '').toLowerCase().replace(/[-_\s]/g, '')
+}
+
+function canSendAlert(role) {
+  return ['staff', 'schooladmin', 'principal'].includes(normaliseRole(role))
+}
+
+async function getUserProfile(decodedUser) {
+  const db = getDb()
+  const { uid, email } = decodedUser
+
+  const userDoc = await db.collection('users').doc(uid).get()
+  if (userDoc.exists) {
+    return { id: userDoc.id, ...userDoc.data() }
+  }
+
+  if (email) {
+    const byEmail = await db.collection('users').where('email', '==', email).limit(1).get()
+    if (!byEmail.empty) {
+      const doc = byEmail.docs[0]
+      return { id: doc.id, ...doc.data() }
+    }
+  }
+
+  return null
+}
+
+async function requireAlertSender(req, res, next) {
+  try {
+    const profile = await getUserProfile(req.user)
+
+    if (!profile || !canSendAlert(profile.role)) {
+      return res.status(403).json({
+        success: false,
+        error: 'You do not have permission to send alerts.',
+      })
+    }
+
+    req.alertSender = profile
+    next()
+  } catch (error) {
+    console.error('Failed to verify alert sender:', error)
+    return res.status(500).json({ success: false, error: 'Failed to verify alert sender.' })
+  }
+}
+
 // Lazily initialise clients so missing env vars don't crash the server at startup
 function getSgMail() {
   if (!process.env.SENDGRID_API_KEY) throw new Error('SENDGRID_API_KEY is not set in .env')
@@ -163,7 +226,7 @@ async function sendAdminSummaryEmail({ emergencyType, location, body, timestamp,
 }
 
 // POST /api/notifications/emergency
-router.post('/emergency', async (req, res) => {
+router.post('/emergency', verifyToken, requireAlertSender, async (req, res) => {
   const { code, emergencyType, location, message, incidentId } = req.body
 
   if (code !== '000') {
