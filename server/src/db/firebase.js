@@ -63,17 +63,52 @@ function serverTimestamp() {
   return admin.firestore.FieldValue.serverTimestamp()
 }
 
+const DISPLAY_TIME_ZONE = 'Australia/Sydney'
+const datePartsFormatter = new Intl.DateTimeFormat('en-AU', {
+  timeZone: DISPLAY_TIME_ZONE,
+  year: 'numeric',
+  month: 'numeric',
+  day: 'numeric',
+})
+const timeFormatter = new Intl.DateTimeFormat('en-AU', {
+  timeZone: DISPLAY_TIME_ZONE,
+  hour: '2-digit',
+  minute: '2-digit',
+})
+
+function getLocalDateParts(date) {
+  const parts = Object.fromEntries(
+    datePartsFormatter.formatToParts(date)
+      .filter(part => part.type !== 'literal')
+      .map(part => [part.type, Number(part.value)])
+  )
+
+  return {
+    year: parts.year,
+    month: parts.month,
+    day: parts.day,
+  }
+}
+
+function getLocalDayNumber(date) {
+  const { year, month, day } = getLocalDateParts(date)
+  return Math.floor(Date.UTC(year, month - 1, day) / 86400000)
+}
+
 // Helper: format a Firestore Timestamp (or ISO string) to a readable string
 function formatTimestamp(value) {
   if (!value) return ''
   const date = value.toDate ? value.toDate() : new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+
   const now = new Date()
-  const diffDays = Math.floor((now - date) / 86400000)
+  const diffDays = getLocalDayNumber(now) - getLocalDayNumber(date)
+  const time = timeFormatter.format(date)
 
   if (diffDays === 0) {
-    return `Today ${date.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })}`
+    return `Today ${time}`
   } else if (diffDays === 1) {
-    return `Yesterday ${date.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })}`
+    return `Yesterday ${time}`
   }
   return `${diffDays} days ago`
 }
