@@ -55,6 +55,9 @@ async function buildAnalytics() {
   // Summary metrics
   const totalIncidents = incidents.length
   const resolvedCount = incidents.filter(i => i.status === 'resolved').length
+  const activeIncidents = incidents.filter(i => i.status !== 'archived' && i.status !== 'resolved')
+  const criticalCount = activeIncidents.filter(i => i.priority === 'critical').length
+  const highCount = activeIncidents.filter(i => i.priority === 'high').length
 
   // Avg Response Time — uses acknowledgedAt (true first-response metric)
   const allAckTimes = incidents.map(getAcknowledgementTime).filter(v => v !== null)
@@ -152,7 +155,7 @@ async function buildAnalytics() {
   const failedAlerts = { total: failedSms + failedEmail, sms: failedSms, email: failedEmail }
 
   return {
-    summary: { totalIncidents, resolvedCount, avgResponseTime, thisWeekIncidents, unacknowledgedCount },
+    summary: { totalIncidents, resolvedCount, avgResponseTime, thisWeekIncidents, unacknowledgedCount, activeIncidents: activeIncidents.length, criticalCount, highCount },
     incidentsByType,
     statusBreakdown,
     locationData,
