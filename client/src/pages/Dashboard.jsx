@@ -4,7 +4,7 @@ import QuickActions from '../components/QuickActions'
 import ShortcutCard from '../components/ShortcutCard'
 import QuickViewStrip from '../components/QuickViewStrip'
 import SchoolAdminStatus from '../components/SchoolAdminStatus'
-import { incidentAPI } from '../api/client'
+import { incidentAPI, analyticsAPI } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 
 const priorityColors = {
@@ -88,6 +88,7 @@ export default function Dashboard() {
   const { currentUser, userRole, isCompanyAdmin, isSchoolAdmin, isStaff } = useAuth()
   const [incidents, setIncidents] = useState([])
   const [loading, setLoading] = useState(true)
+  const [summaryStats, setSummaryStats] = useState(null)
 
   useEffect(() => {
     const fetchIncidents = async () => {
@@ -104,7 +105,19 @@ export default function Dashboard() {
     }
 
     fetchIncidents()
+  }, [])
 
+  useEffect(() => {
+    const fetchSummary = async () => {
+      try {
+        const data = await analyticsAPI.summary()
+        setSummaryStats(data)
+      } catch (error) {
+        console.error('Failed to fetch summary stats:', error)
+      }
+    }
+
+    fetchSummary()
   }, [])
 
   const active   = incidents.filter(i => i.status !== 'archived' && i.status !== 'resolved')
@@ -194,10 +207,10 @@ export default function Dashboard() {
         </div>
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <StatCard label="Active Incidents" value={active.length}   color="text-gray-700"   icon="🚨" />
-          <StatCard label="Critical"         value={critical}        color="text-red-600"    icon="⚡" />
-          <StatCard label="High Priority"    value={high}            color="text-orange-600" icon="🚩" />
-          <StatCard label="Avg Response"     value="4.2m"            color="text-blue-600"   icon="⏱️" />
+          <StatCard label="Active Incidents" value={summaryStats ? summaryStats.activeIncidents : active.length}   color="text-gray-700"   icon="🚨" />
+          <StatCard label="Critical"         value={summaryStats ? summaryStats.criticalCount   : critical}        color="text-red-600"    icon="⚡" />
+          <StatCard label="High Priority"    value={summaryStats ? summaryStats.highCount        : high}            color="text-orange-600" icon="🚩" />
+          <StatCard label="Avg Response"     value={summaryStats ? `${summaryStats.avgResponseTime}m` : '...'}     color="text-blue-600"   icon="⏱️" />
         </div>
       )}
 
