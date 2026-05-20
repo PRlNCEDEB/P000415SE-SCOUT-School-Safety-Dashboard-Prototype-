@@ -9,6 +9,13 @@ import {
 
 const PIE_COLORS = ['#22c55e', '#3b82f6', '#ef4444', '#9ca3af', '#f97316']
 
+const PRIORITY_COLORS = {
+  Critical: '#ef4444',
+  High: '#f97316',
+  Medium: '#eab308',
+  Low: '#22c55e',
+}
+
 export default function Analytics() {
   const { isAdmin, isCompanyAdmin, userRole, authLoading } = useAuth()
   const [loading, setLoading] = useState(true)
@@ -28,6 +35,7 @@ export default function Analytics() {
   const [responseTimeData, setResponseTimeData] = useState([])
   const [failedAlerts, setFailedAlerts] = useState({ total: 0, sms: 0, email: 0 })
   const [unacknowledgedCount, setUnacknowledgedCount] = useState(0)
+  const [incidentsByPriority, setIncidentsByPriority] = useState([])
 
   const fetchAnalytics = async () => {
     setLoading(true)
@@ -42,6 +50,7 @@ export default function Analytics() {
       setResponseTimeData(data.responseTimeData)
       setFailedAlerts(data.failedAlerts || { total: 0, sms: 0, email: 0 })
       setUnacknowledgedCount(data.summary?.unacknowledgedCount ?? 0)
+      setIncidentsByPriority(data.incidentsByPriority || [])
     } catch (err) {
       setError(err.message || 'Failed to load analytics data')
     } finally {
@@ -296,25 +305,55 @@ export default function Analytics() {
 
       </div>
 
-      {/* Row 3 — Daily trend */}
-      <div className="bg-white border border-gray-200 rounded-xl p-5">
-        <h2 className="font-semibold text-gray-900 mb-4">Incidents This Week by Day</h2>
-        {incidentsByDay.length > 0 ? (
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={incidentsByDay} margin={{ top: 0, right: 10, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="day" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip />
-              <Bar dataKey="incidents" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        ) : (
-          <p className="text-gray-400 text-center py-10">No data available</p>
-        )}
+      {/* Row 3 — Daily trend + Priority breakdown */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+        <div className="bg-white border border-gray-200 rounded-xl p-5">
+          <h2 className="font-semibold text-gray-900 mb-4">Incidents This Week by Day</h2>
+          {incidentsByDay.length > 0 ? (
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={incidentsByDay} margin={{ top: 0, right: 10, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="day" tick={{ fontSize: 12 }} />
+                <YAxis tick={{ fontSize: 12 }} />
+                <Tooltip />
+                <Bar dataKey="incidents" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <p className="text-gray-400 text-center py-10">No data available</p>
+          )}
+        </div>
+
+        <div className="bg-white border border-gray-200 rounded-xl p-5">
+          <h2 className="font-semibold text-gray-900 mb-1">Incidents by Priority</h2>
+          <p className="text-xs text-gray-400 mb-3">Total incidents across all statuses grouped by severity</p>
+          {incidentsByPriority.length > 0 ? (
+            <ResponsiveContainer width="100%" height={180}>
+              <BarChart
+                layout="vertical"
+                data={incidentsByPriority}
+                margin={{ top: 0, right: 20, left: 10, bottom: 0 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" horizontal={false} />
+                <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
+                <YAxis type="category" dataKey="priority" tick={{ fontSize: 12 }} width={65} />
+                <Tooltip formatter={(value) => [value, 'Incidents']} />
+                <Bar dataKey="count" radius={[0, 4, 4, 0]} maxBarSize={32}>
+                  {incidentsByPriority.map((entry) => (
+                    <Cell key={entry.priority} fill={PRIORITY_COLORS[entry.priority] || '#9ca3af'} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <p className="text-gray-400 text-center py-10">No data available</p>
+          )}
+        </div>
+
       </div>
 
-      {/* Row 4 — Failed Alerts (Company Admin only) */}
+      {/* Row 5 — Failed Alerts (Company Admin only) */}
       {isCompanyAdmin && (
         <div className="bg-white border border-gray-200 rounded-xl p-5 mt-4">
           <div className="flex items-center justify-between mb-4">

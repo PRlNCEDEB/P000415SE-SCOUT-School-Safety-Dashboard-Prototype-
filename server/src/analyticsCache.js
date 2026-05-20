@@ -154,6 +154,19 @@ async function buildAnalytics() {
   const failedEmail = notifications.filter(n => n.email === 'failed').length
   const failedAlerts = { total: failedSms + failedEmail, sms: failedSms, email: failedEmail }
 
+  // Incidents by priority — all incidents (not just active) so the chart shows historical scope
+  const priorityOrder = ['critical', 'high', 'medium', 'low']
+  const priorityCounts = {}
+  priorityOrder.forEach(p => { priorityCounts[p] = 0 })
+  incidents.forEach(i => {
+    const p = (i.priority || '').toLowerCase()
+    if (priorityCounts[p] !== undefined) priorityCounts[p]++
+  })
+  const incidentsByPriority = priorityOrder.map(p => ({
+    priority: p.charAt(0).toUpperCase() + p.slice(1),
+    count: priorityCounts[p],
+  }))
+
   return {
     summary: { totalIncidents, resolvedCount, avgResponseTime, thisWeekIncidents, unacknowledgedCount, activeIncidents: activeIncidents.length, criticalCount, highCount },
     incidentsByType,
@@ -162,6 +175,7 @@ async function buildAnalytics() {
     incidentsByDay,
     responseTimeData,
     failedAlerts,
+    incidentsByPriority,
   }
 }
 
