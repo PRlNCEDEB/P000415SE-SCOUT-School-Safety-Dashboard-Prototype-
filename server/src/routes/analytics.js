@@ -12,11 +12,11 @@ function normaliseRole(role) {
 }
 
 function isCompanyAdmin(role) {
-  return ['companyadmin', 'admin'].includes(normaliseRole(role))
+  return normaliseRole(role) === 'companyadmin'
 }
 
 function isSchoolAdmin(role) {
-  return ['schooladmin', 'principal'].includes(normaliseRole(role))
+  return normaliseRole(role) === 'schooladmin'
 }
 
 async function verifyToken(req, res, next) {

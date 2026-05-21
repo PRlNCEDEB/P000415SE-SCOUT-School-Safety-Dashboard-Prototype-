@@ -1,9 +1,10 @@
 export default function QuickViewStrip({ incidents }) {
-  const unacked = incidents.filter(i => i.status === 'triggered').length
-  const critical = incidents.filter(i => i.priority === 'critical').length
+  const active = incidents.filter(i => i.status !== 'archived' && i.status !== 'resolved')
+  const unacked = active.filter(i => i.status === 'triggered').length
+  const critical = active.filter(i => i.priority === 'critical').length
   const notificationsToday = incidents.filter(i => {
     const today = new Date().toDateString()
-    const incidentDate = new Date(i.timestamp || Date.now()).toDateString()
+    const incidentDate = new Date(i.createdAt).toDateString()
     return incidentDate === today
   }).length
 
@@ -11,7 +12,7 @@ export default function QuickViewStrip({ incidents }) {
     <div className="grid grid-cols-3 gap-4 mb-6">
       <div className="bg-gradient-to-br from-red-50 to-red-100 border border-red-200 rounded-lg p-4">
         <div className="text-xs text-red-600 font-semibold uppercase mb-1">Active Incidents</div>
-        <div className="text-3xl font-bold text-red-700">{incidents.filter(i => i.status !== 'archived' && i.status !== 'resolved').length}</div>
+        <div className="text-3xl font-bold text-red-700">{active.length}</div>
         <div className="text-xs text-red-600 mt-1">{critical} critical</div>
       </div>
       

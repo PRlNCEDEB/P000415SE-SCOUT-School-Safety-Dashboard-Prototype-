@@ -4,7 +4,7 @@ import QuickActions from '../components/QuickActions'
 import ShortcutCard from '../components/ShortcutCard'
 import QuickViewStrip from '../components/QuickViewStrip'
 import SchoolAdminStatus from '../components/SchoolAdminStatus'
-import { incidentAPI } from '../api/client'
+import { incidentAPI, analyticsAPI, settingsAPI } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 
 const priorityColors = {
@@ -88,13 +88,19 @@ export default function Dashboard() {
   const { currentUser, userRole, isCompanyAdmin, isSchoolAdmin, isStaff } = useAuth()
   const [incidents, setIncidents] = useState([])
   const [loading, setLoading] = useState(true)
+  const [summaryStats, setSummaryStats] = useState(null)
+  const [overdueThresholdMinutes, setOverdueThresholdMinutes] = useState(15)
 
   useEffect(() => {
     const fetchIncidents = async () => {
       try {
         setLoading(true)
-        const data = await incidentAPI.list()
+        const [data, settings] = await Promise.all([
+          incidentAPI.list(),
+          settingsAPI.get().catch(() => ({ overdueThresholdMinutes: 15 })),
+        ])
         setIncidents(data)
+        setOverdueThresholdMinutes(settings.overdueThresholdMinutes ?? 15)
       } catch (error) {
         console.error('Failed to fetch incidents:', error)
         setIncidents([])
@@ -104,7 +110,19 @@ export default function Dashboard() {
     }
 
     fetchIncidents()
+  }, [])
 
+  useEffect(() => {
+    const fetchSummary = async () => {
+      try {
+        const data = await analyticsAPI.summary()
+        setSummaryStats(data)
+      } catch (error) {
+        console.error('Failed to fetch summary stats:', error)
+      }
+    }
+
+    fetchSummary()
   }, [])
 
   const active   = incidents.filter(i => i.status !== 'archived' && i.status !== 'resolved')
@@ -112,6 +130,15 @@ export default function Dashboard() {
   const high     = active.filter(i => i.priority === 'high').length
   const unacked  = active.filter(i => i.status === 'triggered')
   const recent   = incidents.filter(i => i.status !== 'triggered' && isTodayIncident(i))
+
+  // Overdue: triggered incidents past the configured threshold
+  function getElapsedMinutes(incident) {
+    if (!incident.createdAt) return 0
+    const created = new Date(incident.createdAt)
+    if (Number.isNaN(created.getTime())) return 0
+    return Math.floor((Date.now() - created.getTime()) / 60000)
+  }
+  const overdue = unacked.filter(i => getElapsedMinutes(i) > overdueThresholdMinutes)
 
   // Staff see only the last 5 of today's recent incidents for a simplified view
   const recentToShow = isStaff ? recent.slice(0, 5) : recent
@@ -192,14 +219,20 @@ export default function Dashboard() {
       {isStaff ? (
         <div className="grid grid-cols-2 gap-4 mb-6">
           <StatCard label="Active Incidents" value={active.length} color="text-gray-700" icon="🚨" />
-          <StatCard label="Unacknowledged"   value={unacked.length} color="text-red-600"  icon="⏳" />
+          <StatCard
+            label="Unacknowledged"
+            value={unacked.length}
+            color="text-red-600"
+            icon="⏳"
+            subLabel={overdue.length > 0 ? `${overdue.length} overdue` : null}
+          />
         </div>
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <StatCard label="Active Incidents" value={active.length}   color="text-gray-700"   icon="🚨" />
-          <StatCard label="Critical"         value={critical}        color="text-red-600"    icon="⚡" />
-          <StatCard label="High Priority"    value={high}            color="text-orange-600" icon="🚩" />
-          <StatCard label="Avg Response"     value="4.2m"            color="text-blue-600"   icon="⏱️" />
+          <StatCard label="Active Incidents" value={summaryStats ? summaryStats.activeIncidents : active.length}   color="text-gray-700"   icon="🚨" />
+          <StatCard label="Critical"         value={summaryStats ? summaryStats.criticalCount   : critical}        color="text-red-600"    icon="⚡" />
+          <StatCard label="High Priority"    value={summaryStats ? summaryStats.highCount        : high}            color="text-orange-600" icon="🚩" />
+          <StatCard label="Avg Response"     value={summaryStats ? `${summaryStats.avgResponseTime}m` : '...'}     color="text-blue-600"   icon="⏱️" />
         </div>
       )}
 
@@ -210,24 +243,44 @@ export default function Dashboard() {
             <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse inline-block" />
             <h2 className="font-semibold text-gray-900">Unacknowledged Alerts</h2>
             <span className="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded">{unacked.length}</span>
+            {overdue.length > 0 && (
+              <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-medium">
+                ⏰ {overdue.length} overdue
+              </span>
+            )}
           </div>
           <div className="space-y-2">
-            {unacked.map(incident => (
-              <div
-                key={incident.id}
-                onClick={() => navigate(`/incidents/${incident.id}`)}
-                className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 flex items-center gap-3 cursor-pointer hover:bg-red-100 transition-colors"
-              >
-                <span className="text-xs font-semibold text-gray-600">{typeIcons[incident.type] || '📢'}</span>
-                <div className="flex-1">
-                  <p className="text-sm text-red-900">{incident.title}</p>
-                  <p className="text-xs text-red-600">{incident.location} - {incident.timestamp}</p>
+            {unacked.map(incident => {
+              const isIncidentOverdue = getElapsedMinutes(incident) > overdueThresholdMinutes
+              return (
+                <div
+                  key={incident.id}
+                  onClick={() => navigate(`/incidents/${incident.id}`)}
+                  className={`rounded-lg px-4 py-3 flex items-center gap-3 cursor-pointer transition-colors ${
+                    isIncidentOverdue
+                      ? 'bg-amber-50 border border-amber-400 hover:bg-amber-100'
+                      : 'bg-red-50 border border-red-200 hover:bg-red-100'
+                  }`}
+                >
+                  <span className="text-xs font-semibold text-gray-600">{typeIcons[incident.type] || '📢'}</span>
+                  <div className="flex-1">
+                    <p className={`text-sm ${isIncidentOverdue ? 'text-amber-900' : 'text-red-900'}`}>{incident.title}</p>
+                    <p className={`text-xs ${isIncidentOverdue ? 'text-amber-700' : 'text-red-600'}`}>
+                      {incident.location} - {incident.timestamp}
+                      {isIncidentOverdue && ` · ${getElapsedMinutes(incident)} min unacknowledged`}
+                    </p>
+                  </div>
+                  <span className={`text-xs px-2 py-0.5 rounded ${priorityColors[incident.priority]}`}>
+                    {incident.priority}
+                  </span>
+                  {isIncidentOverdue && (
+                    <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-700 font-medium whitespace-nowrap">
+                      ⏰ Overdue
+                    </span>
+                  )}
                 </div>
-                <span className={`text-xs px-2 py-0.5 rounded ${priorityColors[incident.priority]}`}>
-                  {incident.priority}
-                </span>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}
@@ -273,12 +326,15 @@ export default function Dashboard() {
   )
 }
 
-function StatCard({ label, value, color, icon }) {
+function StatCard({ label, value, color, icon, subLabel }) {
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-4">
       <div className="mb-1 text-xs font-semibold text-gray-500">{icon}</div>
       <div className={`text-2xl font-semibold ${color}`}>{value}</div>
       <div className="text-xs text-gray-500">{label}</div>
+      {subLabel && (
+        <div className="text-xs text-amber-600 font-medium mt-0.5">⏰ {subLabel}</div>
+      )}
     </div>
   )
 }

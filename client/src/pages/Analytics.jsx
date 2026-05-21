@@ -20,6 +20,13 @@ import {
 
 const PIE_COLORS = ['#22c55e', '#3b82f6', '#ef4444', '#9ca3af', '#f97316']
 
+const PRIORITY_COLORS = {
+  Critical: '#ef4444',
+  High: '#f97316',
+  Medium: '#eab308',
+  Low: '#22c55e',
+}
+
 export default function Analytics() {
   const { isAdmin, isCompanyAdmin, userRole, authLoading } = useAuth()
   const [loading, setLoading] = useState(true)
@@ -38,6 +45,9 @@ export default function Analytics() {
   const [locationData, setLocationData] = useState([])
   const [incidentsByDay, setIncidentsByDay] = useState([])
   const [responseTimeData, setResponseTimeData] = useState([])
+  const [failedAlerts, setFailedAlerts] = useState({ total: 0, sms: 0, email: 0 })
+  const [unacknowledgedCount, setUnacknowledgedCount] = useState(0)
+  const [incidentsByPriority, setIncidentsByPriority] = useState([])
 
   const fetchAnalytics = async () => {
     setLoading(true)
@@ -50,6 +60,9 @@ export default function Analytics() {
       setLocationData(data.locationData || [])
       setIncidentsByDay(data.incidentsByDay || [])
       setResponseTimeData(data.responseTimeData || [])
+      setFailedAlerts(data.failedAlerts || { total: 0, sms: 0, email: 0 })
+      setUnacknowledgedCount(data.summary?.unacknowledgedCount ?? 0)
+      setIncidentsByPriority(data.incidentsByPriority || [])
     } catch (err) {
       setError(err.message || 'Failed to load analytics data')
     } finally {
@@ -109,7 +122,7 @@ export default function Analytics() {
         <button
           onClick={fetchAnalytics}
           disabled={loading}
-          className="px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:bg-gray-400 transition-colors"
+          className="px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:bg-gray-400 transition-colors flex items-center gap-2"
         >
           {loading ? 'Refreshing...' : 'Refresh'}
         </button>
@@ -130,9 +143,15 @@ export default function Analytics() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <ChartPanel title="Incidents by Type">
           {incidentsByType.length > 0 ? (
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={incidentsByType} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-                <XAxis dataKey="type" tick={{ fontSize: 11 }} />
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={incidentsByType} margin={{ top: 0, right: 0, left: -20, bottom: 40 }}>
+                <XAxis
+                  dataKey="type"
+                  tick={{ fontSize: 11 }}
+                  angle={-35}
+                  textAnchor="end"
+                  interval={0}
+                />
                 <YAxis tick={{ fontSize: 11 }} />
                 <Tooltip />
                 <Bar dataKey="count" fill="#ef4444" radius={[4, 4, 0, 0]} />
@@ -144,6 +163,17 @@ export default function Analytics() {
         </ChartPanel>
 
         <ChartPanel title="Status Breakdown">
+          <div className="flex items-center justify-end mb-2">
+            {unacknowledgedCount > 0 ? (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">
+                {unacknowledgedCount} unacknowledged
+              </span>
+            ) : (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">
+                All acknowledged
+              </span>
+            )}
+          </div>
           {statusBreakdown.length > 0 ? (
             <ResponsiveContainer width="100%" height={220}>
               <PieChart>
@@ -205,21 +235,81 @@ export default function Analytics() {
         </ChartPanel>
       </div>
 
-      <ChartPanel title="Incidents This Week by Day">
-        {incidentsByDay.length > 0 ? (
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={incidentsByDay} margin={{ top: 0, right: 10, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="day" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip />
-              <Bar dataKey="incidents" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        ) : (
-          <EmptyChart />
-        )}
-      </ChartPanel>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <ChartPanel title="Incidents This Week by Day">
+          {incidentsByDay.length > 0 ? (
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={incidentsByDay} margin={{ top: 0, right: 10, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="day" tick={{ fontSize: 12 }} />
+                <YAxis tick={{ fontSize: 12 }} />
+                <Tooltip />
+                <Bar dataKey="incidents" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <EmptyChart />
+          )}
+        </ChartPanel>
+
+        <ChartPanel title="Incidents by Priority" helper="Total incidents across all statuses grouped by severity">
+          {incidentsByPriority.length > 0 ? (
+            <ResponsiveContainer width="100%" height={180}>
+              <BarChart
+                layout="vertical"
+                data={incidentsByPriority}
+                margin={{ top: 0, right: 20, left: 10, bottom: 0 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" horizontal={false} />
+                <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
+                <YAxis type="category" dataKey="priority" tick={{ fontSize: 12 }} width={65} />
+                <Tooltip formatter={value => [value, 'Incidents']} />
+                <Bar dataKey="count" radius={[0, 4, 4, 0]} maxBarSize={32}>
+                  {incidentsByPriority.map(entry => (
+                    <Cell key={entry.priority} fill={PRIORITY_COLORS[entry.priority] || '#9ca3af'} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <EmptyChart />
+          )}
+        </ChartPanel>
+      </div>
+
+      {isCompanyAdmin && (
+        <ChartPanel title="Failed Alerts" className="mt-4">
+          <div className="mb-4 flex justify-end">
+            {failedAlerts.total > 0 ? (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-medium">
+                {failedAlerts.total} failed
+              </span>
+            ) : (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">
+                No failures
+              </span>
+            )}
+          </div>
+          {failedAlerts.total > 0 ? (
+            <ResponsiveContainer width="100%" height={160}>
+              <BarChart
+                data={[{ name: 'Failures', sms: failedAlerts.sms, email: failedAlerts.email }]}
+                margin={{ top: 0, right: 10, left: -20, bottom: 0 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                <YAxis tick={{ fontSize: 12 }} allowDecimals={false} />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="sms" name="SMS Failed" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="email" name="Email Failed" fill="#f97316" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <p className="text-gray-400 text-center py-8 text-sm">All notifications delivered successfully.</p>
+          )}
+        </ChartPanel>
+      )}
     </div>
   )
 }
@@ -231,9 +321,9 @@ function getTopLocations(locationData) {
   return othersTotal > 0 ? [...top5, { location: 'Others', count: othersTotal }] : top5
 }
 
-function ChartPanel({ title, helper, children }) {
+function ChartPanel({ title, helper, className = '', children }) {
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-5">
+    <div className={`bg-white border border-gray-200 rounded-xl p-5 ${className}`}>
       <h2 className="font-semibold text-gray-900 mb-1">{title}</h2>
       {helper && <p className="text-xs text-gray-400 mb-3">{helper}</p>}
       {children}

@@ -31,15 +31,15 @@ function normaliseRole(role) {
 }
 
 function isCompanyAdmin(role) {
-  return ['companyadmin', 'admin'].includes(normaliseRole(role))
+  return normaliseRole(role) === 'companyadmin'
 }
 
 function isSchoolAdmin(role) {
-  return ['schooladmin', 'principal'].includes(normaliseRole(role))
+  return normaliseRole(role) === 'schooladmin'
 }
 
 function canSendAlert(role) {
-  return ['staff', 'schooladmin', 'principal'].includes(normaliseRole(role))
+  return ['staff', 'schooladmin'].includes(normaliseRole(role))
 }
 
 async function getSchoolName(db, schoolId) {

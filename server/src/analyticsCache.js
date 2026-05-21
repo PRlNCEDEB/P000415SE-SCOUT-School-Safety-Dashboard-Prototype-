@@ -1,5 +1,5 @@
 // analyticsCache.js - In-memory analytics cache for SCOUT.
-// Cache is invalidated whenever an incident/notification changes.
+// Cache is invalidated whenever an incident or notification changes.
 
 const { getDb } = require('./db/firebase')
 
@@ -13,7 +13,7 @@ function toDate(val) {
   return Number.isNaN(d.getTime()) ? null : d
 }
 
-function getResponseTime(incident) {
+function getResolutionTime(incident) {
   if (incident.status !== 'resolved') return null
   const created = toDate(incident.createdAt)
   const updated = toDate(incident.updatedAt)
@@ -37,14 +37,15 @@ function getAcknowledgementTime(incident) {
   return mins > 0 ? mins : null
 }
 
-function hasFailedDelivery(notification) {
-  return notification.sms === 'failed' ||
-    notification.email === 'failed' ||
-    notification.smsStatus === 'failed' ||
-    notification.emailStatus === 'failed'
+function hasFailedSms(notification) {
+  return notification.sms === 'failed' || notification.smsStatus === 'failed'
 }
 
-async function getFailedAlertCount(db, schoolId) {
+function hasFailedEmail(notification) {
+  return notification.email === 'failed' || notification.emailStatus === 'failed'
+}
+
+async function getFailedAlerts(db, schoolId) {
   let query = db.collection('notifications')
 
   if (schoolId) {
@@ -52,10 +53,11 @@ async function getFailedAlertCount(db, schoolId) {
   }
 
   const snapshot = await query.get()
-  return snapshot.docs
-    .map(doc => doc.data())
-    .filter(hasFailedDelivery)
-    .length
+  const notifications = snapshot.docs.map(doc => doc.data())
+  const sms = notifications.filter(hasFailedSms).length
+  const email = notifications.filter(hasFailedEmail).length
+
+  return { total: sms + email, sms, email }
 }
 
 async function buildAnalytics({ schoolId = null, includeFailedAlerts = false } = {}) {
@@ -74,12 +76,10 @@ async function buildAnalytics({ schoolId = null, includeFailedAlerts = false } =
 
   const totalIncidents = incidents.length
   const resolvedCount = incidents.filter(i => i.status === 'resolved').length
+  const activeIncidents = incidents.filter(i => i.status !== 'archived' && i.status !== 'resolved')
+  const criticalCount = activeIncidents.filter(i => i.priority === 'critical').length
+  const highCount = activeIncidents.filter(i => i.priority === 'high').length
   const unacknowledgedCount = incidents.filter(i => !i.acknowledgedBy?.length && i.status !== 'resolved').length
-
-  const allResponseTimes = incidents.map(getResponseTime).filter(v => v !== null)
-  const avgResponseTime = allResponseTimes.length > 0
-    ? parseFloat((allResponseTimes.reduce((sum, v) => sum + v, 0) / allResponseTimes.length).toFixed(1))
-    : 0
 
   const allAckTimes = incidents.map(getAcknowledgementTime).filter(v => v !== null)
   const avgAckTime = allAckTimes.length > 0
@@ -98,9 +98,15 @@ async function buildAnalytics({ schoolId = null, includeFailedAlerts = false } =
   })
   const incidentsByType = Object.entries(typeCounts).map(([type, count]) => ({ type, count }))
 
-  const statusMap = { resolved: 'Resolved', acknowledged: 'Acknowledged', triggered: 'Triggered', archived: 'Archived', 'in-progress': 'In Progress' }
+  const statusMap = {
+    resolved: 'Resolved',
+    acknowledged: 'Acknowledged',
+    triggered: 'Triggered',
+    archived: 'Archived',
+    'in-progress': 'In Progress',
+  }
   const statusCounts = {}
-  Object.values(statusMap).forEach(s => { statusCounts[s] = 0 })
+  Object.values(statusMap).forEach(status => { statusCounts[status] = 0 })
   incidents.forEach(i => {
     const name = statusMap[i.status] || 'Unknown'
     statusCounts[name] = (statusCounts[name] || 0) + 1
@@ -123,12 +129,12 @@ async function buildAnalytics({ schoolId = null, includeFailedAlerts = false } =
   const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
   const dayMap = { 1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat', 0: 'Sun' }
   const dayCounts = {}
-  days.forEach(d => { dayCounts[d] = 0 })
+  days.forEach(day => { dayCounts[day] = 0 })
   incidents.forEach(i => {
     const d = toDate(i.createdAt)
     if (d && d >= startOfWeek) dayCounts[dayMap[d.getUTCDay()]]++
   })
-  const incidentsByDay = days.map(d => ({ day: d, incidents: dayCounts[d] }))
+  const incidentsByDay = days.map(day => ({ day, incidents: dayCounts[day] }))
 
   const weekData = {}
   for (let i = 0; i < 4; i++) {
@@ -139,20 +145,20 @@ async function buildAnalytics({ schoolId = null, includeFailedAlerts = false } =
     const d = toDate(i.createdAt)
     if (!d) return
     const weekNumber = Math.floor((now - d) / (7 * 24 * 60 * 60 * 1000)) + 1
-    if (weekNumber >= 1 && weekNumber <= 4) {
-      const key = `Week ${5 - weekNumber}`
-      const ackTime = getAcknowledgementTime(i)
-      const resolutionTime = getResponseTime(i)
+    if (weekNumber < 1 || weekNumber > 4) return
 
-      if (ackTime !== null) {
-        weekData[key].ackTotal += ackTime
-        weekData[key].ackCount++
-      }
+    const key = `Week ${5 - weekNumber}`
+    const ackTime = getAcknowledgementTime(i)
+    const resolutionTime = getResolutionTime(i)
 
-      if (resolutionTime !== null) {
-        weekData[key].resolutionTotal += resolutionTime
-        weekData[key].resolutionCount++
-      }
+    if (ackTime !== null) {
+      weekData[key].ackTotal += ackTime
+      weekData[key].ackCount++
+    }
+
+    if (resolutionTime !== null) {
+      weekData[key].resolutionTotal += resolutionTime
+      weekData[key].resolutionCount++
     }
   })
 
@@ -162,23 +168,40 @@ async function buildAnalytics({ schoolId = null, includeFailedAlerts = false } =
     avgResolutionMinutes: d.resolutionCount > 0 ? parseFloat((d.resolutionTotal / d.resolutionCount).toFixed(1)) : 0,
   }))
 
-  const failedAlerts = includeFailedAlerts ? await getFailedAlertCount(db, schoolId) : undefined
+  const priorityOrder = ['critical', 'high', 'medium', 'low']
+  const priorityCounts = {}
+  priorityOrder.forEach(priority => { priorityCounts[priority] = 0 })
+  incidents.forEach(i => {
+    const priority = (i.priority || '').toLowerCase()
+    if (priorityCounts[priority] !== undefined) priorityCounts[priority]++
+  })
+  const incidentsByPriority = priorityOrder.map(priority => ({
+    priority: priority.charAt(0).toUpperCase() + priority.slice(1),
+    count: priorityCounts[priority],
+  }))
+
+  const failedAlerts = includeFailedAlerts ? await getFailedAlerts(db, schoolId) : undefined
 
   return {
     summary: {
       totalIncidents,
       resolvedCount,
-      avgResponseTime,
+      avgResponseTime: avgAckTime,
       avgAckTime,
       thisWeekIncidents,
       unacknowledgedCount,
-      ...(includeFailedAlerts ? { failedAlerts } : {}),
+      activeIncidents: activeIncidents.length,
+      criticalCount,
+      highCount,
+      ...(includeFailedAlerts ? { failedAlerts: failedAlerts.total } : {}),
     },
     incidentsByType,
     statusBreakdown,
     locationData,
     incidentsByDay,
     responseTimeData,
+    incidentsByPriority,
+    ...(includeFailedAlerts ? { failedAlerts } : {}),
   }
 }
 
