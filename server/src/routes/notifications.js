@@ -86,10 +86,38 @@ function getTwilioClient() {
   return twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
 }
 
-// Query Firestore to get the correct recipients for a given emergency type
-async function getRecipientsForEmergency(emergencyType) {
+// Query Firestore to get the correct recipients for a given emergency type.
+// Checks school-specific routing first (set by School Admins in Setup),
+// then falls back to the legacy global role-based routing.
+async function getRecipientsForEmergency(emergencyType, schoolId) {
   const db = getDb()
 
+  // 1. Check school-specific routing first (new model)
+  if (schoolId) {
+    const schoolRouting = await db.collection('notificationRouting')
+      .where('schoolId', '==', schoolId)
+      .where('alertType', '==', emergencyType)
+      .where('active', '==', true)
+      .limit(1)
+      .get()
+
+    if (!schoolRouting.empty) {
+      const rule = schoolRouting.docs[0].data()
+      if (Array.isArray(rule.recipients) && rule.recipients.length > 0) {
+        console.log(`📋 School routing found for "${emergencyType}" at school ${schoolId} → ${rule.recipients.length} recipient(s)`)
+        return rule.recipients.map(r => ({
+          name: r.name,
+          email: r.email || null,
+          phone: r.phone || null,
+          role: 'recipient',
+          notify: r.notify || 'email',
+        }))
+      }
+    }
+  }
+
+  // 2. Fall back to legacy global role-based routing
+  console.log(`📋 No school routing found for "${emergencyType}" — falling back to global routing`)
   const routingSnapshot = await db.collection('notificationRouting')
     .where('alertScope', '==', 'emergency')
     .where('alertType', '==', emergencyType)
@@ -102,8 +130,8 @@ async function getRecipientsForEmergency(emergencyType) {
   }
 
   const rule = routingSnapshot.docs[0].data()
-  const roles = rule.roles
-  console.log(`📋 Routing rule found for "${emergencyType}" → roles: ${roles.join(', ')}`)
+  const roles = rule.roles || []
+  console.log(`📋 Legacy routing rule for "${emergencyType}" → roles: ${roles.join(', ')}`)
 
   const recipientsSnapshot = await db.collection('notificationRecipients')
     .where('active', '==', true)
@@ -245,7 +273,7 @@ router.post('/emergency', verifyToken, requireAlertSender, async (req, res) => {
 
   let recipients = []
   try {
-    recipients = await getRecipientsForEmergency(emergencyType)
+    recipients = await getRecipientsForEmergency(emergencyType, req.alertSender.schoolId || null)
   } catch (err) {
     console.error('❌ Failed to fetch recipients from Firestore:', err.message)
     return res.status(500).json({ success: false, error: 'Failed to load recipients. Please try again.' })
@@ -264,7 +292,6 @@ router.post('/emergency', verifyToken, requireAlertSender, async (req, res) => {
   const results = []
 
   for (const recipient of recipients) {
-    // Generate unique token per recipient for the acknowledge link
     const token = crypto.randomUUID()
     const acknowledgeLink = `${BACKEND_URL}/api/notifications/acknowledge/${token}`
 
@@ -277,56 +304,58 @@ router.post('/emergency', verifyToken, requireAlertSender, async (req, res) => {
       token,
     }
 
-    // Send Email with acknowledge button
-    try {
-      await getSgMail().send({
-        to: recipient.email,
-        from: process.env.FROM_EMAIL,
-        subject: subject,
-        text: `${body}\n\nClick here to acknowledge this alert: ${acknowledgeLink}`,
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <div style="background: #dc2626; padding: 20px; border-radius: 8px 8px 0 0;">
-              <h1 style="color: white; margin: 0;">🚨 EMERGENCY ALERT</h1>
-              <p style="color: #fecaca; margin: 4px 0 0;">SCOUT School Safety Management System</p>
-            </div>
-            <div style="background: #fff; border: 1px solid #e5e7eb; padding: 24px; border-radius: 0 0 8px 8px;">
-              <p style="font-size: 12px; color: #9ca3af; margin: 0 0 4px;">Emergency Type</p>
-              <p style="font-size: 18px; font-weight: bold; color: #dc2626; margin: 0 0 16px;">${emergencyType}</p>
-              ${location ? `<p style="font-size: 12px; color: #9ca3af; margin: 0 0 4px;">Location</p><p style="font-size: 15px; color: #111827; margin: 0 0 16px;">📍 ${location}</p>` : ''}
-              <p style="color: #374151; font-size: 15px;">${body}</p>
-              <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
-
-              <div style="text-align: center; margin: 24px 0;">
-                <a
-                  href="${acknowledgeLink}"
-                  style="background: #16a34a; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-size: 16px; font-weight: bold; display: inline-block;"
-                >
-                  ✅ I am responding — Acknowledge Alert
-                </a>
-                <p style="color: #9ca3af; font-size: 12px; margin-top: 12px;">
-                  Click the button above to confirm you have received this alert and are responding.
+    // Send Email — only if notify is 'email' or 'both'
+    if (recipient.email && (recipient.notify === 'email' || recipient.notify === 'both' || !recipient.notify)) {
+      try {
+        await getSgMail().send({
+          to: recipient.email,
+          from: process.env.FROM_EMAIL,
+          subject: subject,
+          text: `${body}\n\nClick here to acknowledge this alert: ${acknowledgeLink}`,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <div style="background: #dc2626; padding: 20px; border-radius: 8px 8px 0 0;">
+                <h1 style="color: white; margin: 0;">🚨 EMERGENCY ALERT</h1>
+                <p style="color: #fecaca; margin: 4px 0 0;">SCOUT School Safety Management System</p>
+              </div>
+              <div style="background: #fff; border: 1px solid #e5e7eb; padding: 24px; border-radius: 0 0 8px 8px;">
+                <p style="font-size: 12px; color: #9ca3af; margin: 0 0 4px;">Emergency Type</p>
+                <p style="font-size: 18px; font-weight: bold; color: #dc2626; margin: 0 0 16px;">${emergencyType}</p>
+                ${location ? `<p style="font-size: 12px; color: #9ca3af; margin: 0 0 4px;">Location</p><p style="font-size: 15px; color: #111827; margin: 0 0 16px;">📍 ${location}</p>` : ''}
+                <p style="color: #374151; font-size: 15px;">${body}</p>
+                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+                <div style="text-align: center; margin: 24px 0;">
+                  
+                    href="${acknowledgeLink}"
+                    style="background: #16a34a; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-size: 16px; font-weight: bold; display: inline-block;"
+                  >
+                    ✅ I am responding — Acknowledge Alert
+                  </a>
+                  <p style="color: #9ca3af; font-size: 12px; margin-top: 12px;">
+                    Click the button above to confirm you have received this alert and are responding.
+                  </p>
+                </div>
+                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+                <p style="color: #9ca3af; font-size: 12px;">
+                  This is an automated emergency alert from the SCOUT School Safety System.
+                  Please do not reply to this email.
                 </p>
               </div>
-
-              <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
-              <p style="color: #9ca3af; font-size: 12px;">
-                This is an automated emergency alert from the SCOUT School Safety System.
-                Please do not reply to this email.
-              </p>
             </div>
-          </div>
-        `
-      })
-      result.emailStatus = 'sent'
-      console.log(`✅ Email sent to ${recipient.name} (${recipient.email})`)
-    } catch (err) {
-      result.emailStatus = 'failed'
-      console.error(`❌ Email failed for ${recipient.name}:`, err.message)
+          `
+        })
+        result.emailStatus = 'sent'
+        console.log(`✅ Email sent to ${recipient.name} (${recipient.email})`)
+      } catch (err) {
+        result.emailStatus = 'failed'
+        console.error(`❌ Email failed for ${recipient.name}:`, err.message)
+      }
+    } else {
+      result.emailStatus = 'skipped'
     }
 
-    // Send SMS
-    if (recipient.phone) {
+    // Send SMS — only if notify is 'sms' or 'both'
+    if (recipient.phone && (recipient.notify === 'sms' || recipient.notify === 'both')) {
       try {
         const sms = await getTwilioClient().messages.create({
           body: `🚨 SCOUT EMERGENCY: ${emergencyType}${location ? ' at ' + location : ''}. Please respond immediately. Check your email to acknowledge.`,
@@ -346,7 +375,7 @@ router.post('/emergency', verifyToken, requireAlertSender, async (req, res) => {
 
   const emailsSent = results.filter(r => r.emailStatus === 'sent').length
 
-  // Save notification logs to Firestore with token and incidentId
+  // Save notification logs to Firestore
   try {
     const db = getDb()
     const batch = db.batch()
@@ -373,7 +402,7 @@ router.post('/emergency', verifyToken, requireAlertSender, async (req, res) => {
     console.error('Failed to save notification logs:', err.message)
   }
 
-  // Send admin summary email (separate from responder emails, no acknowledge button)
+  // Send admin summary email
   try {
     await sendAdminSummaryEmail({
       emergencyType,
@@ -398,7 +427,6 @@ router.post('/emergency', verifyToken, requireAlertSender, async (req, res) => {
 })
 
 // GET /api/notifications/acknowledge/:token
-// The link recipients click in their email
 router.get('/acknowledge/:token', async (req, res) => {
   const { token } = req.params
   const db = getDb()
@@ -426,7 +454,6 @@ router.get('/acknowledge/:token', async (req, res) => {
     const doc = snapshot.docs[0]
     const notification = doc.data()
 
-    // Already acknowledged
     if (notification.acknowledged) {
       return res.send(`
         <!DOCTYPE html><html>
@@ -444,13 +471,11 @@ router.get('/acknowledge/:token', async (req, res) => {
 
     const acknowledgedAt = new Date().toISOString()
 
-    // Mark notification as acknowledged
     await db.collection('notifications').doc(doc.id).update({
       acknowledged: true,
       acknowledgedAt,
     })
 
-    // Add to incident's acknowledgedBy array using arrayUnion
     if (notification.incidentId) {
       try {
         const incidentRef = db.collection('incidents').doc(notification.incidentId)
@@ -470,7 +495,6 @@ router.get('/acknowledge/:token', async (req, res) => {
       }
     }
 
-    // Thank you page
     return res.send(`
       <!DOCTYPE html><html>
       <head><title>SCOUT - Response Confirmed</title></head>

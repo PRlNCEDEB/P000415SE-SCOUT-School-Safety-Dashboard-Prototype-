@@ -4,6 +4,7 @@ require('dotenv').config()
 
 const express = require('express')
 const cors = require('cors')
+
 const { initFirebase } = require('./db/firebase')
 const { seedDemoAnalyticsData } = require('./db/seedDemoAnalytics')
 const { seedEmulatorData } = require('./db/seedEmulatorData')
@@ -13,6 +14,7 @@ const incidentRoutes = require('./routes/incidents')
 const notificationRoutes = require('./routes/notifications')
 const analyticsRoutes = require('./routes/analytics')
 const actionLogRoutes = require('./routes/actionLogs')
+const setupRoutes = require('./routes/setup')
 //app setup
 const app = express()
 const PORT = process.env.PORT || 5000
@@ -23,6 +25,7 @@ app.use(cors({
   credentials: true,
 }))
 app.use(express.json())//parse JSON request bodies
+
 
 // ── Initialise Firebase ───────────────────────────────────────────────────────
 initFirebase()
@@ -40,6 +43,7 @@ app.use('/api/incidents', incidentRoutes)
 app.use('/api/notifications', notificationRoutes)
 app.use('/api/analytics', analyticsRoutes)
 app.use('/api/action-logs', actionLogRoutes)
+app.use('/api/setup', setupRoutes)
 //simple route to check whether the backend is running
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() })

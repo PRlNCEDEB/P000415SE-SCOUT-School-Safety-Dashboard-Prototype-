@@ -12,7 +12,8 @@
     "test:integration": "node tests/incidents.integration.test.js",
     "seed:emulator": "node src/db/seedEmulatorData.js",
     "incidents:cleanup-old": "node src/db/deleteOldIncidents.js",
-    "incidents:delete-old": "node src/db/deleteOldIncidents.js --confirm-delete"
+    "incidents:delete-old": "node src/db/deleteOldIncidents.js --confirm-delete",
+    "seed:alert-config": "node src/db/seedAlertConfig.js"
   },
   "keywords": [],
   "author": "",

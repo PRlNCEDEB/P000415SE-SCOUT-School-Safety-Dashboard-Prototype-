@@ -145,8 +145,8 @@ export default function QuickActions() {
         setCodeError(data.error || 'Failed to send alert. Please try again.')
       }
     } catch (error) {
-      setCodeError('Could not connect to server. Make sure the backend is running.')
-    }
+      setCodeError(error.message || 'Could not connect to server. Make sure the backend is running.')
+}
 
     setLoading(false)
   }
