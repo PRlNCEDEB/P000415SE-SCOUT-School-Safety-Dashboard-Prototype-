@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getIncidentById, incidentAPI } from '../api/client'
+import { getIncidentById, incidentAPI, settingsAPI } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 
 const progressSteps = [
@@ -140,6 +140,9 @@ export default function IncidentDetail() {
   const [refreshingStatus, setRefreshingStatus] = useState(false)
   const [refreshError, setRefreshError] = useState('')
 
+  // Overdue threshold
+  const [overdueThresholdMinutes, setOverdueThresholdMinutes] = useState(15)
+
   // Shared helper — apply a fresh record from the API to all state
   function applyRecord(record) {
     setIncident(record)
@@ -176,9 +179,13 @@ export default function IncidentDetail() {
       setError('')
 
       try {
-        const record = await getIncidentById(id)
+        const [record, settings] = await Promise.all([
+          getIncidentById(id),
+          settingsAPI.get().catch(() => ({ overdueThresholdMinutes: 15 })),
+        ])
         if (isActive) {
           applyRecord(record)
+          setOverdueThresholdMinutes(settings.overdueThresholdMinutes ?? 15)
         }
       } catch (err) {
         if (isActive) {
@@ -241,6 +248,15 @@ export default function IncidentDetail() {
 
   const currentStepIndex = statusStepIndex[status] ?? 0
 
+  // Compute whether this incident is overdue (triggered and past threshold)
+  const overdueElapsedMinutes = (() => {
+    if (status !== 'triggered' || !found?.createdAt) return 0
+    const created = new Date(found.createdAt)
+    if (Number.isNaN(created.getTime())) return 0
+    return Math.floor((Date.now() - created.getTime()) / 60000)
+  })()
+  const isOverdue = overdueElapsedMinutes > overdueThresholdMinutes
+
   return (
     <div className="p-6 max-w-3xl mx-auto">
 
@@ -251,6 +267,21 @@ export default function IncidentDetail() {
       >
         ← Back to Incidents
       </button>
+
+      {/* Overdue warning banner */}
+      {isOverdue && (
+        <div className="bg-amber-50 border border-amber-400 rounded-xl px-5 py-4 mb-4 flex items-start gap-3">
+          <span className="text-2xl">⏰</span>
+          <div>
+            <p className="font-semibold text-amber-800">Alert overdue — no acknowledgement received</p>
+            <p className="text-sm text-amber-700 mt-0.5">
+              This alert has been unacknowledged for{' '}
+              <strong>{overdueElapsedMinutes} min</strong>, exceeding the{' '}
+              {overdueThresholdMinutes} min threshold. Please review and respond immediately.
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="flex items-center justify-between gap-3 mb-4">
         <div>

@@ -77,3 +77,12 @@ export const analyticsAPI = {
   responseTimeTrend: () => request('/analytics/response-time-trend'),
   all: () => request('/analytics/all'),
 }
+
+export const settingsAPI = {
+  get: () => request('/settings'),
+  update: (overdueThresholdMinutes) =>
+    request('/settings', {
+      method: 'PATCH',
+      body: JSON.stringify({ overdueThresholdMinutes }),
+    }),
+}

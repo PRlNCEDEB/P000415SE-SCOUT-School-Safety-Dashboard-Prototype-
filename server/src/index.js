@@ -13,6 +13,7 @@ const incidentRoutes = require('./routes/incidents')
 const notificationRoutes = require('./routes/notifications')
 const analyticsRoutes = require('./routes/analytics')
 const actionLogRoutes = require('./routes/actionLogs')
+const settingsRoutes = require('./routes/settings')
 //app setup
 const app = express()
 const PORT = process.env.PORT || 5000
@@ -40,6 +41,7 @@ app.use('/api/incidents', incidentRoutes)
 app.use('/api/notifications', notificationRoutes)
 app.use('/api/analytics', analyticsRoutes)
 app.use('/api/action-logs', actionLogRoutes)
+app.use('/api/settings', settingsRoutes)
 //simple route to check whether the backend is running
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() })
