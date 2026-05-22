@@ -14,6 +14,7 @@ const incidentRoutes = require('./routes/incidents')
 const notificationRoutes = require('./routes/notifications')
 const analyticsRoutes = require('./routes/analytics')
 const actionLogRoutes = require('./routes/actionLogs')
+const settingsRoutes = require('./routes/settings')
 const setupRoutes = require('./routes/setup')
 //app setup
 const app = express()
@@ -43,6 +44,7 @@ app.use('/api/incidents', incidentRoutes)
 app.use('/api/notifications', notificationRoutes)
 app.use('/api/analytics', analyticsRoutes)
 app.use('/api/action-logs', actionLogRoutes)
+app.use('/api/settings', settingsRoutes)
 app.use('/api/setup', setupRoutes)
 //simple route to check whether the backend is running
 app.get('/api/health', (req, res) => {

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { settingsAPI } from '../api/client'
 import { setupAPI } from '../api/client'
 
 const EMOJI_OPTIONS = ['🏥', '🔥', '🔒', '⚠️', '🌩️', '🔧', '📢', '🚨', '🛡️', '🌊']
@@ -207,6 +208,57 @@ export default function Setup() {
 
   const setNotifyPref = (alertType, userId, value) => {
     setNotifyPrefs(p => ({ ...p, [alertType]: { ...(p[alertType] || {}), [userId]: value } }))
+  }
+
+  // Overdue threshold state
+  const [overdueThreshold, setOverdueThreshold] = useState(15)
+  const [thresholdLoading, setThresholdLoading] = useState(true)
+  const [thresholdSaving, setThresholdSaving] = useState(false)
+  const [thresholdError, setThresholdError] = useState('')
+  const [thresholdSuccess, setThresholdSuccess] = useState(false)
+
+  useEffect(() => {
+    async function loadSettings() {
+      try {
+        const data = await settingsAPI.get()
+        setOverdueThreshold(data.overdueThresholdMinutes ?? 15)
+      } catch (err) {
+        console.error('Failed to load settings:', err)
+      } finally {
+        setThresholdLoading(false)
+      }
+    }
+
+    if (isCompanyAdmin) {
+      loadSettings()
+    } else {
+      setThresholdLoading(false)
+    }
+  }, [isCompanyAdmin])
+
+  async function handleSaveGlobalSettings() {
+    setThresholdSaving(true)
+    setThresholdError('')
+    setThresholdSuccess(false)
+
+    const parsed = parseInt(overdueThreshold, 10)
+
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 1440) {
+      setThresholdError('Threshold must be a whole number between 1 and 1440 minutes.')
+      setThresholdSaving(false)
+      return
+    }
+
+    try {
+      await settingsAPI.update(parsed)
+      setOverdueThreshold(parsed)
+      setThresholdSuccess(true)
+      setTimeout(() => setThresholdSuccess(false), 3000)
+    } catch (err) {
+      setThresholdError(err.message || 'Failed to save settings.')
+    } finally {
+      setThresholdSaving(false)
+    }
   }
 
   return (

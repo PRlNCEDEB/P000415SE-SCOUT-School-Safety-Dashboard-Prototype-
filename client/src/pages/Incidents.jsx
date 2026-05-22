@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getIncidents } from '../api/client'
+import { getIncidents, settingsAPI } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 
 const priorityColors = {
@@ -31,6 +31,18 @@ const typeIcons = {
 // Active statuses — what "active" view means
 const ACTIVE_STATUSES = ['triggered', 'acknowledged', 'in-progress']
 
+// Returns true when a triggered incident has exceeded the overdue threshold
+function isOverdue(incident, thresholdMinutes) {
+  if (incident.status !== 'triggered') return false
+  if (!incident.createdAt) return false
+
+  const created = new Date(incident.createdAt)
+  if (Number.isNaN(created.getTime())) return false
+
+  const elapsedMs = Date.now() - created.getTime()
+  return elapsedMs > thresholdMinutes * 60 * 1000
+}
+
 export default function Incidents() {
   const navigate = useNavigate()
   const { userRole, authLoading } = useAuth()
@@ -43,6 +55,9 @@ export default function Incidents() {
   const [filterSchool, setFilterSchool] = useState('all')
   const [search, setSearch] = useState('')
 
+  // Overdue threshold (minutes), loaded from settings API
+  const [overdueThresholdMinutes, setOverdueThresholdMinutes] = useState(15)
+
   useEffect(() => {
     if (authLoading || userRole === null) return
 
@@ -53,9 +68,14 @@ export default function Incidents() {
       setError('')
 
       try {
-        const records = await getIncidents()
+        const [records, settings] = await Promise.all([
+          getIncidents(),
+          settingsAPI.get().catch(() => ({ overdueThresholdMinutes: 15 })),
+        ])
+
         if (isActive) {
           setIncidents(records)
+          setOverdueThresholdMinutes(settings.overdueThresholdMinutes ?? 15)
         }
       } catch (err) {
         if (isActive) {
@@ -212,34 +232,45 @@ export default function Incidents() {
         ) : filtered.length === 0 ? (
           <div className="p-8 text-center text-sm text-gray-500">No incidents found.</div>
         ) : (
-          filtered.map(incident => (
-            <div
-              key={incident.id}
-              onClick={() => navigate(`/incidents/${incident.id}`)}
-              className="px-4 py-3 flex items-center gap-3 cursor-pointer hover:bg-gray-50 transition-colors"
-            >
-              <span className="text-lg">{typeIcons[incident.type]}</span>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-gray-800 truncate">{incident.title}</p>
-                <p className="text-xs text-gray-500 truncate">
-                  {incident.location} · {incident.timestamp} · {incident.triggeredByName}
-                  {isCompanyAdmin && incident.schoolName ? ` · ${incident.schoolName}` : ''}
-                </p>
-              </div>
-              <span className={`text-xs px-2 py-0.5 rounded ${priorityColors[incident.priority]}`}>
-                {incident.priority}
-              </span>
-              <span className={`text-xs px-2 py-0.5 rounded ${statusColors[incident.status]}`}>
-                {incident.status}
-              </span>
-              {incident.acknowledgedBy && incident.acknowledgedBy.length > 0 && (
-                <span className="text-xs px-2 py-0.5 rounded bg-green-100 text-green-700 font-medium">
-                  ✅ Responded
+          filtered.map(incident => {
+            const overdue = isOverdue(incident, overdueThresholdMinutes)
+
+            return (
+              <div
+                key={incident.id}
+                onClick={() => navigate(`/incidents/${incident.id}`)}
+                className={`px-4 py-3 flex items-center gap-3 cursor-pointer transition-colors ${
+                  overdue ? 'bg-amber-50 hover:bg-amber-100 border-l-4 border-amber-400' : 'hover:bg-gray-50'
+                }`}
+              >
+                <span className="text-lg">{typeIcons[incident.type]}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-gray-800 truncate">{incident.title}</p>
+                  <p className="text-xs text-gray-500 truncate">
+                    {incident.location} · {incident.timestamp} · {incident.triggeredByName}
+                    {isCompanyAdmin && incident.schoolName ? ` · ${incident.schoolName}` : ''}
+                  </p>
+                </div>
+                <span className={`text-xs px-2 py-0.5 rounded ${priorityColors[incident.priority]}`}>
+                  {incident.priority}
                 </span>
-              )}
-              <span className="text-gray-400">›</span>
-            </div>
-          ))
+                <span className={`text-xs px-2 py-0.5 rounded ${statusColors[incident.status]}`}>
+                  {incident.status}
+                </span>
+                {overdue && (
+                  <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-700 font-medium whitespace-nowrap">
+                    ⏰ Overdue
+                  </span>
+                )}
+                {!overdue && incident.acknowledgedBy && incident.acknowledgedBy.length > 0 && (
+                  <span className="text-xs px-2 py-0.5 rounded bg-green-100 text-green-700 font-medium">
+                    ✅ Responded
+                  </span>
+                )}
+                <span className="text-gray-400">›</span>
+              </div>
+            )
+          })
         )}
       </div>
     </div>
