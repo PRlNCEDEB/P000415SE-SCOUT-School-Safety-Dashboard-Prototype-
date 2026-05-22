@@ -325,7 +325,7 @@ router.post('/emergency', verifyToken, requireAlertSender, async (req, res) => {
                 <p style="color: #374151; font-size: 15px;">${body}</p>
                 <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
                 <div style="text-align: center; margin: 24px 0;">
-                  
+                  <a
                     href="${acknowledgeLink}"
                     style="background: #16a34a; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-size: 16px; font-weight: bold; display: inline-block;"
                   >

@@ -154,12 +154,13 @@ export default function Layout({ children }) {
       )}
 
       <div className={`w-56 bg-white border-r border-gray-200 flex flex-col ${activeEmergency ? 'mt-12' : ''}`}>
-        <div className="flex items-center gap-2 px-4 py-5 border-b border-gray-200">
+        
+        <Link to="/dashboard" className="flex items-center gap-2 px-4 py-5 border-b border-gray-200">
           <div className="w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center">
             <span className="text-white text-sm">S</span>
           </div>
           <span className="font-bold text-gray-900">SCOUT</span>
-        </div>
+        </Link>
 
         <nav className="flex-1 p-3 space-y-4">
           {navigationSections.map((section) => {

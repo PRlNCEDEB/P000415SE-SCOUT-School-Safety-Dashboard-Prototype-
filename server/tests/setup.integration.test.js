@@ -179,12 +179,12 @@ test.beforeEach(() => { nextDocId = 1 })
 
 // ── Alert Types — happy path ──────────────────────────────────────────────────
 
-test('GET /api/setup/alert-types returns list for any authenticated user', async () => {
+test('GET /api/setup/alert-types returns all types for any authenticated user', async () => {
   fakeDb = createTestDb({
     users: { 'staff-uid': STAFF_USER },
     alertTypes: {
-      'type-1': { label: 'Fire', emoji: '🔥', active: true, createdAt: '2026-01-01T00:00:00.000Z' },
-      'type-2': { label: 'Medical', emoji: '🏥', active: true, createdAt: '2026-01-02T00:00:00.000Z' },
+      'type-1': { label: 'Fire', emoji: '🔥', category: 'emergency', active: true, createdAt: '2026-01-01T00:00:00.000Z' },
+      'type-2': { label: 'Medical', emoji: '🏥', category: 'general', active: true, createdAt: '2026-01-02T00:00:00.000Z' },
     },
   })
   await withServer(createApp(), async baseUrl => {
@@ -197,43 +197,151 @@ test('GET /api/setup/alert-types returns list for any authenticated user', async
   })
 })
 
-test('POST /api/setup/alert-types creates alert type for company admin', async () => {
+test('GET /api/setup/alert-types?category=emergency returns only emergency types', async () => {
+  fakeDb = createTestDb({
+    users: { 'staff-uid': STAFF_USER },
+    alertTypes: {
+      'type-1': { label: 'Fire', emoji: '🔥', category: 'emergency', active: true },
+      'type-2': { label: 'Threat', emoji: '🛡️', category: 'emergency', active: true },
+      'type-3': { label: 'Medical', emoji: '🏥', category: 'general', active: true },
+      'type-4': { label: 'General', emoji: '📢', category: 'general', active: true },
+    },
+  })
+  await withServer(createApp(), async baseUrl => {
+    const res = await fetch(`${baseUrl}/api/setup/alert-types?category=emergency`, {
+      headers: { Authorization: 'Bearer staff-token' },
+    })
+    assert.equal(res.status, 200)
+    const data = await res.json()
+    assert.equal(data.alertTypes.length, 2)
+    assert.ok(data.alertTypes.every(t => t.category === 'emergency'))
+  })
+})
+
+test('GET /api/setup/alert-types?category=general returns only general types', async () => {
+  fakeDb = createTestDb({
+    users: { 'staff-uid': STAFF_USER },
+    alertTypes: {
+      'type-1': { label: 'Fire', emoji: '🔥', category: 'emergency', active: true },
+      'type-2': { label: 'Medical', emoji: '🏥', category: 'general', active: true },
+      'type-3': { label: 'Behaviour', emoji: '⚠️', category: 'general', active: true },
+    },
+  })
+  await withServer(createApp(), async baseUrl => {
+    const res = await fetch(`${baseUrl}/api/setup/alert-types?category=general`, {
+      headers: { Authorization: 'Bearer staff-token' },
+    })
+    assert.equal(res.status, 200)
+    const data = await res.json()
+    assert.equal(data.alertTypes.length, 2)
+    assert.ok(data.alertTypes.every(t => t.category === 'general'))
+  })
+})
+
+test('GET /api/setup/alert-types?category=emergency returns empty when no emergency types exist', async () => {
+  fakeDb = createTestDb({
+    users: { 'staff-uid': STAFF_USER },
+    alertTypes: {
+      'type-1': { label: 'Medical', emoji: '🏥', category: 'general', active: true },
+    },
+  })
+  await withServer(createApp(), async baseUrl => {
+    const res = await fetch(`${baseUrl}/api/setup/alert-types?category=emergency`, {
+      headers: { Authorization: 'Bearer staff-token' },
+    })
+    assert.equal(res.status, 200)
+    const data = await res.json()
+    assert.equal(data.alertTypes.length, 0)
+  })
+})
+
+test('POST /api/setup/alert-types creates emergency alert type for company admin', async () => {
   fakeDb = createTestDb({ users: { 'company-uid': COMPANY_USER } })
   await withServer(createApp(), async baseUrl => {
     const res = await fetch(`${baseUrl}/api/setup/alert-types`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer company-token' },
-      body: JSON.stringify({ label: 'Hazmat', emoji: '☣️' }),
+      body: JSON.stringify({ label: 'Hazmat', emoji: '☣️', category: 'emergency' }),
     })
     assert.equal(res.status, 201)
     const data = await res.json()
     assert.equal(data.alertType.label, 'Hazmat')
-    assert.equal(data.alertType.emoji, '☣️')
+    assert.equal(data.alertType.category, 'emergency')
     assert.equal(data.alertType.active, true)
+    // value should be auto-generated from label
+    assert.equal(data.alertType.value, 'hazmat')
   })
 })
 
-test('PUT /api/setup/alert-types/:id updates alert type for company admin', async () => {
+test('POST /api/setup/alert-types creates general alert type for company admin', async () => {
+  fakeDb = createTestDb({ users: { 'company-uid': COMPANY_USER } })
+  await withServer(createApp(), async baseUrl => {
+    const res = await fetch(`${baseUrl}/api/setup/alert-types`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer company-token' },
+      body: JSON.stringify({ label: 'Noise Complaint', emoji: '📢', category: 'general' }),
+    })
+    assert.equal(res.status, 201)
+    const data = await res.json()
+    assert.equal(data.alertType.category, 'general')
+    // value auto-generated with underscores for spaces
+    assert.equal(data.alertType.value, 'noise_complaint')
+  })
+})
+
+test('POST /api/setup/alert-types auto-generates value from label', async () => {
+  fakeDb = createTestDb({ users: { 'company-uid': COMPANY_USER } })
+  await withServer(createApp(), async baseUrl => {
+    const res = await fetch(`${baseUrl}/api/setup/alert-types`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer company-token' },
+      body: JSON.stringify({ label: 'Natural Disaster', emoji: '🌊', category: 'emergency' }),
+    })
+    assert.equal(res.status, 201)
+    const data = await res.json()
+    assert.equal(data.alertType.value, 'natural_disaster')
+  })
+})
+
+test('PUT /api/setup/alert-types/:id updates label emoji and category', async () => {
   fakeDb = createTestDb({
     users: { 'company-uid': COMPANY_USER },
-    alertTypes: { 'type-1': { label: 'Fire', emoji: '🔥', active: true } },
+    alertTypes: { 'type-1': { label: 'Fire', emoji: '🔥', category: 'emergency', active: true } },
   })
   await withServer(createApp(), async baseUrl => {
     const res = await fetch(`${baseUrl}/api/setup/alert-types/type-1`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer company-token' },
-      body: JSON.stringify({ label: 'Fire Updated', emoji: '🔥' }),
+      body: JSON.stringify({ label: 'Fire Updated', emoji: '🔥', category: 'general' }),
     })
     assert.equal(res.status, 200)
     const data = await res.json()
     assert.equal(data.alertType.label, 'Fire Updated')
+    assert.equal(data.alertType.category, 'general')
+  })
+})
+
+test('PUT /api/setup/alert-types/:id preserves existing category if not provided', async () => {
+  fakeDb = createTestDb({
+    users: { 'company-uid': COMPANY_USER },
+    alertTypes: { 'type-1': { label: 'Fire', emoji: '🔥', category: 'emergency', active: true } },
+  })
+  await withServer(createApp(), async baseUrl => {
+    const res = await fetch(`${baseUrl}/api/setup/alert-types/type-1`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer company-token' },
+      body: JSON.stringify({ label: 'Fire Renamed', emoji: '🔥' }),
+    })
+    assert.equal(res.status, 200)
+    const data = await res.json()
+    assert.equal(data.alertType.category, 'emergency')
   })
 })
 
 test('DELETE /api/setup/alert-types/:id deletes for company admin', async () => {
   fakeDb = createTestDb({
     users: { 'company-uid': COMPANY_USER },
-    alertTypes: { 'type-1': { label: 'Fire', emoji: '🔥', active: true } },
+    alertTypes: { 'type-1': { label: 'Fire', emoji: '🔥', category: 'emergency', active: true } },
   })
   await withServer(createApp(), async baseUrl => {
     const res = await fetch(`${baseUrl}/api/setup/alert-types/type-1`, {
@@ -261,7 +369,7 @@ test('POST /api/setup/alert-types returns 403 for school admin', async () => {
     const res = await fetch(`${baseUrl}/api/setup/alert-types`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer school-token' },
-      body: JSON.stringify({ label: 'Hazmat', emoji: '☣️' }),
+      body: JSON.stringify({ label: 'Hazmat', emoji: '☣️', category: 'emergency' }),
     })
     assert.equal(res.status, 403)
   })
@@ -273,7 +381,7 @@ test('POST /api/setup/alert-types returns 403 for staff', async () => {
     const res = await fetch(`${baseUrl}/api/setup/alert-types`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer staff-token' },
-      body: JSON.stringify({ label: 'Hazmat' }),
+      body: JSON.stringify({ label: 'Hazmat', category: 'emergency' }),
     })
     assert.equal(res.status, 403)
   })
@@ -282,7 +390,7 @@ test('POST /api/setup/alert-types returns 403 for staff', async () => {
 test('DELETE /api/setup/alert-types/:id returns 403 for school admin', async () => {
   fakeDb = createTestDb({
     users: { 'school-uid': SCHOOL_USER },
-    alertTypes: { 'type-1': { label: 'Fire', emoji: '🔥', active: true } },
+    alertTypes: { 'type-1': { label: 'Fire', emoji: '🔥', category: 'emergency', active: true } },
   })
   await withServer(createApp(), async baseUrl => {
     const res = await fetch(`${baseUrl}/api/setup/alert-types/type-1`, {
@@ -301,11 +409,39 @@ test('POST /api/setup/alert-types returns 400 if label is missing', async () => 
     const res = await fetch(`${baseUrl}/api/setup/alert-types`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer company-token' },
-      body: JSON.stringify({ emoji: '🔥' }),
+      body: JSON.stringify({ emoji: '🔥', category: 'emergency' }),
     })
     assert.equal(res.status, 400)
     const data = await res.json()
     assert.equal(data.error, 'Label is required.')
+  })
+})
+
+test('POST /api/setup/alert-types returns 400 if category is missing', async () => {
+  fakeDb = createTestDb({ users: { 'company-uid': COMPANY_USER } })
+  await withServer(createApp(), async baseUrl => {
+    const res = await fetch(`${baseUrl}/api/setup/alert-types`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer company-token' },
+      body: JSON.stringify({ label: 'Hazmat', emoji: '☣️' }),
+    })
+    assert.equal(res.status, 400)
+    const data = await res.json()
+    assert.equal(data.error, 'Category is required.')
+  })
+})
+
+test('POST /api/setup/alert-types returns 400 for invalid category value', async () => {
+  fakeDb = createTestDb({ users: { 'company-uid': COMPANY_USER } })
+  await withServer(createApp(), async baseUrl => {
+    const res = await fetch(`${baseUrl}/api/setup/alert-types`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer company-token' },
+      body: JSON.stringify({ label: 'Hazmat', category: 'critical' }),
+    })
+    assert.equal(res.status, 400)
+    const data = await res.json()
+    assert.equal(data.error, 'Category must be emergency or general.')
   })
 })
 
@@ -315,7 +451,7 @@ test('POST /api/setup/alert-types returns 400 for whitespace-only label', async 
     const res = await fetch(`${baseUrl}/api/setup/alert-types`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer company-token' },
-      body: JSON.stringify({ label: '   ' }),
+      body: JSON.stringify({ label: '   ', category: 'general' }),
     })
     assert.equal(res.status, 400)
   })
@@ -327,7 +463,7 @@ test('POST /api/setup/alert-types stores trimmed label', async () => {
     const res = await fetch(`${baseUrl}/api/setup/alert-types`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer company-token' },
-      body: JSON.stringify({ label: '  Fire  ' }),
+      body: JSON.stringify({ label: '  Fire  ', category: 'emergency' }),
     })
     assert.equal(res.status, 201)
     const data = await res.json()
@@ -341,25 +477,42 @@ test('POST /api/setup/alert-types handles very long label without crashing', asy
     const res = await fetch(`${baseUrl}/api/setup/alert-types`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer company-token' },
-      body: JSON.stringify({ label: 'A'.repeat(10000) }),
+      body: JSON.stringify({ label: 'A'.repeat(10000), category: 'general' }),
     })
-    // Should not crash — either 201 or 400 is acceptable
     assert.ok([200, 201, 400].includes(res.status))
   })
 })
 
-test('POST /api/setup/alert-types handles special characters in label safely', async () => {
+test('POST /api/setup/alert-types handles XSS payload in label safely', async () => {
   fakeDb = createTestDb({ users: { 'company-uid': COMPANY_USER } })
   await withServer(createApp(), async baseUrl => {
+    const xssPayload = '<script>alert("xss")</script>'
     const res = await fetch(`${baseUrl}/api/setup/alert-types`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer company-token' },
-      body: JSON.stringify({ label: '<script>alert("xss")</script>' }),
+      body: JSON.stringify({ label: xssPayload, category: 'general' }),
     })
     assert.equal(res.status, 201)
     const data = await res.json()
-    // Label should be stored as-is (sanitisation is the frontend's job)
-    assert.equal(data.alertType.label, '<script>alert("xss")</script>')
+    // Label stored as-is — sanitisation is the frontend's responsibility
+    assert.equal(data.alertType.label, xssPayload)
+  })
+})
+
+test('PUT /api/setup/alert-types/:id returns 400 for invalid category', async () => {
+  fakeDb = createTestDb({
+    users: { 'company-uid': COMPANY_USER },
+    alertTypes: { 'type-1': { label: 'Fire', emoji: '🔥', category: 'emergency', active: true } },
+  })
+  await withServer(createApp(), async baseUrl => {
+    const res = await fetch(`${baseUrl}/api/setup/alert-types/type-1`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer company-token' },
+      body: JSON.stringify({ label: 'Fire', category: 'critical' }),
+    })
+    assert.equal(res.status, 400)
+    const data = await res.json()
+    assert.equal(data.error, 'Category must be emergency or general.')
   })
 })
 
@@ -369,7 +522,7 @@ test('PUT /api/setup/alert-types/:id returns 404 if not found', async () => {
     const res = await fetch(`${baseUrl}/api/setup/alert-types/nonexistent`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer company-token' },
-      body: JSON.stringify({ label: 'Fire', emoji: '🔥' }),
+      body: JSON.stringify({ label: 'Fire', emoji: '🔥', category: 'emergency' }),
     })
     assert.equal(res.status, 404)
   })
@@ -383,6 +536,18 @@ test('DELETE /api/setup/alert-types/:id returns 404 if already deleted', async (
       headers: { Authorization: 'Bearer company-token' },
     })
     assert.equal(res.status, 404)
+  })
+})
+
+test('POST /api/setup/alert-types returns 400 if body is empty', async () => {
+  fakeDb = createTestDb({ users: { 'company-uid': COMPANY_USER } })
+  await withServer(createApp(), async baseUrl => {
+    const res = await fetch(`${baseUrl}/api/setup/alert-types`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer company-token' },
+      body: JSON.stringify({}),
+    })
+    assert.equal(res.status, 400)
   })
 })
 
@@ -629,6 +794,52 @@ test('PUT /api/setup/routing/:alertType handles URL-encoded alert type', async (
   })
 })
 
+test('PUT /api/setup/routing/:alertType recipient notify defaults to email if not specified', async () => {
+  fakeDb = createTestDb({ users: { 'school-uid': SCHOOL_USER } })
+  await withServer(createApp(), async baseUrl => {
+    const res = await fetch(`${baseUrl}/api/setup/routing/Fire`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer school-token' },
+      body: JSON.stringify({
+        recipients: [{ name: 'Jane', email: 'jane@school.edu' }],
+      }),
+    })
+    assert.equal(res.status, 200)
+    const data = await res.json()
+    assert.equal(data.routing.recipients[0].notify, 'email')
+  })
+})
+
+test('PUT /api/setup/routing/:alertType does not leak other schools routing', async () => {
+  fakeDb = createTestDb({
+    users: { 'school-uid': SCHOOL_USER },
+    notificationRouting: {
+      'route-beta': {
+        schoolId: 'school_beta',
+        alertType: 'Fire',
+        recipients: [{ name: 'Beta Admin', email: 'admin@beta.edu', notify: 'email' }],
+        active: true,
+      },
+    },
+  })
+  await withServer(createApp(), async baseUrl => {
+    // School alpha creates its own Fire routing
+    const res = await fetch(`${baseUrl}/api/setup/routing/Fire`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer school-token' },
+      body: JSON.stringify({
+        recipients: [{ name: 'Alpha Admin', email: 'admin@alpha.edu', notify: 'email' }],
+      }),
+    })
+    assert.equal(res.status, 200)
+    const data = await res.json()
+    // Should only have school_alpha's recipient, not school_beta's
+    assert.equal(data.routing.schoolId, 'school_alpha')
+    assert.equal(data.routing.recipients.length, 1)
+    assert.equal(data.routing.recipients[0].email, 'admin@alpha.edu')
+  })
+})
+
 // ── Routing — access control ──────────────────────────────────────────────────
 
 test('GET /api/setup/routing returns 403 for company admin', async () => {
@@ -722,6 +933,18 @@ test('PUT /api/setup/routing/:alertType returns 400 if recipients is not an arra
   })
 })
 
+test('PUT /api/setup/routing/:alertType returns 400 if recipients is null', async () => {
+  fakeDb = createTestDb({ users: { 'school-uid': SCHOOL_USER } })
+  await withServer(createApp(), async baseUrl => {
+    const res = await fetch(`${baseUrl}/api/setup/routing/Fire`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer school-token' },
+      body: JSON.stringify({ recipients: null }),
+    })
+    assert.equal(res.status, 400)
+  })
+})
+
 test('GET /api/setup/routing returns 403 for school admin without schoolId', async () => {
   fakeDb = createTestDb({ users: { 'school-uid': SCHOOL_USER_NO_ID } })
   await withServer(createApp(), async baseUrl => {
@@ -770,6 +993,45 @@ test('GET /api/setup/school-users response contains name role and email fields',
     assert.ok('name' in user)
     assert.ok('email' in user)
     assert.ok('role' in user)
+  })
+})
+
+test('GET /api/setup/school-users does not expose password or sensitive fields', async () => {
+  fakeDb = createTestDb({
+    users: {
+      'school-uid': SCHOOL_USER,
+      'staff-uid': { name: 'Staff', email: 'staff@school.edu', role: 'staff', schoolId: 'school_alpha', password: 'secret123', internalNotes: 'sensitive' },
+    },
+  })
+  await withServer(createApp(), async baseUrl => {
+    const res = await fetch(`${baseUrl}/api/setup/school-users`, {
+      headers: { Authorization: 'Bearer school-token' },
+    })
+    assert.equal(res.status, 200)
+    const data = await res.json()
+    const user = data.users[0]
+    assert.ok(!('password' in user))
+    assert.ok(!('internalNotes' in user))
+  })
+})
+
+test('GET /api/setup/school-users does not return users from other schools', async () => {
+  fakeDb = createTestDb({
+    users: {
+      'school-uid': SCHOOL_USER,
+      'alpha-staff': { name: 'Alpha Staff', email: 'alpha@school.edu', role: 'staff', schoolId: 'school_alpha' },
+      'beta-staff': { name: 'Beta Staff', email: 'beta@school.edu', role: 'staff', schoolId: 'school_beta' },
+      'gamma-staff': { name: 'Gamma Staff', email: 'gamma@school.edu', role: 'staff', schoolId: 'school_gamma' },
+    },
+  })
+  await withServer(createApp(), async baseUrl => {
+    const res = await fetch(`${baseUrl}/api/setup/school-users`, {
+      headers: { Authorization: 'Bearer school-token' },
+    })
+    assert.equal(res.status, 200)
+    const data = await res.json()
+    assert.equal(data.users.length, 1)
+    assert.equal(data.users[0].email, 'alpha@school.edu')
   })
 })
 

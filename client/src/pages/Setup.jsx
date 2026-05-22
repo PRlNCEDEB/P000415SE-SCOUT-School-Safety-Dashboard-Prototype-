@@ -4,12 +4,6 @@ import { setupAPI } from '../api/client'
 
 const EMOJI_OPTIONS = ['🏥', '🔥', '🔒', '⚠️', '🌩️', '🔧', '📢', '🚨', '🛡️', '🌊']
 
-const EMERGENCY_TYPES = [
-  { value: 'Fire', icon: '🔥' },
-  { value: 'Threat', icon: '🛡️' },
-  { value: 'Natural Disaster', icon: '🌊' },
-]
-
 function formatRole(role) {
   return String(role || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 }
@@ -23,11 +17,11 @@ export default function Setup() {
   const [loadingConfig, setLoadingConfig] = useState(false)
   const [configError, setConfigError] = useState('')
 
-  const [newType, setNewType] = useState({ label: '', emoji: '' })
+  const [newType, setNewType] = useState({ label: '', emoji: '', category: 'general' })
   const [addingType, setAddingType] = useState(false)
   const [typeError, setTypeError] = useState('')
   const [editingTypeId, setEditingTypeId] = useState(null)
-  const [editTypeForm, setEditTypeForm] = useState({ label: '', emoji: '' })
+  const [editTypeForm, setEditTypeForm] = useState({ label: '', emoji: '', category: 'general' })
 
   const [newLocation, setNewLocation] = useState('')
   const [addingLocation, setAddingLocation] = useState(false)
@@ -36,6 +30,7 @@ export default function Setup() {
   const [editLocationLabel, setEditLocationLabel] = useState('')
 
   // ── Routing state (School Admin) ────────────────────────────────────────────
+  const [emergencyTypes, setEmergencyTypes] = useState([])
   const [routing, setRouting] = useState({})
   const [schoolUsers, setSchoolUsers] = useState([])
   const [loadingRouting, setLoadingRouting] = useState(false)
@@ -43,7 +38,6 @@ export default function Setup() {
   const [savingRouting, setSavingRouting] = useState({})
   const [saveStatus, setSaveStatus] = useState({})
   const [selectedEmergencyType, setSelectedEmergencyType] = useState('')
-  // notify preference per user per alert type: { alertType: { userId: 'email'|'sms'|'both' } }
   const [notifyPrefs, setNotifyPrefs] = useState({})
 
   // ── Load alert types and locations (Company Admin) ─────────────────────────
@@ -68,16 +62,17 @@ export default function Setup() {
     if (isCompanyAdmin) loadConfig()
   }, [isCompanyAdmin, loadConfig])
 
-  // ── Load routing + school users (School Admin) ──────────────────────────────
+  // ── Load routing + school users + emergency types (School Admin) ────────────
   useEffect(() => {
     if (!isSchoolAdmin) return
     async function loadData() {
       setLoadingRouting(true)
       setRoutingError('')
       try {
-        const [routingData, usersData] = await Promise.all([
+        const [routingData, usersData, emergencyTypesData] = await Promise.all([
           setupAPI.getRouting(),
           setupAPI.getSchoolUsers(),
+          setupAPI.getAlertTypes('emergency'),
         ])
         const map = {}
         for (const rule of (routingData.routing || [])) {
@@ -85,6 +80,12 @@ export default function Setup() {
         }
         setRouting(map)
         setSchoolUsers(usersData.users || [])
+        setEmergencyTypes(
+          (emergencyTypesData.alertTypes || []).map(t => ({
+            value: t.label,
+            icon: t.emoji || '🚨',
+          }))
+        )
       } catch {
         setRoutingError('Failed to load routing. Is the backend running?')
       } finally {
@@ -97,12 +98,13 @@ export default function Setup() {
   // ── Alert type handlers ─────────────────────────────────────────────────────
   const handleAddType = async () => {
     if (!newType.label.trim()) { setTypeError('Label is required.'); return }
+    if (!newType.category) { setTypeError('Category is required.'); return }
     setAddingType(true)
     setTypeError('')
     try {
       const data = await setupAPI.createAlertType(newType)
       setAlertTypes(prev => [...prev, data.alertType])
-      setNewType({ label: '', emoji: '' })
+      setNewType({ label: '', emoji: '', category: 'general' })
     } catch (err) {
       setTypeError(err.message || 'Failed to add alert type.')
     } finally {
@@ -188,24 +190,9 @@ export default function Setup() {
   const handleAddUser = async (alertType, user) => {
     const notify = notifyPrefs[alertType]?.[user.id] || 'email'
     const current = getRecipients(alertType)
-
-    // Duplicate check
-    const alreadyAdded = current.some(
-      r => r.email?.toLowerCase() === user.email?.toLowerCase()
-    )
+    const alreadyAdded = current.some(r => r.email?.toLowerCase() === user.email?.toLowerCase())
     if (alreadyAdded) return
-
-    const updated = [
-      ...current,
-      {
-        name: user.name,
-        email: user.email || null,
-        phone: user.phone || null,
-        role: user.role,
-        notify,
-      },
-    ]
-
+    const updated = [...current, { name: user.name, email: user.email || null, phone: user.phone || null, role: user.role, notify }]
     setRouting(r => ({ ...r, [alertType]: updated }))
     await saveRouting(alertType, updated)
   }
@@ -216,19 +203,31 @@ export default function Setup() {
     await saveRouting(alertType, updated)
   }
 
-  const getNotifyPref = (alertType, userId) =>
-    notifyPrefs[alertType]?.[userId] || 'email'
+  const getNotifyPref = (alertType, userId) => notifyPrefs[alertType]?.[userId] || 'email'
 
   const setNotifyPref = (alertType, userId, value) => {
-    setNotifyPrefs(p => ({
-      ...p,
-      [alertType]: { ...(p[alertType] || {}), [userId]: value },
-    }))
+    setNotifyPrefs(p => ({ ...p, [alertType]: { ...(p[alertType] || {}), [userId]: value } }))
   }
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <h1 className="text-2xl font-bold mb-6">Setup</h1>
+        {isCompanyAdmin && (
+           <p className="text-sm text-gray-500 mb-6 max-w-2xl">
+            Through this page you can design, configure, and manage the SCOUT system across all schools. 
+            This includes creating alert types, defining workflows, and shaping how SCOUT functions for all users.
+           </p>
+)}
+
+        {isSchoolAdmin && (
+  <p className="text-sm text-gray-500 mb-6 max-w-2xl">
+    Configure and apply SCOUT within your school. This includes selecting available alert types, 
+    assigning roles, and defining who receives notifications.
+        </p>
+)}
+
+
+
 
       {/* Alert Configuration — Company Admin only */}
       {isCompanyAdmin && (
@@ -255,29 +254,51 @@ export default function Setup() {
                   <div key={type.id} className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
                     {editingTypeId === type.id ? (
                       <>
-                        <select
-                          value={editTypeForm.emoji}
-                          onChange={e => setEditTypeForm(f => ({ ...f, emoji: e.target.value }))}
-                          className="border border-gray-300 rounded px-2 py-1 text-sm w-20"
-                        >
-                          <option value="">—</option>
-                          {EMOJI_OPTIONS.map(em => <option key={em} value={em}>{em}</option>)}
-                        </select>
-                        <input
-                          className="flex-1 border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
-                          value={editTypeForm.label}
-                          onChange={e => setEditTypeForm(f => ({ ...f, label: e.target.value }))}
-                          onKeyDown={e => e.key === 'Enter' && handleSaveType(type.id)}
-                        />
-                        <button onClick={() => handleSaveType(type.id)} className="text-xs text-green-600 hover:text-green-800 font-medium">Save</button>
-                        <button onClick={() => setEditingTypeId(null)} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
+                        <div className="flex flex-col gap-2 flex-1">
+                          <div className="flex gap-2">
+                            <select
+                              value={editTypeForm.emoji}
+                              onChange={e => setEditTypeForm(f => ({ ...f, emoji: e.target.value }))}
+                              className="border border-gray-300 rounded px-2 py-1 text-sm w-16"
+                            >
+                              <option value="">—</option>
+                              {EMOJI_OPTIONS.map(em => <option key={em} value={em}>{em}</option>)}
+                            </select>
+                            <input
+                              className="flex-1 border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
+                              value={editTypeForm.label}
+                              onChange={e => setEditTypeForm(f => ({ ...f, label: e.target.value }))}
+                              onKeyDown={e => e.key === 'Enter' && handleSaveType(type.id)}
+                            />
+                          </div>
+                          <div className="flex gap-2 items-center">
+                            <select
+                              value={editTypeForm.category}
+                              onChange={e => setEditTypeForm(f => ({ ...f, category: e.target.value }))}
+                              className="flex-1 border border-gray-300 rounded px-2 py-1 text-xs"
+                            >
+                              <option value="general">General</option>
+                              <option value="emergency">Emergency</option>
+                            </select>
+                            <button onClick={() => handleSaveType(type.id)} className="text-xs text-green-600 hover:text-green-800 font-medium">Save</button>
+                            <button onClick={() => setEditingTypeId(null)} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
+                          </div>
+                        </div>
                       </>
                     ) : (
                       <>
                         <span className="text-base w-7">{type.emoji || '📢'}</span>
                         <span className="flex-1 text-sm font-medium text-gray-800">{type.label}</span>
+                        <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${
+                          type.category === 'emergency' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'
+                        }`}>
+                          {type.category || 'general'}
+                        </span>
                         <button
-                          onClick={() => { setEditingTypeId(type.id); setEditTypeForm({ label: type.label, emoji: type.emoji || '' }) }}
+                          onClick={() => {
+                            setEditingTypeId(type.id)
+                            setEditTypeForm({ label: type.label, emoji: type.emoji || '', category: type.category || 'general' })
+                          }}
                           className="text-xs text-gray-400 hover:text-blue-600"
                         >
                           Edit
@@ -292,13 +313,14 @@ export default function Setup() {
                 )}
               </div>
 
+              {/* Add new */}
               <div className="border-t border-gray-100 pt-3">
                 <p className="text-xs font-medium text-gray-500 mb-2">Add new</p>
-                <div className="flex gap-2">
+                <div className="flex gap-2 mb-2">
                   <select
                     value={newType.emoji}
                     onChange={e => setNewType(f => ({ ...f, emoji: e.target.value }))}
-                    className="border border-gray-300 rounded px-2 py-1.5 text-sm w-20"
+                    className="border border-gray-300 rounded px-2 py-1.5 text-sm w-16"
                   >
                     <option value="">Emoji</option>
                     {EMOJI_OPTIONS.map(em => <option key={em} value={em}>{em}</option>)}
@@ -310,6 +332,16 @@ export default function Setup() {
                     onChange={e => setNewType(f => ({ ...f, label: e.target.value }))}
                     onKeyDown={e => e.key === 'Enter' && handleAddType()}
                   />
+                </div>
+                <div className="flex gap-2">
+                  <select
+                    value={newType.category}
+                    onChange={e => setNewType(f => ({ ...f, category: e.target.value }))}
+                    className="flex-1 border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
+                  >
+                    <option value="general">General</option>
+                    <option value="emergency">Emergency</option>
+                  </select>
                   <button
                     onClick={handleAddType}
                     disabled={addingType}
@@ -399,7 +431,7 @@ export default function Setup() {
           {loadingRouting && <p className="text-sm text-gray-400 mb-4">Loading...</p>}
           {routingError && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-4">{routingError}</p>}
 
-          {/* Emergency type selector */}
+          {/* Emergency type selector — fetched from Firestore */}
           <div className="mb-4">
             <select
               value={selectedEmergencyType}
@@ -407,7 +439,7 @@ export default function Setup() {
               className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 w-64"
             >
               <option value="">Select an emergency type</option>
-              {EMERGENCY_TYPES.map(type => (
+              {emergencyTypes.map(type => (
                 <option key={type.value} value={type.value}>
                   {type.icon} {type.value}
                 </option>
@@ -417,7 +449,8 @@ export default function Setup() {
 
           {/* Recipients panel for selected type */}
           {selectedEmergencyType && (() => {
-            const type = EMERGENCY_TYPES.find(t => t.value === selectedEmergencyType)
+            const type = emergencyTypes.find(t => t.value === selectedEmergencyType)
+            if (!type) return null
             const recipients = getRecipients(type.value)
             const isSaving = savingRouting[type.value]
             const status = saveStatus[type.value]
@@ -425,7 +458,6 @@ export default function Setup() {
             return (
               <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-5">
 
-                {/* Header */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className="text-lg">{type.icon}</span>
@@ -439,7 +471,6 @@ export default function Setup() {
                   </div>
                 </div>
 
-                {/* Current Recipients */}
                 <div>
                   <p className="text-xs font-medium text-gray-500 mb-2">Current Recipients</p>
                   {recipients.length === 0 ? (
@@ -475,7 +506,6 @@ export default function Setup() {
                   )}
                 </div>
 
-                {/* Add from school users */}
                 <div className="border-t border-gray-100 pt-4">
                   <p className="text-xs font-medium text-gray-500 mb-2">Add from school users</p>
                   {schoolUsers.length === 0 ? (
@@ -483,9 +513,7 @@ export default function Setup() {
                   ) : (
                     <div className="space-y-2">
                       {schoolUsers.map(user => {
-                        const alreadyAdded = recipients.some(
-                          r => r.email?.toLowerCase() === user.email?.toLowerCase()
-                        )
+                        const alreadyAdded = recipients.some(r => r.email?.toLowerCase() === user.email?.toLowerCase())
                         const notify = getNotifyPref(type.value, user.id)
 
                         return (
@@ -500,7 +528,6 @@ export default function Setup() {
                                 {user.phone && <span className="text-xs text-gray-400">📱 {user.phone}</span>}
                               </div>
                             </div>
-
                             {alreadyAdded ? (
                               <span className="text-xs text-green-600 font-medium shrink-0">✓ Added</span>
                             ) : (
