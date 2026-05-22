@@ -1,0 +1,326 @@
+const express = require('express')
+const admin = require('firebase-admin')
+const { getDb, docToObject, snapshotToArray } = require('../db/firebase')
+
+const router = express.Router()
+
+// ── Middleware ────────────────────────────────────────────────────────────────
+
+async function verifyToken(req, res, next) {
+  const authHeader = req.headers.authorization || ''
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null
+
+  if (!token) return res.status(401).json({ error: 'No token provided.' })
+
+  try {
+    req.user = await admin.auth().verifyIdToken(token)
+    next()
+  } catch {
+    return res.status(401).json({ error: 'Invalid or expired token.' })
+  }
+}
+
+function normaliseRole(role) {
+  return String(role || '').toLowerCase().replace(/[-_\s]/g, '')
+}
+
+async function getUserProfile(decodedUser) {
+  const db = getDb()
+  const { uid, email } = decodedUser
+
+  const userDoc = await db.collection('users').doc(uid).get()
+  if (userDoc.exists) return { uid, ...userDoc.data() }
+
+  if (email) {
+    const byEmail = await db.collection('users').where('email', '==', email).limit(1).get()
+    if (!byEmail.empty) return { uid, ...byEmail.docs[0].data() }
+  }
+
+  return { uid, email, role: 'staff' }
+}
+
+// Blocks the route if user is not a Company Admin
+async function requireCompanyAdmin(req, res, next) {
+  try {
+    const profile = await getUserProfile(req.user)
+    if (normaliseRole(profile.role) !== 'companyadmin') {
+      return res.status(403).json({ error: 'Company Admin access required.' })
+    }
+    req.profile = profile
+    next()
+  } catch (err) {
+    next(err)
+  }
+}
+
+// Blocks the route if user is not a School Admin
+async function requireSchoolAdmin(req, res, next) {
+  try {
+    const profile = await getUserProfile(req.user)
+    if (normaliseRole(profile.role) !== 'schooladmin') {
+      return res.status(403).json({ error: 'School Admin access required.' })
+    }
+    if (!profile.schoolId) {
+      return res.status(403).json({ error: 'Your account is not assigned to a school.' })
+    }
+    req.profile = profile
+    next()
+  } catch (err) {
+    next(err)
+  }
+}
+
+// ── Alert Types ───────────────────────────────────────────────────────────────
+
+// GET /api/setup/alert-types
+// Any authenticated user can read (SubmitAlert needs this)
+router.get('/alert-types', verifyToken, async (req, res, next) => {
+  try {
+    const snapshot = await getDb()
+      .collection('alertTypes')
+      .orderBy('createdAt', 'asc')
+      .get()
+    res.json({ alertTypes: snapshotToArray(snapshot) })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// POST /api/setup/alert-types — Company Admin only
+router.post('/alert-types', verifyToken, requireCompanyAdmin, async (req, res, next) => {
+  try {
+    const { label, emoji } = req.body
+    if (!label?.trim()) return res.status(400).json({ error: 'Label is required.' })
+
+    const now = new Date().toISOString()
+    const docRef = await getDb().collection('alertTypes').add({
+      label: label.trim(),
+      emoji: emoji?.trim() || '',
+      active: true,
+      createdAt: now,
+      updatedAt: now,
+    })
+
+    const doc = await docRef.get()
+    res.status(201).json({ alertType: docToObject(doc) })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// PUT /api/setup/alert-types/:id — Company Admin only
+router.put('/alert-types/:id', verifyToken, requireCompanyAdmin, async (req, res, next) => {
+  try {
+    const { label, emoji } = req.body
+    if (!label?.trim()) return res.status(400).json({ error: 'Label is required.' })
+
+    const ref = getDb().collection('alertTypes').doc(req.params.id)
+    const doc = await ref.get()
+    if (!doc.exists) return res.status(404).json({ error: 'Alert type not found.' })
+
+    await ref.update({
+      label: label.trim(),
+      emoji: emoji?.trim() || '',
+      updatedAt: new Date().toISOString(),
+    })
+
+    const updated = await ref.get()
+    res.json({ alertType: docToObject(updated) })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// DELETE /api/setup/alert-types/:id — Company Admin only
+router.delete('/alert-types/:id', verifyToken, requireCompanyAdmin, async (req, res, next) => {
+  try {
+    const ref = getDb().collection('alertTypes').doc(req.params.id)
+    const doc = await ref.get()
+    if (!doc.exists) return res.status(404).json({ error: 'Alert type not found.' })
+
+    await ref.delete()
+    res.status(204).send()
+  } catch (err) {
+    next(err)
+  }
+})
+
+// ── Locations ─────────────────────────────────────────────────────────────────
+
+// GET /api/setup/locations
+// Any authenticated user can read (SubmitAlert needs this)
+router.get('/locations', verifyToken, async (req, res, next) => {
+  try {
+    const snapshot = await getDb()
+      .collection('locations')
+      .orderBy('createdAt', 'asc')
+      .get()
+    res.json({ locations: snapshotToArray(snapshot) })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// POST /api/setup/locations — Company Admin only
+router.post('/locations', verifyToken, requireCompanyAdmin, async (req, res, next) => {
+  try {
+    const { label } = req.body
+    if (!label?.trim()) return res.status(400).json({ error: 'Label is required.' })
+
+    const now = new Date().toISOString()
+    const docRef = await getDb().collection('locations').add({
+      label: label.trim(),
+      active: true,
+      createdAt: now,
+      updatedAt: now,
+    })
+
+    const doc = await docRef.get()
+    res.status(201).json({ location: docToObject(doc) })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// PUT /api/setup/locations/:id — Company Admin only
+router.put('/locations/:id', verifyToken, requireCompanyAdmin, async (req, res, next) => {
+  try {
+    const { label } = req.body
+    if (!label?.trim()) return res.status(400).json({ error: 'Label is required.' })
+
+    const ref = getDb().collection('locations').doc(req.params.id)
+    const doc = await ref.get()
+    if (!doc.exists) return res.status(404).json({ error: 'Location not found.' })
+
+    await ref.update({
+      label: label.trim(),
+      updatedAt: new Date().toISOString(),
+    })
+
+    const updated = await ref.get()
+    res.json({ location: docToObject(updated) })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// DELETE /api/setup/locations/:id — Company Admin only
+router.delete('/locations/:id', verifyToken, requireCompanyAdmin, async (req, res, next) => {
+  try {
+    const ref = getDb().collection('locations').doc(req.params.id)
+    const doc = await ref.get()
+    if (!doc.exists) return res.status(404).json({ error: 'Location not found.' })
+
+    await ref.delete()
+    res.status(204).send()
+  } catch (err) {
+    next(err)
+  }
+})
+
+// ── Email Routing (School Admin) ──────────────────────────────────────────────
+
+// GET /api/setup/routing — get all routing rules for this school
+router.get('/routing', verifyToken, requireSchoolAdmin, async (req, res, next) => {
+  try {
+    const { schoolId } = req.profile
+    const snapshot = await getDb()
+      .collection('notificationRouting')
+      .where('schoolId', '==', schoolId)
+      .get()
+    const routing = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+    res.json({ routing })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// PUT /api/setup/routing/:alertType — upsert recipients for one alert type at this school
+router.put('/routing/:alertType', verifyToken, requireSchoolAdmin, async (req, res, next) => {
+  try {
+    const { schoolId } = req.profile
+    const alertType = decodeURIComponent(req.params.alertType)
+    const { recipients } = req.body
+
+    if (!Array.isArray(recipients)) {
+      return res.status(400).json({ error: 'recipients must be an array.' })
+    }
+
+    // Validate — each recipient needs at least email or phone
+    for (const r of recipients) {
+      if (!r.email?.trim() && !r.phone?.trim()) {
+        return res.status(400).json({ error: 'Each recipient needs at least an email or phone.' })
+      }
+    }
+
+    const now = new Date().toISOString()
+    const db = getDb()
+
+    // Check if routing doc already exists for this school + alertType
+    const existing = await db.collection('notificationRouting')
+      .where('schoolId', '==', schoolId)
+      .where('alertType', '==', alertType)
+      .limit(1)
+      .get()
+
+    const payload = {
+      schoolId,
+      alertType,
+      alertScope: 'emergency',
+      active: true,
+      recipients: recipients.map(r => ({
+        name: r.name?.trim() || r.email?.trim() || r.phone?.trim(),
+        email: r.email?.trim() || null,
+        phone: r.phone?.trim() || null,
+        role: r.role || 'recipient',
+        notify: r.notify || 'email',
+      })),
+      updatedAt: now,
+    }
+
+    let docId
+    if (!existing.empty) {
+      docId = existing.docs[0].id
+      await db.collection('notificationRouting').doc(docId).update(payload)
+    } else {
+      payload.createdAt = now
+      const ref = await db.collection('notificationRouting').add(payload)
+      docId = ref.id
+    }
+
+    const updated = await db.collection('notificationRouting').doc(docId).get()
+    res.json({ routing: { id: updated.id, ...updated.data() } })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// GET /api/setup/school-users — get all users belonging to the school admin's school
+router.get('/school-users', verifyToken, requireSchoolAdmin, async (req, res, next) => {
+  try {
+    const { schoolId, uid } = req.profile
+    const snapshot = await getDb()
+      .collection('users')
+      .where('schoolId', '==', schoolId)
+      .get()
+
+    // Exclude the school admin themselves
+    const users = snapshot.docs
+      .map(doc => ({ id: doc.id, ...doc.data() }))
+      .filter(u => u.id !== uid)
+      .map(u => ({
+        id: u.id,
+        name: u.name || '',
+        email: u.email || null,
+        phone: u.phone || null,
+        role: u.role || '',
+      }))
+
+    res.json({ users })
+  } catch (err) {
+    next(err)
+  }
+})
+
+module.exports = router
+module.exports.normaliseRole = normaliseRole

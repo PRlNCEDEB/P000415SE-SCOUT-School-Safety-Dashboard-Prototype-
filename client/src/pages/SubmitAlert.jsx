@@ -1,9 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { incidentAPI } from '../api/client'
+import { incidentAPI, setupAPI } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 
-const alertTypes = [
+const FALLBACK_ALERT_TYPES = [
   { value: 'medical', label: '🏥 Medical' },
   { value: 'fire', label: '🔥 Fire' },
   { value: 'lockdown', label: '🔒 Lockdown' },
@@ -13,6 +13,11 @@ const alertTypes = [
   { value: 'general', label: '📢 General' },
 ]
 
+const FALLBACK_LOCATIONS = [
+  'Oval', 'Canteen', 'Block A', 'Block B', 'Block C',
+  'Main Building', 'Cafeteria', 'Library', 'Car Park', 'Reception',
+]
+
 const priorities = [
   { value: 'critical', label: '🔴 Critical' },
   { value: 'high', label: '🟠 High' },
@@ -20,14 +25,11 @@ const priorities = [
   { value: 'low', label: '⚪ Low' },
 ]
 
-const locations = [
-  'Oval', 'Canteen', 'Block A', 'Block B', 'Block C',
-  'Main Building', 'Cafeteria', 'Library', 'Car Park', 'Reception',
-]
-
 export default function SubmitAlert() {
   const navigate = useNavigate()
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [alertTypes, setAlertTypes] = useState(FALLBACK_ALERT_TYPES)
+  const [locations, setLocations] = useState(FALLBACK_LOCATIONS)
   const [form, setForm] = useState({
     type: '',
     priority: '',
@@ -37,6 +39,27 @@ export default function SubmitAlert() {
   })
   const [errors, setErrors] = useState({})
   const { currentUser } = useAuth()
+
+  useEffect(() => {
+    setupAPI.getAlertTypes()
+      .then(data => {
+        if (data.alertTypes?.length) {
+          setAlertTypes(data.alertTypes.map(t => ({
+            value: t.label.toLowerCase().replace(/\s+/g, '_'),
+            label: `${t.emoji || '📢'} ${t.label}`,
+          })))
+        }
+      })
+      .catch(() => {}) // keep fallback on error
+
+    setupAPI.getLocations()
+      .then(data => {
+        if (data.locations?.length) {
+          setLocations(data.locations.map(l => l.label))
+        }
+      })
+      .catch(() => {}) // keep fallback on error
+  }, [])
 
   // TODO: Keep basic client-side validation here, but also validate all alert fields again on the backend before saving.
   const validate = () => {
@@ -188,6 +211,7 @@ export default function SubmitAlert() {
         </div>
 
         {/* Submit */}
+        {errors.submit && <p className="text-xs text-red-500">{errors.submit}</p>}
         <button
           onClick={handleSubmit}
           disabled={isSubmitting}

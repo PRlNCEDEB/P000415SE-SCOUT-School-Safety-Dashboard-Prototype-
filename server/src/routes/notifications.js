@@ -8,7 +8,7 @@ const admin = require('firebase-admin')
 const { getDb } = require('../db/firebase')
 const { invalidateAnalyticsCache } = require('../analyticsCache')
 
-const BACKEND_URL = process.env.BACKEND_URL || 'https://p000415se-scout-school-safety-dashboard-lo5f.onrender.com'
+const BACKEND_URL = process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 5000}`
 
 async function verifyToken(req, res, next) {
   const authHeader = req.headers.authorization || ''
@@ -122,7 +122,6 @@ async function requireNotificationViewer(req, res, next) {
   }
 }
 
-// Lazily initialise clients so missing env vars don't crash the server at startup
 function getSgMail() {
   if (!process.env.SENDGRID_API_KEY) throw new Error('SENDGRID_API_KEY is not set in .env')
   sgMail.setApiKey(process.env.SENDGRID_API_KEY)
@@ -136,30 +135,57 @@ function getTwilioClient() {
   return twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
 }
 
-// Query Firestore to get the correct recipients for a given emergency type
+function normaliseRecipient(recipient) {
+  return {
+    name: recipient.name || recipient.email || recipient.phone || 'Recipient',
+    email: recipient.email || null,
+    phone: recipient.phone || null,
+    role: recipient.role || 'recipient',
+    notify: recipient.notify || 'email',
+  }
+}
+
 async function getRecipientsForEmergency(emergencyType, schoolId) {
   const db = getDb()
 
-  let routingQuery = db.collection('notificationRouting')
+  if (schoolId) {
+    const schoolRouting = await db.collection('notificationRouting')
+      .where('schoolId', '==', schoolId)
+      .where('alertType', '==', emergencyType)
+      .where('active', '==', true)
+      .limit(1)
+      .get()
+
+    if (!schoolRouting.empty) {
+      const rule = schoolRouting.docs[0].data()
+
+      if (Array.isArray(rule.recipients)) {
+        const recipients = rule.recipients
+          .filter(recipient => recipient.email || recipient.phone)
+          .map(normaliseRecipient)
+
+        console.log(`School routing found for "${emergencyType}" at ${schoolId}: ${recipients.length} recipient(s)`)
+        return recipients
+      }
+    }
+  }
+
+  const routingSnapshot = await db.collection('notificationRouting')
     .where('alertScope', '==', 'emergency')
     .where('alertType', '==', emergencyType)
     .where('active', '==', true)
+    .get()
 
-  if (schoolId) {
-    routingQuery = routingQuery.where('schoolId', '==', schoolId)
-  }
+  const legacyRule = routingSnapshot.docs
+    .map(doc => doc.data())
+    .find(rule => Array.isArray(rule.roles) && (!rule.schoolId || !schoolId || rule.schoolId === schoolId))
 
-  const routingSnapshot = await routingQuery.get()
-
-  if (routingSnapshot.empty) {
-    console.warn(`⚠️ No routing rule found for emergency type: ${emergencyType}`)
+  if (!legacyRule) {
+    console.warn(`No routing rule found for emergency type: ${emergencyType}`)
     return []
   }
 
-  const rule = routingSnapshot.docs[0].data()
-  const roles = rule.roles
-  console.log(`📋 Routing rule found for "${emergencyType}" → roles: ${roles.join(', ')}`)
-
+  const roles = legacyRule.roles || []
   let recipientsQuery = db.collection('notificationRecipients')
     .where('active', '==', true)
 
@@ -168,68 +194,63 @@ async function getRecipientsForEmergency(emergencyType, schoolId) {
   }
 
   const recipientsSnapshot = await recipientsQuery.get()
-
   const recipients = recipientsSnapshot.docs
     .map(doc => ({ id: doc.id, ...doc.data() }))
-    .filter(r => roles.includes(r.role))
+    .filter(recipient => roles.includes(recipient.role))
+    .map(normaliseRecipient)
 
-  console.log(`👥 Found ${recipients.length} recipient(s): ${recipients.map(r => r.name).join(', ')}`)
+  console.log(`Legacy routing found for "${emergencyType}": ${recipients.length} recipient(s)`)
   return recipients
 }
 
-// Query Firestore users collection to get all admin users
 async function getAdminUsers(schoolId) {
   const db = getDb()
-
   const usersSnapshot = await db.collection('users').get()
 
   const admins = usersSnapshot.docs
     .map(doc => ({ id: doc.id, ...doc.data() }))
-    .filter(a => {
-      if (!a.email || !a.role) return false
-      if (isCompanyAdmin(a.role)) return true
-      return isSchoolAdmin(a.role) && schoolId && a.schoolId === schoolId
+    .filter(user => {
+      if (!user.email || !user.role) return false
+      if (isCompanyAdmin(user.role)) return true
+      return isSchoolAdmin(user.role) && schoolId && user.schoolId === schoolId
     })
 
-  console.log(`👔 Found ${admins.length} admin(s): ${admins.map(a => a.name).join(', ')}`)
+  console.log(`Found ${admins.length} admin(s): ${admins.map(adminUser => adminUser.name).join(', ')}`)
   return admins
 }
 
-// Send a summary email to admins — no acknowledge button, just a record
 async function sendAdminSummaryEmail({ emergencyType, location, body, timestamp, incidentId, notifiedStaff, schoolId, schoolName }) {
   const admins = await getAdminUsers(schoolId)
 
   if (admins.length === 0) {
-    console.warn('⚠️ No admin users found in users collection — skipping admin summary email')
+    console.warn('No admin users found in users collection - skipping admin summary email')
     return
   }
 
   const formattedTime = new Date(timestamp).toLocaleString('en-AU', {
-    timeZone: 'Australia/Melbourne',
+    timeZone: 'Australia/Sydney',
     dateStyle: 'full',
     timeStyle: 'short',
   })
 
-  const staffListHtml = notifiedStaff.map(r => `
+  const staffListHtml = notifiedStaff.map(result => `
     <tr>
-      <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb; font-size: 14px;">${r.name}</td>
-      <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb; font-size: 14px;">${r.role}</td>
-      <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb; font-size: 14px; color: ${r.emailStatus === 'sent' ? '#16a34a' : '#dc2626'};">
-        ${r.emailStatus === 'sent' ? '✅ Sent' : '❌ Failed'}
+      <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb; font-size: 14px;">${result.name}</td>
+      <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb; font-size: 14px;">${result.role}</td>
+      <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb; font-size: 14px; color: ${result.emailStatus === 'sent' ? '#16a34a' : '#dc2626'};">
+        ${result.emailStatus}
       </td>
     </tr>
   `).join('')
 
-  const subject = `📋 SCOUT Admin Summary: ${emergencyType} Emergency Alert`
-
+  const subject = `SCOUT Admin Summary: ${emergencyType} Emergency Alert`
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <div style="background: #1e293b; padding: 20px; border-radius: 8px 8px 0 0;">
-        <h1 style="color: white; margin: 0; font-size: 20px;">📋 Emergency Alert Summary</h1>
-        <p style="color: #94a3b8; margin: 4px 0 0; font-size: 14px;">SCOUT School Safety Management System — Admin Record</p>
+        <h1 style="color: white; margin: 0; font-size: 20px;">Emergency Alert Summary</h1>
+        <p style="color: #94a3b8; margin: 4px 0 0; font-size: 14px;">SCOUT School Safety Management System - Admin Record</p>
       </div>
       <div style="background: #fff; border: 1px solid #e5e7eb; padding: 24px; border-radius: 0 0 8px 8px;">
-
         <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">
           <tr>
             <td style="padding: 8px 12px; background: #f8fafc; font-weight: bold; font-size: 14px; width: 40%; border-bottom: 1px solid #e5e7eb;">Emergency Type</td>
@@ -238,7 +259,7 @@ async function sendAdminSummaryEmail({ emergencyType, location, body, timestamp,
           ${location ? `
           <tr>
             <td style="padding: 8px 12px; background: #f8fafc; font-weight: bold; font-size: 14px; border-bottom: 1px solid #e5e7eb;">Location</td>
-            <td style="padding: 8px 12px; font-size: 14px; border-bottom: 1px solid #e5e7eb;">📍 ${location}</td>
+            <td style="padding: 8px 12px; font-size: 14px; border-bottom: 1px solid #e5e7eb;">${location}</td>
           </tr>` : ''}
           ${schoolName ? `
           <tr>
@@ -247,7 +268,7 @@ async function sendAdminSummaryEmail({ emergencyType, location, body, timestamp,
           </tr>` : ''}
           <tr>
             <td style="padding: 8px 12px; background: #f8fafc; font-weight: bold; font-size: 14px; border-bottom: 1px solid #e5e7eb;">Date & Time</td>
-            <td style="padding: 8px 12px; font-size: 14px; border-bottom: 1px solid #e5e7eb;">🕐 ${formattedTime}</td>
+            <td style="padding: 8px 12px; font-size: 14px; border-bottom: 1px solid #e5e7eb;">${formattedTime}</td>
           </tr>
           <tr>
             <td style="padding: 8px 12px; background: #f8fafc; font-weight: bold; font-size: 14px; border-bottom: 1px solid #e5e7eb;">Incident ID</td>
@@ -284,12 +305,12 @@ async function sendAdminSummaryEmail({ emergencyType, location, body, timestamp,
         to: adminUser.email,
         from: process.env.FROM_EMAIL,
         subject,
-        text: `Emergency Alert Summary — ${emergencyType} at ${location || 'Unknown location'} on ${formattedTime}. Incident ID: ${incidentId || 'N/A'}. Staff notified: ${notifiedStaff.map(r => r.name).join(', ')}`,
+        text: `Emergency Alert Summary - ${emergencyType} at ${location || 'Unknown location'} on ${formattedTime}. Incident ID: ${incidentId || 'N/A'}. Staff notified: ${notifiedStaff.map(result => result.name).join(', ')}`,
         html,
       })
-      console.log(`📧 Admin summary email sent to ${adminUser.name} (${adminUser.email})`)
+      console.log(`Admin summary email sent to ${adminUser.name} (${adminUser.email})`)
     } catch (err) {
-      console.error(`❌ Admin summary email failed for ${adminUser.name}:`, err.message)
+      console.error(`Admin summary email failed for ${adminUser.name}:`, err.message)
     }
   }
 }
@@ -316,21 +337,20 @@ async function getNotificationSchoolContext(incidentId, senderProfile) {
   return { schoolId, schoolName }
 }
 
-// POST /api/notifications/emergency
 router.post('/emergency', verifyToken, requireAlertSender, async (req, res) => {
   const { code, emergencyType, location, message, incidentId } = req.body
 
   if (code !== '000') {
     return res.status(401).json({
       success: false,
-      error: 'Invalid emergency code. Please enter 000 to confirm.'
+      error: 'Invalid emergency code. Please enter 000 to confirm.',
     })
   }
 
   if (!emergencyType) {
     return res.status(400).json({
       success: false,
-      error: 'Emergency type is required.'
+      error: 'Emergency type is required.',
     })
   }
 
@@ -340,110 +360,105 @@ router.post('/emergency', verifyToken, requireAlertSender, async (req, res) => {
   try {
     recipients = await getRecipientsForEmergency(emergencyType, schoolId)
   } catch (err) {
-    console.error('❌ Failed to fetch recipients from Firestore:', err.message)
+    console.error('Failed to fetch recipients from Firestore:', err.message)
     return res.status(500).json({ success: false, error: 'Failed to load recipients. Please try again.' })
   }
 
   if (recipients.length === 0) {
     return res.status(404).json({
       success: false,
-      error: `No active recipients found for emergency type: ${emergencyType}`
+      error: `No active recipients found for emergency type: ${emergencyType}`,
     })
   }
 
-  const subject = `🚨 EMERGENCY ALERT: ${emergencyType}${location ? ' - ' + location : ''}`
-  const body = message || `An emergency has been declared at the school. Please respond immediately.`
+  const subject = `EMERGENCY ALERT: ${emergencyType}${location ? ' - ' + location : ''}`
+  const body = message || 'An emergency has been declared at the school. Please respond immediately.'
   const timestamp = new Date().toISOString()
   const results = []
 
   for (const recipient of recipients) {
-    // Generate unique token per recipient for the acknowledge link
     const token = crypto.randomUUID()
     const acknowledgeLink = `${BACKEND_URL}/api/notifications/acknowledge/${token}`
-
     const result = {
       name: recipient.name,
       role: recipient.role,
       email: recipient.email,
-      emailStatus: 'pending',
+      emailStatus: 'skipped',
       smsStatus: 'skipped',
       token,
     }
 
-    // Send Email with acknowledge button
-    try {
-      await getSgMail().send({
-        to: recipient.email,
-        from: process.env.FROM_EMAIL,
-        subject: subject,
-        text: `${body}\n\nClick here to acknowledge this alert: ${acknowledgeLink}`,
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <div style="background: #dc2626; padding: 20px; border-radius: 8px 8px 0 0;">
-              <h1 style="color: white; margin: 0;">🚨 EMERGENCY ALERT</h1>
-              <p style="color: #fecaca; margin: 4px 0 0;">SCOUT School Safety Management System</p>
-            </div>
-            <div style="background: #fff; border: 1px solid #e5e7eb; padding: 24px; border-radius: 0 0 8px 8px;">
-              <p style="font-size: 12px; color: #9ca3af; margin: 0 0 4px;">Emergency Type</p>
-              <p style="font-size: 18px; font-weight: bold; color: #dc2626; margin: 0 0 16px;">${emergencyType}</p>
-              ${location ? `<p style="font-size: 12px; color: #9ca3af; margin: 0 0 4px;">Location</p><p style="font-size: 15px; color: #111827; margin: 0 0 16px;">📍 ${location}</p>` : ''}
-              <p style="color: #374151; font-size: 15px;">${body}</p>
-              <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
-
-              <div style="text-align: center; margin: 24px 0;">
-                <a
-                  href="${acknowledgeLink}"
-                  style="background: #16a34a; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-size: 16px; font-weight: bold; display: inline-block;"
-                >
-                  ✅ I am responding — Acknowledge Alert
-                </a>
-                <p style="color: #9ca3af; font-size: 12px; margin-top: 12px;">
-                  Click the button above to confirm you have received this alert and are responding.
+    if (recipient.email && (recipient.notify === 'email' || recipient.notify === 'both' || !recipient.notify)) {
+      try {
+        await getSgMail().send({
+          to: recipient.email,
+          from: process.env.FROM_EMAIL,
+          subject,
+          text: `${body}\n\nClick here to acknowledge this alert: ${acknowledgeLink}`,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <div style="background: #dc2626; padding: 20px; border-radius: 8px 8px 0 0;">
+                <h1 style="color: white; margin: 0;">EMERGENCY ALERT</h1>
+                <p style="color: #fecaca; margin: 4px 0 0;">SCOUT School Safety Management System</p>
+              </div>
+              <div style="background: #fff; border: 1px solid #e5e7eb; padding: 24px; border-radius: 0 0 8px 8px;">
+                <p style="font-size: 12px; color: #9ca3af; margin: 0 0 4px;">Emergency Type</p>
+                <p style="font-size: 18px; font-weight: bold; color: #dc2626; margin: 0 0 16px;">${emergencyType}</p>
+                ${location ? `<p style="font-size: 12px; color: #9ca3af; margin: 0 0 4px;">Location</p><p style="font-size: 15px; color: #111827; margin: 0 0 16px;">${location}</p>` : ''}
+                <p style="color: #374151; font-size: 15px;">${body}</p>
+                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+                <div style="text-align: center; margin: 24px 0;">
+                  <a
+                    href="${acknowledgeLink}"
+                    style="background: #16a34a; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-size: 16px; font-weight: bold; display: inline-block;"
+                  >
+                    I am responding - Acknowledge Alert
+                  </a>
+                  <p style="color: #9ca3af; font-size: 12px; margin-top: 12px;">
+                    Click the button above to confirm you have received this alert and are responding.
+                  </p>
+                </div>
+                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+                <p style="color: #9ca3af; font-size: 12px;">
+                  This is an automated emergency alert from the SCOUT School Safety System.
+                  Please do not reply to this email.
                 </p>
               </div>
-
-              <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
-              <p style="color: #9ca3af; font-size: 12px;">
-                This is an automated emergency alert from the SCOUT School Safety System.
-                Please do not reply to this email.
-              </p>
             </div>
-          </div>
-        `
-      })
-      result.emailStatus = 'sent'
-      console.log(`✅ Email sent to ${recipient.name} (${recipient.email})`)
-    } catch (err) {
-      result.emailStatus = 'failed'
-      console.error(`❌ Email failed for ${recipient.name}:`, err.message)
+          `,
+        })
+        result.emailStatus = 'sent'
+        console.log(`Email sent to ${recipient.name} (${recipient.email})`)
+      } catch (err) {
+        result.emailStatus = 'failed'
+        console.error(`Email failed for ${recipient.name}:`, err.message)
+      }
     }
 
-    // Send SMS
-    if (recipient.phone) {
+    if (recipient.phone && (recipient.notify === 'sms' || recipient.notify === 'both')) {
       try {
         const sms = await getTwilioClient().messages.create({
-          body: `🚨 SCOUT EMERGENCY: ${emergencyType}${location ? ' at ' + location : ''}. Please respond immediately. Check your email to acknowledge.`,
+          body: `SCOUT EMERGENCY: ${emergencyType}${location ? ' at ' + location : ''}. Please respond immediately. Check your email to acknowledge.`,
           messagingServiceSid: process.env.TWILIO_MESSAGING_SERVICE_SID,
-          to: recipient.phone
+          to: recipient.phone,
         })
         result.smsStatus = 'sent'
-        console.log(`✅ SMS sent to ${recipient.name} - SID: ${sms.sid}`)
+        console.log(`SMS sent to ${recipient.name} - SID: ${sms.sid}`)
       } catch (err) {
         result.smsStatus = 'failed'
-        console.error(`❌ SMS failed for ${recipient.name}:`, err.message)
+        console.error(`SMS failed for ${recipient.name}:`, err.message)
       }
     }
 
     results.push(result)
   }
 
-  const emailsSent = results.filter(r => r.emailStatus === 'sent').length
+  const deliveriesSent = results.filter(result => result.emailStatus === 'sent' || result.smsStatus === 'sent').length
 
-  // Save notification logs to Firestore with token and incidentId
   try {
     const db = getDb()
     const batch = db.batch()
-    for (const r of results) {
+    for (const result of results) {
       const ref = db.collection('notifications').doc()
       batch.set(ref, {
         incidentId: incidentId || null,
@@ -451,12 +466,12 @@ router.post('/emergency', verifyToken, requireAlertSender, async (req, res) => {
         schoolName,
         incidentTitle: `${emergencyType}${location ? ' - ' + location : ''}`,
         type: emergencyType.toLowerCase(),
-        recipientName: r.name,
-        recipientEmail: r.email,
-        recipientRole: r.role,
-        sms: r.smsStatus,
-        email: r.emailStatus,
-        token: r.token,
+        recipientName: result.name,
+        recipientEmail: result.email,
+        recipientRole: result.role,
+        sms: result.smsStatus,
+        email: result.emailStatus,
+        token: result.token,
         acknowledged: false,
         acknowledgedAt: null,
         timestamp,
@@ -464,39 +479,36 @@ router.post('/emergency', verifyToken, requireAlertSender, async (req, res) => {
     }
     await batch.commit()
     invalidateAnalyticsCache()
-    console.log(`💾 Saved ${results.length} notification log(s) to Firestore`)
+    console.log(`Saved ${results.length} notification log(s) to Firestore`)
   } catch (err) {
     console.error('Failed to save notification logs:', err.message)
   }
 
-  // Send admin summary email (separate from responder emails, no acknowledge button)
   try {
     await sendAdminSummaryEmail({
-        emergencyType,
-        location,
-        body,
-        timestamp,
-        incidentId,
-        notifiedStaff: results,
-        schoolId,
-        schoolName,
-      })
+      emergencyType,
+      location,
+      body,
+      timestamp,
+      incidentId,
+      notifiedStaff: results,
+      schoolId,
+      schoolName,
+    })
   } catch (err) {
     console.error('Failed to send admin summary email:', err.message)
   }
 
   res.json({
-    success: emailsSent > 0,
-    message: `Emergency alert sent to ${emailsSent} of ${results.length} recipients.`,
+    success: deliveriesSent > 0,
+    message: `Emergency alert sent to ${deliveriesSent} of ${results.length} recipients.`,
     emergencyType,
     location: location || null,
     timestamp,
-    results
+    results,
   })
 })
 
-// GET /api/notifications/acknowledge/:token
-// The link recipients click in their email
 router.get('/acknowledge/:token', async (req, res) => {
   const { token } = req.params
   const db = getDb()
@@ -512,7 +524,6 @@ router.get('/acknowledge/:token', async (req, res) => {
         <head><title>SCOUT - Invalid Link</title></head>
         <body style="font-family:Arial,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f9fafb;">
           <div style="text-align:center;max-width:400px;padding:40px;background:white;border-radius:12px;box-shadow:0 4px 6px rgba(0,0,0,0.1);">
-            <div style="font-size:48px;margin-bottom:16px;">❌</div>
             <h1 style="color:#111827;margin-bottom:8px;">Invalid Link</h1>
             <p style="color:#6b7280;">This acknowledgement link is invalid or has expired.</p>
             <p style="color:#9ca3af;font-size:12px;margin-top:16px;">SCOUT School Safety System</p>
@@ -524,14 +535,12 @@ router.get('/acknowledge/:token', async (req, res) => {
     const doc = snapshot.docs[0]
     const notification = doc.data()
 
-    // Already acknowledged
     if (notification.acknowledged) {
       return res.send(`
         <!DOCTYPE html><html>
         <head><title>SCOUT - Already Acknowledged</title></head>
         <body style="font-family:Arial,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f9fafb;">
           <div style="text-align:center;max-width:400px;padding:40px;background:white;border-radius:12px;box-shadow:0 4px 6px rgba(0,0,0,0.1);">
-            <div style="font-size:48px;margin-bottom:16px;">✅</div>
             <h1 style="color:#111827;margin-bottom:8px;">Already Acknowledged</h1>
             <p style="color:#6b7280;">You have already confirmed your response to this alert.</p>
             <p style="color:#9ca3af;font-size:12px;margin-top:16px;">SCOUT School Safety System</p>
@@ -542,13 +551,11 @@ router.get('/acknowledge/:token', async (req, res) => {
 
     const acknowledgedAt = new Date().toISOString()
 
-    // Mark notification as acknowledged
     await db.collection('notifications').doc(doc.id).update({
       acknowledged: true,
       acknowledgedAt,
     })
 
-    // Add to incident's acknowledgedBy array using arrayUnion
     if (notification.incidentId) {
       try {
         const incidentRef = db.collection('incidents').doc(notification.incidentId)
@@ -562,19 +569,18 @@ router.get('/acknowledge/:token', async (req, res) => {
           status: 'acknowledged',
           updatedAt: new Date().toISOString(),
         })
-        console.log(`✅ Incident ${notification.incidentId} acknowledged by ${notification.recipientName}`)
+        invalidateAnalyticsCache()
+        console.log(`Incident ${notification.incidentId} acknowledged by ${notification.recipientName}`)
       } catch (err) {
         console.error('Failed to update incident acknowledgedBy:', err.message)
       }
     }
 
-    // Thank you page
     return res.send(`
       <!DOCTYPE html><html>
       <head><title>SCOUT - Response Confirmed</title></head>
       <body style="font-family:Arial,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f9fafb;">
         <div style="text-align:center;max-width:400px;padding:40px;background:white;border-radius:12px;box-shadow:0 4px 6px rgba(0,0,0,0.1);">
-          <div style="font-size:48px;margin-bottom:16px;">✅</div>
           <h1 style="color:#16a34a;margin-bottom:8px;">Response Confirmed</h1>
           <p style="color:#374151;margin-bottom:8px;">
             Thank you, <strong>${notification.recipientName}</strong>.
@@ -598,7 +604,6 @@ router.get('/acknowledge/:token', async (req, res) => {
       <head><title>SCOUT - Error</title></head>
       <body style="font-family:Arial,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f9fafb;">
         <div style="text-align:center;max-width:400px;padding:40px;background:white;border-radius:12px;">
-          <div style="font-size:48px;margin-bottom:16px;">⚠️</div>
           <h1 style="color:#111827;">Something went wrong</h1>
           <p style="color:#6b7280;">Please try again or contact your safety manager.</p>
         </div>
@@ -607,27 +612,22 @@ router.get('/acknowledge/:token', async (req, res) => {
   }
 })
 
-// GET /api/notifications — fetch delivery logs from Firestore
 router.get('/', verifyToken, requireNotificationViewer, async (req, res, next) => {
   try {
     const db = getDb()
-    let snapshot
+    let query = db.collection('notifications')
+      .orderBy('timestamp', 'desc')
+      .limit(100)
 
     if (isSchoolAdmin(req.profile.role)) {
-      snapshot = await db.collection('notifications')
+      query = db.collection('notifications')
         .where('schoolId', '==', req.profile.schoolId)
-        .get()
-    } else {
-      snapshot = await db.collection('notifications')
         .orderBy('timestamp', 'desc')
         .limit(100)
-        .get()
     }
 
-    const notifications = snapshot.docs
-      .map(doc => ({ id: doc.id, ...doc.data() }))
-      .sort((left, right) => Date.parse(right.timestamp || 0) - Date.parse(left.timestamp || 0))
-      .slice(0, 100)
+    const snapshot = await query.get()
+    const notifications = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
     res.json({ notifications })
   } catch (err) {
     next(err)
