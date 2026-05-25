@@ -1,7 +1,6 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { settingsAPI } from '../api/client'
-import { setupAPI } from '../api/client'
+import { settingsAPI, setupAPI } from '../api/client'
 
 const EMOJI_OPTIONS = ['🏥', '🔥', '🔒', '⚠️', '🌩️', '🔧', '📢', '🚨', '🛡️', '🌊']
 
@@ -12,7 +11,6 @@ function formatRole(role) {
 export default function Setup() {
   const { isCompanyAdmin, isSchoolAdmin } = useAuth()
 
-  // ── Alert Config state (Company Admin) ─────────────────────────────────────
   const [alertTypes, setAlertTypes] = useState([])
   const [locations, setLocations] = useState([])
   const [loadingConfig, setLoadingConfig] = useState(false)
@@ -30,7 +28,6 @@ export default function Setup() {
   const [editingLocationId, setEditingLocationId] = useState(null)
   const [editLocationLabel, setEditLocationLabel] = useState('')
 
-  // ── Routing state (School Admin) ────────────────────────────────────────────
   const [emergencyTypes, setEmergencyTypes] = useState([])
   const [routing, setRouting] = useState({})
   const [schoolUsers, setSchoolUsers] = useState([])
@@ -41,7 +38,12 @@ export default function Setup() {
   const [selectedEmergencyType, setSelectedEmergencyType] = useState('')
   const [notifyPrefs, setNotifyPrefs] = useState({})
 
-  // ── Load alert types and locations (Company Admin) ─────────────────────────
+  const [overdueThreshold, setOverdueThreshold] = useState(15)
+  const [thresholdLoading, setThresholdLoading] = useState(true)
+  const [thresholdSaving, setThresholdSaving] = useState(false)
+  const [thresholdError, setThresholdError] = useState('')
+  const [thresholdSuccess, setThresholdSuccess] = useState(false)
+
   const loadConfig = useCallback(async () => {
     setLoadingConfig(true)
     setConfigError('')
@@ -63,9 +65,9 @@ export default function Setup() {
     if (isCompanyAdmin) loadConfig()
   }, [isCompanyAdmin, loadConfig])
 
-  // ── Load routing + school users + emergency types (School Admin) ────────────
   useEffect(() => {
     if (!isSchoolAdmin) return
+
     async function loadData() {
       setLoadingRouting(true)
       setRoutingError('')
@@ -82,9 +84,9 @@ export default function Setup() {
         setRouting(map)
         setSchoolUsers(usersData.users || [])
         setEmergencyTypes(
-          (emergencyTypesData.alertTypes || []).map(t => ({
-            value: t.label,
-            icon: t.emoji || '🚨',
+          (emergencyTypesData.alertTypes || []).map(type => ({
+            value: type.label,
+            icon: type.emoji || '🚨',
           }))
         )
       } catch {
@@ -93,129 +95,9 @@ export default function Setup() {
         setLoadingRouting(false)
       }
     }
+
     loadData()
   }, [isSchoolAdmin])
-
-  // ── Alert type handlers ─────────────────────────────────────────────────────
-  const handleAddType = async () => {
-    if (!newType.label.trim()) { setTypeError('Label is required.'); return }
-    if (!newType.category) { setTypeError('Category is required.'); return }
-    setAddingType(true)
-    setTypeError('')
-    try {
-      const data = await setupAPI.createAlertType(newType)
-      setAlertTypes(prev => [...prev, data.alertType])
-      setNewType({ label: '', emoji: '', category: 'general' })
-    } catch (err) {
-      setTypeError(err.message || 'Failed to add alert type.')
-    } finally {
-      setAddingType(false)
-    }
-  }
-
-  const handleSaveType = async (id) => {
-    if (!editTypeForm.label.trim()) return
-    try {
-      const data = await setupAPI.updateAlertType(id, editTypeForm)
-      setAlertTypes(prev => prev.map(t => t.id === id ? data.alertType : t))
-      setEditingTypeId(null)
-    } catch (err) {
-      setTypeError(err.message || 'Failed to update.')
-    }
-  }
-
-  const handleDeleteType = async (id) => {
-    if (!confirm('Delete this alert type?')) return
-    try {
-      await setupAPI.deleteAlertType(id)
-      setAlertTypes(prev => prev.filter(t => t.id !== id))
-    } catch (err) {
-      setTypeError(err.message || 'Failed to delete.')
-    }
-  }
-
-  // ── Location handlers ───────────────────────────────────────────────────────
-  const handleAddLocation = async () => {
-    if (!newLocation.trim()) { setLocationError('Label is required.'); return }
-    setAddingLocation(true)
-    setLocationError('')
-    try {
-      const data = await setupAPI.createLocation({ label: newLocation })
-      setLocations(prev => [...prev, data.location])
-      setNewLocation('')
-    } catch (err) {
-      setLocationError(err.message || 'Failed to add location.')
-    } finally {
-      setAddingLocation(false)
-    }
-  }
-
-  const handleSaveLocation = async (id) => {
-    if (!editLocationLabel.trim()) return
-    try {
-      const data = await setupAPI.updateLocation(id, { label: editLocationLabel })
-      setLocations(prev => prev.map(l => l.id === id ? data.location : l))
-      setEditingLocationId(null)
-    } catch (err) {
-      setLocationError(err.message || 'Failed to update.')
-    }
-  }
-
-  const handleDeleteLocation = async (id) => {
-    if (!confirm('Delete this location?')) return
-    try {
-      await setupAPI.deleteLocation(id)
-      setLocations(prev => prev.filter(l => l.id !== id))
-    } catch (err) {
-      setLocationError(err.message || 'Failed to delete.')
-    }
-  }
-
-  // ── Routing handlers ────────────────────────────────────────────────────────
-  const getRecipients = (alertType) => routing[alertType] || []
-
-  const saveRouting = async (alertType, recipients) => {
-    setSavingRouting(s => ({ ...s, [alertType]: true }))
-    setSaveStatus(s => ({ ...s, [alertType]: null }))
-    try {
-      await setupAPI.updateRouting(alertType, recipients)
-      setSaveStatus(s => ({ ...s, [alertType]: 'saved' }))
-      setTimeout(() => setSaveStatus(s => ({ ...s, [alertType]: null })), 3000)
-    } catch {
-      setSaveStatus(s => ({ ...s, [alertType]: 'error' }))
-    } finally {
-      setSavingRouting(s => ({ ...s, [alertType]: false }))
-    }
-  }
-
-  const handleAddUser = async (alertType, user) => {
-    const notify = notifyPrefs[alertType]?.[user.id] || 'email'
-    const current = getRecipients(alertType)
-    const alreadyAdded = current.some(r => r.email?.toLowerCase() === user.email?.toLowerCase())
-    if (alreadyAdded) return
-    const updated = [...current, { name: user.name, email: user.email || null, phone: user.phone || null, role: user.role, notify }]
-    setRouting(r => ({ ...r, [alertType]: updated }))
-    await saveRouting(alertType, updated)
-  }
-
-  const handleRemoveRecipient = async (alertType, index) => {
-    const updated = getRecipients(alertType).filter((_, i) => i !== index)
-    setRouting(r => ({ ...r, [alertType]: updated }))
-    await saveRouting(alertType, updated)
-  }
-
-  const getNotifyPref = (alertType, userId) => notifyPrefs[alertType]?.[userId] || 'email'
-
-  const setNotifyPref = (alertType, userId, value) => {
-    setNotifyPrefs(p => ({ ...p, [alertType]: { ...(p[alertType] || {}), [userId]: value } }))
-  }
-
-  // Overdue threshold state
-  const [overdueThreshold, setOverdueThreshold] = useState(15)
-  const [thresholdLoading, setThresholdLoading] = useState(true)
-  const [thresholdSaving, setThresholdSaving] = useState(false)
-  const [thresholdError, setThresholdError] = useState('')
-  const [thresholdSuccess, setThresholdSuccess] = useState(false)
 
   useEffect(() => {
     async function loadSettings() {
@@ -235,6 +117,153 @@ export default function Setup() {
       setThresholdLoading(false)
     }
   }, [isCompanyAdmin])
+
+  const handleAddType = async () => {
+    if (!newType.label.trim()) {
+      setTypeError('Label is required.')
+      return
+    }
+    if (!newType.category) {
+      setTypeError('Category is required.')
+      return
+    }
+
+    setAddingType(true)
+    setTypeError('')
+    try {
+      const data = await setupAPI.createAlertType(newType)
+      setAlertTypes(prev => [...prev, data.alertType])
+      setNewType({ label: '', emoji: '', category: 'general' })
+    } catch (err) {
+      setTypeError(err.message || 'Failed to add alert type.')
+    } finally {
+      setAddingType(false)
+    }
+  }
+
+  const handleSaveType = async (id) => {
+    if (!editTypeForm.label.trim()) return
+
+    try {
+      const data = await setupAPI.updateAlertType(id, editTypeForm)
+      setAlertTypes(prev => prev.map(type => type.id === id ? data.alertType : type))
+      setEditingTypeId(null)
+    } catch (err) {
+      setTypeError(err.message || 'Failed to update.')
+    }
+  }
+
+  const handleDeleteType = async (id) => {
+    if (!confirm('Delete this alert type?')) return
+
+    try {
+      const deleted = alertTypes.find(type => type.id === id)
+      await setupAPI.deleteAlertType(id)
+      setAlertTypes(prev => prev.filter(type => type.id !== id))
+      if (deleted?.label === selectedEmergencyType) {
+        setSelectedEmergencyType('')
+      }
+    } catch (err) {
+      setTypeError(err.message || 'Failed to delete.')
+    }
+  }
+
+  const handleAddLocation = async () => {
+    if (!newLocation.trim()) {
+      setLocationError('Label is required.')
+      return
+    }
+
+    setAddingLocation(true)
+    setLocationError('')
+    try {
+      const data = await setupAPI.createLocation({ label: newLocation })
+      setLocations(prev => [...prev, data.location])
+      setNewLocation('')
+    } catch (err) {
+      setLocationError(err.message || 'Failed to add location.')
+    } finally {
+      setAddingLocation(false)
+    }
+  }
+
+  const handleSaveLocation = async (id) => {
+    if (!editLocationLabel.trim()) return
+
+    try {
+      const data = await setupAPI.updateLocation(id, { label: editLocationLabel })
+      setLocations(prev => prev.map(location => location.id === id ? data.location : location))
+      setEditingLocationId(null)
+    } catch (err) {
+      setLocationError(err.message || 'Failed to update.')
+    }
+  }
+
+  const handleDeleteLocation = async (id) => {
+    if (!confirm('Delete this location?')) return
+
+    try {
+      await setupAPI.deleteLocation(id)
+      setLocations(prev => prev.filter(location => location.id !== id))
+    } catch (err) {
+      setLocationError(err.message || 'Failed to delete.')
+    }
+  }
+
+  const getRecipients = (alertType) => routing[alertType] || []
+
+  const saveRouting = async (alertType, recipients) => {
+    setSavingRouting(state => ({ ...state, [alertType]: true }))
+    setSaveStatus(state => ({ ...state, [alertType]: null }))
+    try {
+      await setupAPI.updateRouting(alertType, recipients)
+      setSaveStatus(state => ({ ...state, [alertType]: 'saved' }))
+      setTimeout(() => setSaveStatus(state => ({ ...state, [alertType]: null })), 3000)
+    } catch {
+      setSaveStatus(state => ({ ...state, [alertType]: 'error' }))
+    } finally {
+      setSavingRouting(state => ({ ...state, [alertType]: false }))
+    }
+  }
+
+  const handleAddUser = async (alertType, user) => {
+    const notify = notifyPrefs[alertType]?.[user.id] || 'email'
+    const current = getRecipients(alertType)
+    const alreadyAdded = current.some(
+      recipient => recipient.email?.toLowerCase() === user.email?.toLowerCase()
+    )
+
+    if (alreadyAdded) return
+
+    const updated = [
+      ...current,
+      {
+        name: user.name,
+        email: user.email || null,
+        phone: user.phone || null,
+        role: user.role,
+        notify,
+      },
+    ]
+
+    setRouting(state => ({ ...state, [alertType]: updated }))
+    await saveRouting(alertType, updated)
+  }
+
+  const handleRemoveRecipient = async (alertType, index) => {
+    const updated = getRecipients(alertType).filter((_, i) => i !== index)
+    setRouting(state => ({ ...state, [alertType]: updated }))
+    await saveRouting(alertType, updated)
+  }
+
+  const getNotifyPref = (alertType, userId) => notifyPrefs[alertType]?.[userId] || 'email'
+
+  const setNotifyPref = (alertType, userId, value) => {
+    setNotifyPrefs(prev => ({
+      ...prev,
+      [alertType]: { ...(prev[alertType] || {}), [userId]: value },
+    }))
+  }
 
   async function handleSaveGlobalSettings() {
     setThresholdSaving(true)
@@ -264,24 +293,21 @@ export default function Setup() {
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <h1 className="text-2xl font-bold mb-6">Setup</h1>
-        {isCompanyAdmin && (
-           <p className="text-sm text-gray-500 mb-6 max-w-2xl">
-            Through this page you can design, configure, and manage the SCOUT system across all schools. 
-            This includes creating alert types, defining workflows, and shaping how SCOUT functions for all users.
-           </p>
-)}
 
-        {isSchoolAdmin && (
-  <p className="text-sm text-gray-500 mb-6 max-w-2xl">
-    Configure and apply SCOUT within your school. This includes selecting available alert types, 
-    assigning roles, and defining who receives notifications.
+      {isCompanyAdmin && (
+        <p className="text-sm text-gray-500 mb-6 max-w-2xl">
+          Through this page you can design, configure, and manage the SCOUT system across all schools.
+          This includes creating alert types, defining workflows, and shaping how SCOUT functions for all users.
         </p>
-)}
+      )}
 
+      {isSchoolAdmin && (
+        <p className="text-sm text-gray-500 mb-6 max-w-2xl">
+          Configure and apply SCOUT within your school. This includes selecting available alert types,
+          assigning roles, and defining who receives notifications.
+        </p>
+      )}
 
-
-
-      {/* Alert Configuration — Company Admin only */}
       {isCompanyAdmin && (
         <div>
           <div className="flex items-center gap-2 mb-3">
@@ -292,9 +318,7 @@ export default function Setup() {
           {loadingConfig && <p className="text-sm text-gray-400 mb-4">Loading...</p>}
           {configError && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-4">{configError}</p>}
 
-          <div className="grid grid-cols-2 gap-6">
-
-            {/* Alert Types */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-white border border-gray-200 rounded-xl p-5">
               <h3 className="font-semibold text-gray-900 mb-1">Alert Types</h3>
               <p className="text-sm text-gray-500 mb-4">Appear in the alert type dropdown when submitting an alert.</p>
@@ -305,38 +329,36 @@ export default function Setup() {
                 {alertTypes.map(type => (
                   <div key={type.id} className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
                     {editingTypeId === type.id ? (
-                      <>
-                        <div className="flex flex-col gap-2 flex-1">
-                          <div className="flex gap-2">
-                            <select
-                              value={editTypeForm.emoji}
-                              onChange={e => setEditTypeForm(f => ({ ...f, emoji: e.target.value }))}
-                              className="border border-gray-300 rounded px-2 py-1 text-sm w-16"
-                            >
-                              <option value="">—</option>
-                              {EMOJI_OPTIONS.map(em => <option key={em} value={em}>{em}</option>)}
-                            </select>
-                            <input
-                              className="flex-1 border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
-                              value={editTypeForm.label}
-                              onChange={e => setEditTypeForm(f => ({ ...f, label: e.target.value }))}
-                              onKeyDown={e => e.key === 'Enter' && handleSaveType(type.id)}
-                            />
-                          </div>
-                          <div className="flex gap-2 items-center">
-                            <select
-                              value={editTypeForm.category}
-                              onChange={e => setEditTypeForm(f => ({ ...f, category: e.target.value }))}
-                              className="flex-1 border border-gray-300 rounded px-2 py-1 text-xs"
-                            >
-                              <option value="general">General</option>
-                              <option value="emergency">Emergency</option>
-                            </select>
-                            <button onClick={() => handleSaveType(type.id)} className="text-xs text-green-600 hover:text-green-800 font-medium">Save</button>
-                            <button onClick={() => setEditingTypeId(null)} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
-                          </div>
+                      <div className="flex flex-col gap-2 flex-1">
+                        <div className="flex gap-2">
+                          <select
+                            value={editTypeForm.emoji}
+                            onChange={event => setEditTypeForm(form => ({ ...form, emoji: event.target.value }))}
+                            className="border border-gray-300 rounded px-2 py-1 text-sm w-20"
+                          >
+                            <option value="">None</option>
+                            {EMOJI_OPTIONS.map(emoji => <option key={emoji} value={emoji}>{emoji}</option>)}
+                          </select>
+                          <input
+                            className="flex-1 border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
+                            value={editTypeForm.label}
+                            onChange={event => setEditTypeForm(form => ({ ...form, label: event.target.value }))}
+                            onKeyDown={event => event.key === 'Enter' && handleSaveType(type.id)}
+                          />
                         </div>
-                      </>
+                        <div className="flex gap-2 items-center">
+                          <select
+                            value={editTypeForm.category}
+                            onChange={event => setEditTypeForm(form => ({ ...form, category: event.target.value }))}
+                            className="flex-1 border border-gray-300 rounded px-2 py-1 text-xs"
+                          >
+                            <option value="general">General</option>
+                            <option value="emergency">Emergency</option>
+                          </select>
+                          <button onClick={() => handleSaveType(type.id)} className="text-xs text-green-600 hover:text-green-800 font-medium">Save</button>
+                          <button onClick={() => setEditingTypeId(null)} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
+                        </div>
+                      </div>
                     ) : (
                       <>
                         <span className="text-base w-7">{type.emoji || '📢'}</span>
@@ -365,30 +387,29 @@ export default function Setup() {
                 )}
               </div>
 
-              {/* Add new */}
               <div className="border-t border-gray-100 pt-3">
                 <p className="text-xs font-medium text-gray-500 mb-2">Add new</p>
                 <div className="flex gap-2 mb-2">
                   <select
                     value={newType.emoji}
-                    onChange={e => setNewType(f => ({ ...f, emoji: e.target.value }))}
-                    className="border border-gray-300 rounded px-2 py-1.5 text-sm w-16"
+                    onChange={event => setNewType(form => ({ ...form, emoji: event.target.value }))}
+                    className="border border-gray-300 rounded px-2 py-1.5 text-sm w-20"
                   >
                     <option value="">Emoji</option>
-                    {EMOJI_OPTIONS.map(em => <option key={em} value={em}>{em}</option>)}
+                    {EMOJI_OPTIONS.map(emoji => <option key={emoji} value={emoji}>{emoji}</option>)}
                   </select>
                   <input
                     className="flex-1 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
                     placeholder="e.g. Medical"
                     value={newType.label}
-                    onChange={e => setNewType(f => ({ ...f, label: e.target.value }))}
-                    onKeyDown={e => e.key === 'Enter' && handleAddType()}
+                    onChange={event => setNewType(form => ({ ...form, label: event.target.value }))}
+                    onKeyDown={event => event.key === 'Enter' && handleAddType()}
                   />
                 </div>
                 <div className="flex gap-2">
                   <select
                     value={newType.category}
-                    onChange={e => setNewType(f => ({ ...f, category: e.target.value }))}
+                    onChange={event => setNewType(form => ({ ...form, category: event.target.value }))}
                     className="flex-1 border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
                   >
                     <option value="general">General</option>
@@ -405,7 +426,6 @@ export default function Setup() {
               </div>
             </div>
 
-            {/* Locations */}
             <div className="bg-white border border-gray-200 rounded-xl p-5">
               <h3 className="font-semibold text-gray-900 mb-1">Locations</h3>
               <p className="text-sm text-gray-500 mb-4">Appear as location options when submitting an alert.</p>
@@ -413,30 +433,33 @@ export default function Setup() {
               {locationError && <p className="text-xs text-red-600 mb-2">{locationError}</p>}
 
               <div className="space-y-2 mb-4">
-                {locations.map(loc => (
-                  <div key={loc.id} className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
-                    {editingLocationId === loc.id ? (
+                {locations.map(location => (
+                  <div key={location.id} className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
+                    {editingLocationId === location.id ? (
                       <>
                         <input
                           className="flex-1 border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
                           value={editLocationLabel}
-                          onChange={e => setEditLocationLabel(e.target.value)}
-                          onKeyDown={e => e.key === 'Enter' && handleSaveLocation(loc.id)}
+                          onChange={event => setEditLocationLabel(event.target.value)}
+                          onKeyDown={event => event.key === 'Enter' && handleSaveLocation(location.id)}
                         />
-                        <button onClick={() => handleSaveLocation(loc.id)} className="text-xs text-green-600 hover:text-green-800 font-medium">Save</button>
+                        <button onClick={() => handleSaveLocation(location.id)} className="text-xs text-green-600 hover:text-green-800 font-medium">Save</button>
                         <button onClick={() => setEditingLocationId(null)} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
                       </>
                     ) : (
                       <>
                         <span className="text-sm text-gray-400">📍</span>
-                        <span className="flex-1 text-sm font-medium text-gray-800">{loc.label}</span>
+                        <span className="flex-1 text-sm font-medium text-gray-800">{location.label}</span>
                         <button
-                          onClick={() => { setEditingLocationId(loc.id); setEditLocationLabel(loc.label) }}
+                          onClick={() => {
+                            setEditingLocationId(location.id)
+                            setEditLocationLabel(location.label)
+                          }}
                           className="text-xs text-gray-400 hover:text-blue-600"
                         >
                           Edit
                         </button>
-                        <button onClick={() => handleDeleteLocation(loc.id)} className="text-xs text-gray-400 hover:text-red-600">Delete</button>
+                        <button onClick={() => handleDeleteLocation(location.id)} className="text-xs text-gray-400 hover:text-red-600">Delete</button>
                       </>
                     )}
                   </div>
@@ -453,8 +476,8 @@ export default function Setup() {
                     className="flex-1 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
                     placeholder="e.g. Block A"
                     value={newLocation}
-                    onChange={e => setNewLocation(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handleAddLocation()}
+                    onChange={event => setNewLocation(event.target.value)}
+                    onKeyDown={event => event.key === 'Enter' && handleAddLocation()}
                   />
                   <button
                     onClick={handleAddLocation}
@@ -466,12 +489,53 @@ export default function Setup() {
                 </div>
               </div>
             </div>
+          </div>
 
+          <div className="bg-white border border-gray-200 rounded-xl p-5 mt-6">
+            <h3 className="font-semibold mb-2">System-wide Configuration</h3>
+            <p className="text-sm text-gray-500 mb-4">Only Company Admins can update global settings.</p>
+
+            <label className="block text-xs text-gray-600 mb-1">
+              Unacknowledged alert threshold (minutes)
+            </label>
+            <p className="text-xs text-gray-400 mb-2">
+              Alerts that remain unacknowledged longer than this will be flagged as overdue.
+            </p>
+            <input
+              type="number"
+              min={1}
+              max={1440}
+              value={thresholdLoading ? '' : overdueThreshold}
+              onChange={event => {
+                setThresholdSuccess(false)
+                setThresholdError('')
+                setOverdueThreshold(event.target.value)
+              }}
+              placeholder={thresholdLoading ? 'Loading...' : '15'}
+              className="w-full px-3 py-2 border rounded disabled:bg-gray-50 disabled:text-gray-400"
+              disabled={thresholdLoading}
+            />
+
+            {thresholdError && (
+              <p className="text-xs text-red-600 mt-1">{thresholdError}</p>
+            )}
+            {thresholdSuccess && (
+              <p className="text-xs text-green-600 mt-1">Settings saved.</p>
+            )}
+
+            <div className="mt-4">
+              <button
+                onClick={handleSaveGlobalSettings}
+                disabled={thresholdSaving || thresholdLoading}
+                className="px-3 py-2 rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {thresholdSaving ? 'Saving...' : 'Save global settings'}
+              </button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Email Routing — School Admin only */}
       {isSchoolAdmin && (
         <div className="mt-6">
           <div className="flex items-center gap-2 mb-3">
@@ -483,11 +547,10 @@ export default function Setup() {
           {loadingRouting && <p className="text-sm text-gray-400 mb-4">Loading...</p>}
           {routingError && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-4">{routingError}</p>}
 
-          {/* Emergency type selector — fetched from Firestore */}
           <div className="mb-4">
             <select
               value={selectedEmergencyType}
-              onChange={e => setSelectedEmergencyType(e.target.value)}
+              onChange={event => setSelectedEmergencyType(event.target.value)}
               className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 w-64"
             >
               <option value="">Select an emergency type</option>
@@ -499,17 +562,16 @@ export default function Setup() {
             </select>
           </div>
 
-          {/* Recipients panel for selected type */}
           {selectedEmergencyType && (() => {
-            const type = emergencyTypes.find(t => t.value === selectedEmergencyType)
+            const type = emergencyTypes.find(item => item.value === selectedEmergencyType)
             if (!type) return null
+
             const recipients = getRecipients(type.value)
             const isSaving = savingRouting[type.value]
             const status = saveStatus[type.value]
 
             return (
               <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-5">
-
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className="text-lg">{type.icon}</span>
@@ -518,31 +580,31 @@ export default function Setup() {
                   </div>
                   <div className="flex items-center gap-2">
                     {isSaving && <span className="text-xs text-gray-400">Saving...</span>}
-                    {status === 'saved' && <span className="text-xs text-green-600">✓ Saved</span>}
-                    {status === 'error' && <span className="text-xs text-red-600">✗ Failed to save</span>}
+                    {status === 'saved' && <span className="text-xs text-green-600">Saved</span>}
+                    {status === 'error' && <span className="text-xs text-red-600">Failed to save</span>}
                   </div>
                 </div>
 
                 <div>
                   <p className="text-xs font-medium text-gray-500 mb-2">Current Recipients</p>
                   {recipients.length === 0 ? (
-                    <p className="text-xs text-gray-400">No recipients yet — add from school users below.</p>
+                    <p className="text-xs text-gray-400">No recipients yet. Add from school users below.</p>
                   ) : (
                     <div className="space-y-2">
-                      {recipients.map((r, index) => (
-                        <div key={index} className="flex items-center gap-3 bg-gray-50 px-3 py-2 rounded-lg">
+                      {recipients.map((recipient, index) => (
+                        <div key={`${recipient.email || recipient.phone || recipient.name}-${index}`} className="flex items-center gap-3 bg-gray-50 px-3 py-2 rounded-lg">
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-800">{r.name}</p>
+                            <p className="text-sm font-medium text-gray-800">{recipient.name}</p>
                             <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                              <span className="text-xs text-gray-400">{formatRole(r.role)}</span>
-                              {r.email && <span className="text-xs text-gray-400">📧 {r.email}</span>}
-                              {r.phone && <span className="text-xs text-gray-400">📱 {r.phone}</span>}
+                              <span className="text-xs text-gray-400">{formatRole(recipient.role)}</span>
+                              {recipient.email && <span className="text-xs text-gray-400">Email: {recipient.email}</span>}
+                              {recipient.phone && <span className="text-xs text-gray-400">Phone: {recipient.phone}</span>}
                               <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${
-                                r.notify === 'both' ? 'bg-blue-100 text-blue-700' :
-                                r.notify === 'sms' ? 'bg-green-100 text-green-700' :
+                                recipient.notify === 'both' ? 'bg-blue-100 text-blue-700' :
+                                recipient.notify === 'sms' ? 'bg-green-100 text-green-700' :
                                 'bg-gray-100 text-gray-600'
                               }`}>
-                                {r.notify === 'both' ? 'Email + SMS' : r.notify === 'sms' ? 'SMS' : 'Email'}
+                                {recipient.notify === 'both' ? 'Email + SMS' : recipient.notify === 'sms' ? 'SMS' : 'Email'}
                               </span>
                             </div>
                           </div>
@@ -565,7 +627,9 @@ export default function Setup() {
                   ) : (
                     <div className="space-y-2">
                       {schoolUsers.map(user => {
-                        const alreadyAdded = recipients.some(r => r.email?.toLowerCase() === user.email?.toLowerCase())
+                        const alreadyAdded = recipients.some(
+                          recipient => recipient.email?.toLowerCase() === user.email?.toLowerCase()
+                        )
                         const notify = getNotifyPref(type.value, user.id)
 
                         return (
@@ -576,17 +640,18 @@ export default function Setup() {
                               <p className="text-sm font-medium text-gray-800">{user.name}</p>
                               <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                                 <span className="text-xs text-gray-400">{formatRole(user.role)}</span>
-                                {user.email && <span className="text-xs text-gray-400">📧 {user.email}</span>}
-                                {user.phone && <span className="text-xs text-gray-400">📱 {user.phone}</span>}
+                                {user.email && <span className="text-xs text-gray-400">Email: {user.email}</span>}
+                                {user.phone && <span className="text-xs text-gray-400">Phone: {user.phone}</span>}
                               </div>
                             </div>
+
                             {alreadyAdded ? (
-                              <span className="text-xs text-green-600 font-medium shrink-0">✓ Added</span>
+                              <span className="text-xs text-green-600 font-medium shrink-0">Added</span>
                             ) : (
                               <div className="flex items-center gap-2 shrink-0">
                                 <select
                                   value={notify}
-                                  onChange={e => setNotifyPref(type.value, user.id, e.target.value)}
+                                  onChange={event => setNotifyPref(type.value, user.id, event.target.value)}
                                   className="border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-red-400"
                                 >
                                   <option value="email">Email</option>
@@ -607,14 +672,11 @@ export default function Setup() {
                     </div>
                   )}
                 </div>
-
               </div>
             )
           })()}
-
         </div>
       )}
-
     </div>
   )
 }

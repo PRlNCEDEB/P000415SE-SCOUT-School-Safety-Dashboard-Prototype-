@@ -12,8 +12,16 @@ const ALERT_TYPES = [
 ]
 
 const LOCATIONS = [
-  'Oval', 'Canteen', 'Block A', 'Block B', 'Block C',
-  'Main Building', 'Cafeteria', 'Library', 'Car Park', 'Reception',
+  'Oval',
+  'Canteen',
+  'Block A',
+  'Block B',
+  'Block C',
+  'Main Building',
+  'Cafeteria',
+  'Library',
+  'Car Park',
+  'Reception',
 ]
 
 async function seedAlertConfig() {
@@ -30,7 +38,7 @@ async function seedAlertConfig() {
       createdAt: now,
       updatedAt: now,
     })
-    console.log(`  ✅ ${type.emoji} ${type.label}`)
+    console.log(`  ${type.emoji} ${type.label}`)
   }
 
   console.log('Seeding locations...')
@@ -41,7 +49,7 @@ async function seedAlertConfig() {
       createdAt: now,
       updatedAt: now,
     })
-    console.log(`  ✅ 📍 ${label}`)
+    console.log(`  ${label}`)
   }
 
   console.log('Done.')

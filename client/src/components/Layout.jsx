@@ -1,5 +1,16 @@
 import { useState, useEffect } from 'react'
 import { Link, Navigate, useLocation } from 'react-router-dom'
+import {
+  BarChart3,
+  Bell,
+  CheckCircle2,
+  ClipboardList,
+  LayoutDashboard,
+  LogOut,
+  PlusCircle,
+  Settings,
+  Siren,
+} from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { getIncidentById } from '../api/client'
 
@@ -7,11 +18,9 @@ export default function Layout({ children }) {
   const location = useLocation()
   const { currentUser, userRole, logout, isCompanyAdmin, isSchoolAdmin, isStaff } = useAuth()
 
-  // Active emergency banner state
   const [activeEmergency, setActiveEmergency] = useState(null)
   const [acknowledgedBy, setAcknowledgedBy] = useState([])
 
-  // Load active emergency from localStorage
   useEffect(() => {
     const loadActiveEmergency = () => {
       const stored = localStorage.getItem('activeEmergency')
@@ -20,6 +29,7 @@ export default function Layout({ children }) {
         setAcknowledgedBy([])
         return
       }
+
       try {
         const parsed = JSON.parse(stored)
         setActiveEmergency(parsed)
@@ -45,7 +55,6 @@ export default function Layout({ children }) {
     }
   }, [])
 
-  // Poll every 5 seconds until acknowledged
   useEffect(() => {
     if (!activeEmergency?.incidentId || acknowledgedBy.length > 0) return
 
@@ -55,7 +64,6 @@ export default function Layout({ children }) {
         const ackBy = incident?.acknowledgedBy || []
         if (ackBy.length > 0) {
           setAcknowledgedBy(ackBy)
-          // Persist acknowledgement in localStorage so it survives page navigation
           const stored = JSON.parse(localStorage.getItem('activeEmergency') || '{}')
           localStorage.setItem('activeEmergency', JSON.stringify({
             ...stored,
@@ -86,35 +94,35 @@ export default function Layout({ children }) {
       title: 'SCOUT Setup / Config',
       visible: isCompanyAdmin || isSchoolAdmin,
       items: [
-        { path: '/setup', label: 'Setup', icon: 'S', visible: isCompanyAdmin || isSchoolAdmin },
+        { path: '/setup', label: 'Setup', icon: Settings, visible: isCompanyAdmin || isSchoolAdmin },
       ],
     },
     {
       title: 'Live Operations',
       visible: true,
       items: [
-        { path: '/dashboard', label: 'Dashboard', icon: 'D', visible: true },
-        { path: '/submit', label: 'Submit Alert', icon: '+', visible: isSchoolAdmin || isStaff },
-        { path: '/incidents', label: 'Incidents', icon: 'I', visible: isCompanyAdmin || isSchoolAdmin || isStaff },
+        { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, visible: true },
+        { path: '/submit', label: 'Submit Alert', icon: PlusCircle, visible: isSchoolAdmin || isStaff },
+        { path: '/incidents', label: 'Incidents', icon: ClipboardList, visible: isCompanyAdmin || isSchoolAdmin || isStaff },
       ],
     },
     {
       title: 'Data & Insights',
       visible: isCompanyAdmin || isSchoolAdmin,
       items: [
-        { path: '/analytics', label: 'Analytics', icon: 'A', visible: isCompanyAdmin },
-        { path: '/notifications', label: 'Notifications', icon: 'N', visible: isCompanyAdmin || isSchoolAdmin },
+        { path: '/analytics', label: 'Analytics', icon: BarChart3, visible: isCompanyAdmin },
+        { path: '/notifications', label: 'Notifications', icon: Bell, visible: isCompanyAdmin || isSchoolAdmin },
       ],
     },
   ]
 
   const isAcknowledged = acknowledgedBy.length > 0
   const firstAck = acknowledgedBy[0]
+  const displayName = currentUser.displayName || currentUser._profileName || currentUser.name || currentUser.email
 
   return (
     <div className="flex h-screen bg-gray-50">
 
-      {/* Floating Emergency Banner — shown on all pages */}
       {activeEmergency && (
         <div className={`fixed top-0 left-0 right-0 z-50 px-4 py-3 flex items-center justify-between shadow-lg ${
           isAcknowledged ? 'bg-green-600' : 'bg-red-600'
@@ -122,7 +130,7 @@ export default function Layout({ children }) {
           <div className="flex items-center gap-3">
             {isAcknowledged ? (
               <>
-                <span className="text-xl">✅</span>
+                <CheckCircle2 className="w-5 h-5 text-white" aria-hidden="true" />
                 <div>
                   <p className="text-white font-semibold text-sm">Help is on the way!</p>
                   <p className="text-white text-xs opacity-90">
@@ -132,7 +140,7 @@ export default function Layout({ children }) {
               </>
             ) : (
               <>
-                <span className="text-xl animate-pulse">🚨</span>
+                <Siren className="w-5 h-5 text-white animate-pulse" aria-hidden="true" />
                 <div>
                   <p className="text-white font-semibold text-sm">
                     {activeEmergency.emergencyType} Emergency Alert Sent
@@ -154,7 +162,6 @@ export default function Layout({ children }) {
       )}
 
       <div className={`w-56 bg-white border-r border-gray-200 flex flex-col ${activeEmergency ? 'mt-12' : ''}`}>
-        
         <Link to="/dashboard" className="flex items-center gap-2 px-4 py-5 border-b border-gray-200">
           <div className="w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center">
             <span className="text-white text-sm">S</span>
@@ -163,7 +170,7 @@ export default function Layout({ children }) {
         </Link>
 
         <nav className="flex-1 p-3 space-y-4">
-          {navigationSections.map((section) => {
+          {navigationSections.map(section => {
             const visibleItems = section.items.filter(item => item.visible)
             if (visibleItems.length === 0) return null
 
@@ -173,20 +180,23 @@ export default function Layout({ children }) {
                   {section.title}
                 </h3>
                 <div className="space-y-1">
-                  {visibleItems.map(item => (
-                    <Link
-                      key={item.path}
-                      to={item.path}
-                      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
-                        location.pathname === item.path
-                          ? 'bg-red-50 text-red-600 font-medium'
-                          : 'text-gray-600 hover:bg-gray-100'
-                      }`}
-                    >
-                      <span>{item.icon}</span>
-                      {item.label}
-                    </Link>
-                  ))}
+                  {visibleItems.map(item => {
+                    const Icon = item.icon
+                    return (
+                      <Link
+                        key={item.path}
+                        to={item.path}
+                        className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+                          location.pathname === item.path
+                            ? 'bg-red-50 text-red-600 font-medium'
+                            : 'text-gray-600 hover:bg-gray-100'
+                        }`}
+                      >
+                        <Icon className="w-4 h-4 shrink-0" aria-hidden="true" />
+                        {item.label}
+                      </Link>
+                    )
+                  })}
                 </div>
               </div>
             )
@@ -195,9 +205,9 @@ export default function Layout({ children }) {
 
         <div className="p-3 border-t border-gray-200">
           <div className="px-3 py-2 mb-1">
-            <div className="flex items-center justify-between mb-0.5">
-              <p className="text-sm font-medium text-gray-800">{currentUser.displayName || currentUser.name}</p>
-              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+            <p className="text-sm font-medium text-gray-800 truncate mb-1">{displayName}</p>
+            <div className="mb-1">
+              <span className={`inline-flex text-xs px-2 py-0.5 rounded-full font-medium ${
                 isCompanyAdmin
                   ? 'bg-red-100 text-red-700'
                   : isSchoolAdmin
@@ -207,13 +217,14 @@ export default function Layout({ children }) {
                 {userRole || currentUser.role}
               </span>
             </div>
-            <p className="text-xs text-gray-400">{currentUser.email}</p>
+            <p className="text-xs text-gray-400 truncate">{currentUser.email}</p>
           </div>
           <button
             onClick={logout}
             className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100 transition-colors"
           >
-            <span>R</span> Reset Session
+            <LogOut className="w-4 h-4 shrink-0" aria-hidden="true" />
+            Logout
           </button>
         </div>
       </div>

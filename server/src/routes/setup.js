@@ -297,6 +297,7 @@ router.put('/routing/:alertType', verifyToken, requireSchoolAdmin, async (req, r
         name: r.name?.trim() || r.email?.trim() || r.phone?.trim(),
         email: r.email?.trim() || null,
         phone: r.phone?.trim() || null,
+        role: r.role || 'recipient',
         notify: r.notify || 'email',
       })),
       updatedAt: now,
