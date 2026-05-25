@@ -243,7 +243,7 @@ export default function Incidents() {
                   overdue ? 'bg-amber-50 hover:bg-amber-100 border-l-4 border-amber-400' : 'hover:bg-gray-50'
                 }`}
               >
-                <span className="text-lg">{typeIcons[incident.type]}</span>
+                <span className="text-lg">{typeIcons[incident.type] || '📢'}</span>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-gray-800 truncate">{incident.title}</p>
                   <p className="text-xs text-gray-500 truncate">

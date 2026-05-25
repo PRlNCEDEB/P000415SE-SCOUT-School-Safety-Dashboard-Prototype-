@@ -615,18 +615,23 @@ router.get('/acknowledge/:token', async (req, res) => {
 router.get('/', verifyToken, requireNotificationViewer, async (req, res, next) => {
   try {
     const db = getDb()
-    let query = db.collection('notifications')
-      .orderBy('timestamp', 'desc')
-      .limit(100)
+    const query = db.collection('notifications')
 
     if (isSchoolAdmin(req.profile.role)) {
-      query = db.collection('notifications')
+      const snapshot = await query
         .where('schoolId', '==', req.profile.schoolId)
-        .orderBy('timestamp', 'desc')
         .limit(100)
+        .get()
+      const notifications = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0))
+      return res.json({ notifications })
     }
 
-    const snapshot = await query.get()
+    const snapshot = await query
+      .orderBy('timestamp', 'desc')
+      .limit(100)
+      .get()
     const notifications = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
     res.json({ notifications })
   } catch (err) {
