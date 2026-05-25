@@ -13,7 +13,8 @@
     "seed:emulator": "node src/db/seedEmulatorData.js",
     "incidents:cleanup-old": "node src/db/deleteOldIncidents.js",
     "incidents:delete-old": "node src/db/deleteOldIncidents.js --confirm-delete",
-    "seed:alert-config": "node src/db/seedAlertConfig.js"
+    "seed:alert-config": "node src/db/seedAlertConfig.js",
+    "migrate:alert-types": "node src/db/migrateAlertTypes.js"
   },
   "keywords": [],
   "author": "",

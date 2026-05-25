@@ -71,7 +71,7 @@ export const notificationsAPI = {
 
 export const setupAPI = {
   // Alert types
-  getAlertTypes: () => request('/setup/alert-types'),
+  getAlertTypes: (category) => request(`/setup/alert-types${category ? `?category=${category}` : ''}`),
   createAlertType: data => request('/setup/alert-types', { method: 'POST', body: JSON.stringify(data) }),
   updateAlertType: (id, data) => request(`/setup/alert-types/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteAlertType: id => request(`/setup/alert-types/${id}`, { method: 'DELETE' }),

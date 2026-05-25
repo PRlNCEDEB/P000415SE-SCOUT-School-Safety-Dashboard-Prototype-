@@ -73,13 +73,24 @@ async function requireSchoolAdmin(req, res, next) {
 // ── Alert Types ───────────────────────────────────────────────────────────────
 
 // GET /api/setup/alert-types
+// Optional query param: ?category=emergency or ?category=general
 // Any authenticated user can read (SubmitAlert needs this)
 router.get('/alert-types', verifyToken, async (req, res, next) => {
   try {
-    const snapshot = await getDb()
-      .collection('alertTypes')
-      .orderBy('createdAt', 'asc')
-      .get()
+    const { category } = req.query
+
+    let query
+    if (category) {
+      query = getDb()
+        .collection('alertTypes')
+        .where('category', '==', category)
+    } else {
+      query = getDb()
+        .collection('alertTypes')
+        .orderBy('createdAt', 'asc')
+    }
+
+    const snapshot = await query.get()
     res.json({ alertTypes: snapshotToArray(snapshot) })
   } catch (err) {
     next(err)
@@ -89,13 +100,21 @@ router.get('/alert-types', verifyToken, async (req, res, next) => {
 // POST /api/setup/alert-types — Company Admin only
 router.post('/alert-types', verifyToken, requireCompanyAdmin, async (req, res, next) => {
   try {
-    const { label, emoji } = req.body
+    const { label, emoji, category } = req.body
     if (!label?.trim()) return res.status(400).json({ error: 'Label is required.' })
+    if (!category) return res.status(400).json({ error: 'Category is required.' })
+    if (!['emergency', 'general'].includes(category)) {
+      return res.status(400).json({ error: 'Category must be emergency or general.' })
+    }
 
     const now = new Date().toISOString()
+    const value = label.trim().toLowerCase().replace(/\s+/g, '_')
+
     const docRef = await getDb().collection('alertTypes').add({
       label: label.trim(),
+      value,
       emoji: emoji?.trim() || '',
+      category,
       active: true,
       createdAt: now,
       updatedAt: now,
@@ -111,18 +130,26 @@ router.post('/alert-types', verifyToken, requireCompanyAdmin, async (req, res, n
 // PUT /api/setup/alert-types/:id — Company Admin only
 router.put('/alert-types/:id', verifyToken, requireCompanyAdmin, async (req, res, next) => {
   try {
-    const { label, emoji } = req.body
+    const { label, emoji, category } = req.body
     if (!label?.trim()) return res.status(400).json({ error: 'Label is required.' })
+    if (category && !['emergency', 'general'].includes(category)) {
+      return res.status(400).json({ error: 'Category must be emergency or general.' })
+    }
 
     const ref = getDb().collection('alertTypes').doc(req.params.id)
     const doc = await ref.get()
     if (!doc.exists) return res.status(404).json({ error: 'Alert type not found.' })
 
-    await ref.update({
+    const updateData = {
       label: label.trim(),
       emoji: emoji?.trim() || '',
       updatedAt: new Date().toISOString(),
-    })
+    }
+
+    // Only update category if provided
+    if (category) updateData.category = category
+
+    await ref.update(updateData)
 
     const updated = await ref.get()
     res.json({ alertType: docToObject(updated) })
@@ -246,7 +273,6 @@ router.put('/routing/:alertType', verifyToken, requireSchoolAdmin, async (req, r
       return res.status(400).json({ error: 'recipients must be an array.' })
     }
 
-    // Validate — each recipient needs at least email or phone
     for (const r of recipients) {
       if (!r.email?.trim() && !r.phone?.trim()) {
         return res.status(400).json({ error: 'Each recipient needs at least an email or phone.' })
@@ -256,7 +282,6 @@ router.put('/routing/:alertType', verifyToken, requireSchoolAdmin, async (req, r
     const now = new Date().toISOString()
     const db = getDb()
 
-    // Check if routing doc already exists for this school + alertType
     const existing = await db.collection('notificationRouting')
       .where('schoolId', '==', schoolId)
       .where('alertType', '==', alertType)
@@ -304,7 +329,6 @@ router.get('/school-users', verifyToken, requireSchoolAdmin, async (req, res, ne
       .where('schoolId', '==', schoolId)
       .get()
 
-    // Exclude the school admin themselves
     const users = snapshot.docs
       .map(doc => ({ id: doc.id, ...doc.data() }))
       .filter(u => u.id !== uid)

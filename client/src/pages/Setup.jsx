@@ -1,14 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { settingsAPI, setupAPI } from '../api/client'
 
 const EMOJI_OPTIONS = ['🏥', '🔥', '🔒', '⚠️', '🌩️', '🔧', '📢', '🚨', '🛡️', '🌊']
-
-const DEFAULT_EMERGENCY_TYPES = [
-  { value: 'Fire', icon: '🔥' },
-  { value: 'Threat', icon: '🛡️' },
-  { value: 'Natural Disaster', icon: '🌊' },
-]
 
 function formatRole(role) {
   return String(role || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
@@ -22,11 +16,11 @@ export default function Setup() {
   const [loadingConfig, setLoadingConfig] = useState(false)
   const [configError, setConfigError] = useState('')
 
-  const [newType, setNewType] = useState({ label: '', emoji: '' })
+  const [newType, setNewType] = useState({ label: '', emoji: '', category: 'general' })
   const [addingType, setAddingType] = useState(false)
   const [typeError, setTypeError] = useState('')
   const [editingTypeId, setEditingTypeId] = useState(null)
-  const [editTypeForm, setEditTypeForm] = useState({ label: '', emoji: '' })
+  const [editTypeForm, setEditTypeForm] = useState({ label: '', emoji: '', category: 'general' })
 
   const [newLocation, setNewLocation] = useState('')
   const [addingLocation, setAddingLocation] = useState(false)
@@ -34,6 +28,7 @@ export default function Setup() {
   const [editingLocationId, setEditingLocationId] = useState(null)
   const [editLocationLabel, setEditLocationLabel] = useState('')
 
+  const [emergencyTypes, setEmergencyTypes] = useState([])
   const [routing, setRouting] = useState({})
   const [schoolUsers, setSchoolUsers] = useState([])
   const [loadingRouting, setLoadingRouting] = useState(false)
@@ -48,14 +43,6 @@ export default function Setup() {
   const [thresholdSaving, setThresholdSaving] = useState(false)
   const [thresholdError, setThresholdError] = useState('')
   const [thresholdSuccess, setThresholdSuccess] = useState(false)
-
-  const routingTypes = useMemo(() => {
-    const activeTypes = alertTypes
-      .filter(type => type.active !== false && type.label)
-      .map(type => ({ value: type.label, icon: type.emoji || '📢' }))
-
-    return activeTypes.length > 0 ? activeTypes : DEFAULT_EMERGENCY_TYPES
-  }, [alertTypes])
 
   const loadConfig = useCallback(async () => {
     setLoadingConfig(true)
@@ -75,8 +62,8 @@ export default function Setup() {
   }, [])
 
   useEffect(() => {
-    if (isCompanyAdmin || isSchoolAdmin) loadConfig()
-  }, [isCompanyAdmin, isSchoolAdmin, loadConfig])
+    if (isCompanyAdmin) loadConfig()
+  }, [isCompanyAdmin, loadConfig])
 
   useEffect(() => {
     if (!isSchoolAdmin) return
@@ -85,9 +72,10 @@ export default function Setup() {
       setLoadingRouting(true)
       setRoutingError('')
       try {
-        const [routingData, usersData] = await Promise.all([
+        const [routingData, usersData, emergencyTypesData] = await Promise.all([
           setupAPI.getRouting(),
           setupAPI.getSchoolUsers(),
+          setupAPI.getAlertTypes('emergency'),
         ])
         const map = {}
         for (const rule of (routingData.routing || [])) {
@@ -95,6 +83,12 @@ export default function Setup() {
         }
         setRouting(map)
         setSchoolUsers(usersData.users || [])
+        setEmergencyTypes(
+          (emergencyTypesData.alertTypes || []).map(type => ({
+            value: type.label,
+            icon: type.emoji || '🚨',
+          }))
+        )
       } catch {
         setRoutingError('Failed to load routing. Is the backend running?')
       } finally {
@@ -129,13 +123,17 @@ export default function Setup() {
       setTypeError('Label is required.')
       return
     }
+    if (!newType.category) {
+      setTypeError('Category is required.')
+      return
+    }
 
     setAddingType(true)
     setTypeError('')
     try {
       const data = await setupAPI.createAlertType(newType)
       setAlertTypes(prev => [...prev, data.alertType])
-      setNewType({ label: '', emoji: '' })
+      setNewType({ label: '', emoji: '', category: 'general' })
     } catch (err) {
       setTypeError(err.message || 'Failed to add alert type.')
     } finally {
@@ -159,9 +157,10 @@ export default function Setup() {
     if (!confirm('Delete this alert type?')) return
 
     try {
+      const deleted = alertTypes.find(type => type.id === id)
       await setupAPI.deleteAlertType(id)
       setAlertTypes(prev => prev.filter(type => type.id !== id))
-      if (alertTypes.find(type => type.id === id)?.label === selectedEmergencyType) {
+      if (deleted?.label === selectedEmergencyType) {
         setSelectedEmergencyType('')
       }
     } catch (err) {
@@ -296,6 +295,20 @@ export default function Setup() {
       <h1 className="text-2xl font-bold mb-6">Setup</h1>
 
       {isCompanyAdmin && (
+        <p className="text-sm text-gray-500 mb-6 max-w-2xl">
+          Through this page you can design, configure, and manage the SCOUT system across all schools.
+          This includes creating alert types, defining workflows, and shaping how SCOUT functions for all users.
+        </p>
+      )}
+
+      {isSchoolAdmin && (
+        <p className="text-sm text-gray-500 mb-6 max-w-2xl">
+          Configure and apply SCOUT within your school. This includes selecting available alert types,
+          assigning roles, and defining who receives notifications.
+        </p>
+      )}
+
+      {isCompanyAdmin && (
         <div>
           <div className="flex items-center gap-2 mb-3">
             <h2 className="text-lg font-semibold text-gray-800">Alert Configuration</h2>
@@ -316,32 +329,49 @@ export default function Setup() {
                 {alertTypes.map(type => (
                   <div key={type.id} className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
                     {editingTypeId === type.id ? (
-                      <>
-                        <select
-                          value={editTypeForm.emoji}
-                          onChange={event => setEditTypeForm(form => ({ ...form, emoji: event.target.value }))}
-                          className="border border-gray-300 rounded px-2 py-1 text-sm w-20"
-                        >
-                          <option value="">None</option>
-                          {EMOJI_OPTIONS.map(emoji => <option key={emoji} value={emoji}>{emoji}</option>)}
-                        </select>
-                        <input
-                          className="flex-1 border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
-                          value={editTypeForm.label}
-                          onChange={event => setEditTypeForm(form => ({ ...form, label: event.target.value }))}
-                          onKeyDown={event => event.key === 'Enter' && handleSaveType(type.id)}
-                        />
-                        <button onClick={() => handleSaveType(type.id)} className="text-xs text-green-600 hover:text-green-800 font-medium">Save</button>
-                        <button onClick={() => setEditingTypeId(null)} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
-                      </>
+                      <div className="flex flex-col gap-2 flex-1">
+                        <div className="flex gap-2">
+                          <select
+                            value={editTypeForm.emoji}
+                            onChange={event => setEditTypeForm(form => ({ ...form, emoji: event.target.value }))}
+                            className="border border-gray-300 rounded px-2 py-1 text-sm w-20"
+                          >
+                            <option value="">None</option>
+                            {EMOJI_OPTIONS.map(emoji => <option key={emoji} value={emoji}>{emoji}</option>)}
+                          </select>
+                          <input
+                            className="flex-1 border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
+                            value={editTypeForm.label}
+                            onChange={event => setEditTypeForm(form => ({ ...form, label: event.target.value }))}
+                            onKeyDown={event => event.key === 'Enter' && handleSaveType(type.id)}
+                          />
+                        </div>
+                        <div className="flex gap-2 items-center">
+                          <select
+                            value={editTypeForm.category}
+                            onChange={event => setEditTypeForm(form => ({ ...form, category: event.target.value }))}
+                            className="flex-1 border border-gray-300 rounded px-2 py-1 text-xs"
+                          >
+                            <option value="general">General</option>
+                            <option value="emergency">Emergency</option>
+                          </select>
+                          <button onClick={() => handleSaveType(type.id)} className="text-xs text-green-600 hover:text-green-800 font-medium">Save</button>
+                          <button onClick={() => setEditingTypeId(null)} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
+                        </div>
+                      </div>
                     ) : (
                       <>
                         <span className="text-base w-7">{type.emoji || '📢'}</span>
                         <span className="flex-1 text-sm font-medium text-gray-800">{type.label}</span>
+                        <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${
+                          type.category === 'emergency' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'
+                        }`}>
+                          {type.category || 'general'}
+                        </span>
                         <button
                           onClick={() => {
                             setEditingTypeId(type.id)
-                            setEditTypeForm({ label: type.label, emoji: type.emoji || '' })
+                            setEditTypeForm({ label: type.label, emoji: type.emoji || '', category: type.category || 'general' })
                           }}
                           className="text-xs text-gray-400 hover:text-blue-600"
                         >
@@ -359,7 +389,7 @@ export default function Setup() {
 
               <div className="border-t border-gray-100 pt-3">
                 <p className="text-xs font-medium text-gray-500 mb-2">Add new</p>
-                <div className="flex gap-2">
+                <div className="flex gap-2 mb-2">
                   <select
                     value={newType.emoji}
                     onChange={event => setNewType(form => ({ ...form, emoji: event.target.value }))}
@@ -375,6 +405,16 @@ export default function Setup() {
                     onChange={event => setNewType(form => ({ ...form, label: event.target.value }))}
                     onKeyDown={event => event.key === 'Enter' && handleAddType()}
                   />
+                </div>
+                <div className="flex gap-2">
+                  <select
+                    value={newType.category}
+                    onChange={event => setNewType(form => ({ ...form, category: event.target.value }))}
+                    className="flex-1 border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
+                  >
+                    <option value="general">General</option>
+                    <option value="emergency">Emergency</option>
+                  </select>
                   <button
                     onClick={handleAddType}
                     disabled={addingType}
@@ -504,8 +544,7 @@ export default function Setup() {
           </div>
           <p className="text-sm text-gray-500 mb-4">Configure who receives notifications for each emergency alert type at your school.</p>
 
-          {loadingConfig && <p className="text-sm text-gray-400 mb-4">Loading alert types...</p>}
-          {loadingRouting && <p className="text-sm text-gray-400 mb-4">Loading routing...</p>}
+          {loadingRouting && <p className="text-sm text-gray-400 mb-4">Loading...</p>}
           {routingError && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-4">{routingError}</p>}
 
           <div className="mb-4">
@@ -515,7 +554,7 @@ export default function Setup() {
               className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 w-64"
             >
               <option value="">Select an emergency type</option>
-              {routingTypes.map(type => (
+              {emergencyTypes.map(type => (
                 <option key={type.value} value={type.value}>
                   {type.icon} {type.value}
                 </option>
@@ -524,7 +563,7 @@ export default function Setup() {
           </div>
 
           {selectedEmergencyType && (() => {
-            const type = routingTypes.find(item => item.value === selectedEmergencyType)
+            const type = emergencyTypes.find(item => item.value === selectedEmergencyType)
             if (!type) return null
 
             const recipients = getRecipients(type.value)
