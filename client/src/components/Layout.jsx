@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { getIncidentById } from '../api/client'
@@ -10,10 +10,8 @@ export default function Layout({ children }) {
   // Active emergency banner state
   const [activeEmergency, setActiveEmergency] = useState(null)
   const [acknowledgedBy, setAcknowledgedBy] = useState([])
-  const [refreshingStatus, setRefreshingStatus] = useState(false)
-  const [refreshError, setRefreshError] = useState('')
 
-  // Sync the active emergency banner without polling Firestore.
+  // Load active emergency from localStorage
   useEffect(() => {
     const loadActiveEmergency = () => {
       const stored = localStorage.getItem('activeEmergency')
@@ -22,9 +20,10 @@ export default function Layout({ children }) {
         setAcknowledgedBy([])
         return
       }
-
       try {
-        setActiveEmergency(JSON.parse(stored))
+        const parsed = JSON.parse(stored)
+        setActiveEmergency(parsed)
+        setAcknowledgedBy(parsed.acknowledgedBy || [])
       } catch {
         localStorage.removeItem('activeEmergency')
       }
@@ -46,46 +45,42 @@ export default function Layout({ children }) {
     }
   }, [])
 
+  // Poll every 5 seconds until acknowledged
+  useEffect(() => {
+    if (!activeEmergency?.incidentId || acknowledgedBy.length > 0) return
+
+    const interval = setInterval(async () => {
+      try {
+        const incident = await getIncidentById(activeEmergency.incidentId)
+        const ackBy = incident?.acknowledgedBy || []
+        if (ackBy.length > 0) {
+          setAcknowledgedBy(ackBy)
+          // Persist acknowledgement in localStorage so it survives page navigation
+          const stored = JSON.parse(localStorage.getItem('activeEmergency') || '{}')
+          localStorage.setItem('activeEmergency', JSON.stringify({
+            ...stored,
+            acknowledgedBy: ackBy,
+          }))
+          clearInterval(interval)
+        }
+      } catch (err) {
+        console.error('Polling failed:', err)
+      }
+    }, 5000)
+
+    return () => clearInterval(interval)
+  }, [activeEmergency?.incidentId, acknowledgedBy.length])
+
   const dismissBanner = () => {
     localStorage.removeItem('activeEmergency')
     setActiveEmergency(null)
     setAcknowledgedBy([])
-    setRefreshError('')
   }
-
-  const refreshEmergencyStatus = useCallback(async () => {
-    if (!activeEmergency?.incidentId || refreshingStatus) return
-
-    setRefreshingStatus(true)
-    setRefreshError('')
-
-    try {
-      const incident = await getIncidentById(activeEmergency.incidentId)
-      setAcknowledgedBy(incident?.acknowledgedBy || [])
-    } catch (err) {
-      console.error('Failed to refresh incident acknowledgement:', err)
-      setRefreshError('Could not refresh status.')
-    } finally {
-      setRefreshingStatus(false)
-    }
-  }, [activeEmergency?.incidentId, refreshingStatus])
-
-  useEffect(() => {
-    if (!activeEmergency?.incidentId) return
-
-    const refreshOnFocus = () => {
-      refreshEmergencyStatus()
-    }
-
-    window.addEventListener('focus', refreshOnFocus)
-    return () => window.removeEventListener('focus', refreshOnFocus)
-  }, [activeEmergency?.incidentId, refreshEmergencyStatus])
 
   if (!currentUser) {
     return <Navigate to="/login" replace />
   }
 
-  // Role-based navigation sections with visibility control
   const navigationSections = [
     {
       title: 'SCOUT Setup / Config',
@@ -143,42 +138,32 @@ export default function Layout({ children }) {
                     {activeEmergency.emergencyType} Emergency Alert Sent
                   </p>
                   <p className="text-white text-xs opacity-90">
-                    Waiting for acknowledgement. Use refresh to check status.
+                    Waiting for acknowledgement...
                   </p>
-                  {refreshError && <p className="text-white text-xs opacity-90">{refreshError}</p>}
                 </div>
               </>
             )}
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={refreshEmergencyStatus}
-              disabled={refreshingStatus}
-              className="text-white text-xs opacity-90 hover:opacity-100 px-2 py-1 rounded hover:bg-white hover:bg-opacity-20 transition-colors disabled:opacity-50"
-            >
-              {refreshingStatus ? 'Refreshing...' : 'Refresh Status'}
-            </button>
-            <button
-              onClick={dismissBanner}
-              className="text-white text-xs opacity-75 hover:opacity-100 px-2 py-1 rounded hover:bg-white hover:bg-opacity-20 transition-colors"
-            >
-              Dismiss
-            </button>
-          </div>
+          <button
+            onClick={dismissBanner}
+            className="text-white text-xs opacity-75 hover:opacity-100 px-2 py-1 rounded hover:bg-white hover:bg-opacity-20 transition-colors"
+          >
+            Dismiss
+          </button>
         </div>
       )}
 
       <div className={`w-56 bg-white border-r border-gray-200 flex flex-col ${activeEmergency ? 'mt-12' : ''}`}>
-        <div className="flex items-center gap-2 px-4 py-5 border-b border-gray-200">
+        
+        <Link to="/dashboard" className="flex items-center gap-2 px-4 py-5 border-b border-gray-200">
           <div className="w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center">
             <span className="text-white text-sm">S</span>
           </div>
           <span className="font-bold text-gray-900">SCOUT</span>
-        </div>
+        </Link>
 
         <nav className="flex-1 p-3 space-y-4">
           {navigationSections.map((section) => {
-            // Only show section if it has at least one visible item
             const visibleItems = section.items.filter(item => item.visible)
             if (visibleItems.length === 0) return null
 
