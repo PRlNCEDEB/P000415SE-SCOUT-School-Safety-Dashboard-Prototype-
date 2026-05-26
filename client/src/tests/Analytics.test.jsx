@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import React, { useState, useEffect } from 'react'
+import React from 'react'
 import { describe, test, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import Analytics from '../pages/Analytics'

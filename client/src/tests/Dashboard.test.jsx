@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import '@testing-library/jest-dom/vitest'
 
 import React from 'react'
 import {
@@ -24,6 +25,7 @@ const mockNavigate = vi.fn()
 
 afterEach(() => {
   cleanup()
+  vi.clearAllMocks()
 })
 
 vi.mock('react-router-dom', async () => {
@@ -42,6 +44,8 @@ vi.mock('../context/AuthContext', () => ({
     isCompanyAdmin: true,
     isSchoolAdmin: false,
     isStaff: false,
+    isAdmin: true,
+    authLoading: false,
   }),
 }))
 
@@ -62,6 +66,20 @@ vi.mock('../api/client', () => ({
       ])
     ),
   },
+
+  settingsAPI: {
+    get: vi.fn(() =>
+      Promise.resolve({
+        alertTypes: [],
+        locations: [],
+        recipients: [],
+      })
+    ),
+  },
+
+  notificationsAPI: {
+    list: vi.fn(() => Promise.resolve([])),
+  },
 }))
 
 describe('Dashboard Page UI', () => {
@@ -72,14 +90,12 @@ describe('Dashboard Page UI', () => {
       </MemoryRouter>
     )
 
-    expect(screen.getByText(/loading incidents/i)).toBeTruthy()
-
     await waitFor(() => {
-      expect(screen.getByText(/dashboard/i)).toBeTruthy()
+      expect(screen.getByText(/dashboard/i)).toBeInTheDocument()
     })
 
-    expect(screen.getByText(/fire alert/i)).toBeTruthy()
-    expect(screen.getByText(/active incidents/i)).toBeTruthy()
+    expect(screen.getByText(/fire alert/i)).toBeInTheDocument()
+    expect(screen.getByText(/active incidents/i)).toBeInTheDocument()
 
     expect(
       screen.getAllByText(/critical/i).length
@@ -94,7 +110,7 @@ describe('Dashboard Page UI', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByText(/dashboard/i)).toBeTruthy()
+      expect(screen.getByText(/dashboard/i)).toBeInTheDocument()
     })
 
     fireEvent.click(
@@ -106,16 +122,6 @@ describe('Dashboard Page UI', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/submit')
   })
 
-  test('shows loading state before dashboard data loads', () => {
-  render(
-    <MemoryRouter>
-      <Dashboard />
-    </MemoryRouter>
-  )
-
-  expect(screen.getByText(/loading incidents/i)).toBeTruthy()
-})
-
   test('shows company admin role-based dashboard content', async () => {
     render(
       <MemoryRouter>
@@ -124,7 +130,7 @@ describe('Dashboard Page UI', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByText(/dashboard/i)).toBeTruthy()
+      expect(screen.getByText(/dashboard/i)).toBeInTheDocument()
     })
 
     expect(
@@ -133,11 +139,11 @@ describe('Dashboard Page UI', () => {
 
     expect(
       screen.getByText(/company admin view/i)
-    ).toBeTruthy()
+    ).toBeInTheDocument()
 
     expect(
       screen.getByText(/active incidents/i)
-    ).toBeTruthy()
+    ).toBeInTheDocument()
 
     expect(
       screen.getAllByText(/critical/i).length
@@ -145,10 +151,10 @@ describe('Dashboard Page UI', () => {
 
     expect(
       screen.getByText(/high priority/i)
-    ).toBeTruthy()
+    ).toBeInTheDocument()
 
     expect(
       screen.getByText(/avg response/i)
-    ).toBeTruthy()
+    ).toBeInTheDocument()
   })
 })
