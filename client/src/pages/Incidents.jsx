@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getIncidents, settingsAPI } from '../api/client'
+import { getIncidents, settingsAPI, archiveAPI } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 
 const priorityColors = {
@@ -58,6 +58,12 @@ export default function Incidents() {
   // Overdue threshold (minutes), loaded from settings API
   const [overdueThresholdMinutes, setOverdueThresholdMinutes] = useState(15)
 
+  // Archived incidents — loaded on demand when the archived filter is selected
+  const [archivedIncidents, setArchivedIncidents] = useState([])
+  const [archivedLoading, setArchivedLoading] = useState(false)
+  const [archivedError, setArchivedError] = useState('')
+  const [archivedLoaded, setArchivedLoaded] = useState(false)
+
   useEffect(() => {
     if (authLoading || userRole === null) return
 
@@ -95,6 +101,35 @@ export default function Incidents() {
     }
   }, [authLoading, userRole])
 
+  // Load archived incidents when the archived tab is first selected (Company Admin only)
+  useEffect(() => {
+    if (filterStatus !== 'archived' || !isCompanyAdmin || archivedLoaded) return
+
+    let isActive = true
+
+    async function loadArchived() {
+      setArchivedLoading(true)
+      setArchivedError('')
+      try {
+        const records = await archiveAPI.list()
+        if (isActive) {
+          setArchivedIncidents(records)
+          setArchivedLoaded(true)
+        }
+      } catch (err) {
+        if (isActive) {
+          setArchivedError(err.message || 'Failed to load archived incidents.')
+        }
+      } finally {
+        if (isActive) setArchivedLoading(false)
+      }
+    }
+
+    loadArchived()
+
+    return () => { isActive = false }
+  }, [filterStatus, isCompanyAdmin, archivedLoaded])
+
   // Wait for role to resolve before deciding access
   if (authLoading || userRole === null) {
     return (
@@ -125,7 +160,9 @@ export default function Incidents() {
     return incidentWithSchool?.schoolName || null
   }, [incidents, isCompanyAdmin, isSchoolAdmin])
 
-  const filtered = incidents.filter(incident => {
+  const isArchivedView = filterStatus === 'archived' && isCompanyAdmin
+
+  const filtered = isArchivedView ? [] : incidents.filter(incident => {
     const searchTerm = search.trim().toLowerCase()
     const searchableText = [
       incident.title,
@@ -153,11 +190,13 @@ export default function Incidents() {
 
   const activeCount = incidents.filter(i => ACTIVE_STATUSES.includes(i.status)).length
 
-  const subtitleText = loading
-    ? 'Loading incidents...'
-    : filterStatus === 'active'
-      ? `${activeCount} active incident${activeCount !== 1 ? 's' : ''}`
-      : `${filtered.length} of ${incidents.length} incidents`
+  const subtitleText = isArchivedView
+    ? (archivedLoading ? 'Loading archived incidents...' : `${archivedIncidents.length} archived incident${archivedIncidents.length !== 1 ? 's' : ''}`)
+    : loading
+      ? 'Loading incidents...'
+      : filterStatus === 'active'
+        ? `${activeCount} active incident${activeCount !== 1 ? 's' : ''}`
+        : `${filtered.length} of ${incidents.length} incidents`
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -195,7 +234,7 @@ export default function Incidents() {
           <option value="acknowledged">Acknowledged</option>
           <option value="in-progress">In Progress</option>
           <option value="resolved">Resolved</option>
-          <option value="archived">Archived</option>
+          {isCompanyAdmin && <option value="archived">Archived</option>}
         </select>
         <select
           value={filterPriority}
@@ -224,55 +263,93 @@ export default function Incidents() {
         )}
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100 overflow-hidden">
-        {loading ? (
-          <div className="p-8 text-center text-sm text-gray-500">Loading incidents...</div>
-        ) : error ? (
-          <div className="p-8 text-center text-sm text-red-600">{error}</div>
-        ) : filtered.length === 0 ? (
-          <div className="p-8 text-center text-sm text-gray-500">No incidents found.</div>
-        ) : (
-          filtered.map(incident => {
-            const overdue = isOverdue(incident, overdueThresholdMinutes)
-
-            return (
+      {/* Archived incidents view */}
+      {isArchivedView ? (
+        <div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100 overflow-hidden">
+          {archivedLoading ? (
+            <div className="p-8 text-center text-sm text-gray-500">Loading archived incidents...</div>
+          ) : archivedError ? (
+            <div className="p-8 text-center text-sm text-red-600">{archivedError}</div>
+          ) : archivedIncidents.length === 0 ? (
+            <div className="p-8 text-center text-sm text-gray-500">No archived incidents yet.</div>
+          ) : (
+            archivedIncidents.map(incident => (
               <div
                 key={incident.id}
-                onClick={() => navigate(`/incidents/${incident.id}`)}
-                className={`px-4 py-3 flex items-center gap-3 cursor-pointer transition-colors ${
-                  overdue ? 'bg-amber-50 hover:bg-amber-100 border-l-4 border-amber-400' : 'hover:bg-gray-50'
-                }`}
+                className="px-4 py-3 flex items-center gap-3 opacity-75"
               >
                 <span className="text-lg">{typeIcons[incident.type] || '📢'}</span>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-gray-800 truncate">{incident.title}</p>
                   <p className="text-xs text-gray-500 truncate">
-                    {incident.location} · {incident.timestamp} · {incident.triggeredByName}
-                    {isCompanyAdmin && incident.schoolName ? ` · ${incident.schoolName}` : ''}
+                    {incident.location} · {incident.triggeredByName}
+                    {incident.schoolName ? ` · ${incident.schoolName}` : ''}
                   </p>
                 </div>
                 <span className={`text-xs px-2 py-0.5 rounded ${priorityColors[incident.priority]}`}>
                   {incident.priority}
                 </span>
-                <span className={`text-xs px-2 py-0.5 rounded ${statusColors[incident.status]}`}>
-                  {incident.status}
+                <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-500">
+                  archived
                 </span>
-                {overdue && (
-                  <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-700 font-medium whitespace-nowrap">
-                    ⏰ Overdue
-                  </span>
-                )}
-                {!overdue && incident.acknowledgedBy && incident.acknowledgedBy.length > 0 && (
-                  <span className="text-xs px-2 py-0.5 rounded bg-green-100 text-green-700 font-medium">
-                    ✅ Responded
-                  </span>
-                )}
-                <span className="text-gray-400">›</span>
+                <span className="text-xs text-gray-400 whitespace-nowrap">
+                  Archived {incident.archivedAt ? new Date(incident.archivedAt).toLocaleDateString() : ''}
+                </span>
               </div>
-            )
-          })
-        )}
-      </div>
+            ))
+          )}
+        </div>
+      ) : (
+        <div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100 overflow-hidden">
+          {loading ? (
+            <div className="p-8 text-center text-sm text-gray-500">Loading incidents...</div>
+          ) : error ? (
+            <div className="p-8 text-center text-sm text-red-600">{error}</div>
+          ) : filtered.length === 0 ? (
+            <div className="p-8 text-center text-sm text-gray-500">No incidents found.</div>
+          ) : (
+            filtered.map(incident => {
+              const overdue = isOverdue(incident, overdueThresholdMinutes)
+
+              return (
+                <div
+                  key={incident.id}
+                  onClick={() => navigate(`/incidents/${incident.id}`)}
+                  className={`px-4 py-3 flex items-center gap-3 cursor-pointer transition-colors ${
+                    overdue ? 'bg-amber-50 hover:bg-amber-100 border-l-4 border-amber-400' : 'hover:bg-gray-50'
+                  }`}
+                >
+                  <span className="text-lg">{typeIcons[incident.type] || '📢'}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-gray-800 truncate">{incident.title}</p>
+                    <p className="text-xs text-gray-500 truncate">
+                      {incident.location} · {incident.timestamp} · {incident.triggeredByName}
+                      {isCompanyAdmin && incident.schoolName ? ` · ${incident.schoolName}` : ''}
+                    </p>
+                  </div>
+                  <span className={`text-xs px-2 py-0.5 rounded ${priorityColors[incident.priority]}`}>
+                    {incident.priority}
+                  </span>
+                  <span className={`text-xs px-2 py-0.5 rounded ${statusColors[incident.status]}`}>
+                    {incident.status}
+                  </span>
+                  {overdue && (
+                    <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-700 font-medium whitespace-nowrap">
+                      ⏰ Overdue
+                    </span>
+                  )}
+                  {!overdue && incident.acknowledgedBy && incident.acknowledgedBy.length > 0 && (
+                    <span className="text-xs px-2 py-0.5 rounded bg-green-100 text-green-700 font-medium">
+                      ✅ Responded
+                    </span>
+                  )}
+                  <span className="text-gray-400">›</span>
+                </div>
+              )
+            })
+          )}
+        </div>
+      )}
     </div>
   )
 }

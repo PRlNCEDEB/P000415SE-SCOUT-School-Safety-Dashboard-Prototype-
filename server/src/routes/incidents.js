@@ -214,6 +214,30 @@ router.get('/', verifyToken, async (req, res, next) => {
     next(error)
   }
 })
+// GET /api/incidents/archived — company admin only; reads from archivedIncidents collection
+// Must be registered before /:id to prevent Express treating 'archived' as an ID
+router.get('/archived', verifyToken, async (req, res, next) => {
+  try {
+    const profile = await getUserProfile(req.user)
+
+    if (!isCompanyAdmin(profile.role)) {
+      return res.status(403).json({ error: 'Only Company Admins can view archived incidents.' })
+    }
+
+    const snapshot = await getDb().collection('archivedIncidents').get()
+    const incidents = snapshotToArray(snapshot)
+      .sort((left, right) => getSortValue(right) - getSortValue(left))
+      .map(incident => ({
+        ...toIncidentResponse(incident),
+        archivedAt: incident.archivedAt || null,
+      }))
+
+    res.json({ incidents })
+  } catch (error) {
+    next(error)
+  }
+})
+
 //gets a specific incident by ID
 router.get('/:id', verifyToken, async (req, res, next) => {
   try {

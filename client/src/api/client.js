@@ -107,9 +107,14 @@ export const analyticsAPI = {
 
 export const settingsAPI = {
   get: () => request('/settings'),
-  update: (overdueThresholdMinutes) =>
+  update: (fields) =>
     request('/settings', {
       method: 'PATCH',
-      body: JSON.stringify({ overdueThresholdMinutes }),
+      body: JSON.stringify(fields),
     }),
+}
+
+export const archiveAPI = {
+  trigger: () => request('/settings/archive', { method: 'POST' }),
+  list: () => request('/incidents/archived').then(data => data.incidents ?? []),
 }
