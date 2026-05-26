@@ -31,6 +31,66 @@ const typeIcons = {
 // Active statuses — what "active" view means
 const ACTIVE_STATUSES = ['triggered', 'acknowledged', 'in-progress']
 
+// Exports the filtered incident list as a CSV (opens natively in Excel)
+function exportToExcel(incidents, showSchool) {
+  const headers = [
+    'Title', 'Type', 'Priority', 'Status', 'Location',
+    ...(showSchool ? ['School'] : []),
+    'Triggered By', 'Date / Time', 'Acknowledged',
+  ]
+
+  const escape = val => {
+    const str = String(val ?? '')
+    // Wrap in quotes if the value contains a comma, quote, or newline
+    return str.includes(',') || str.includes('"') || str.includes('\n')
+      ? `"${str.replace(/"/g, '""')}"`
+      : str
+  }
+
+  const rows = incidents.map(i => [
+    i.title,
+    i.type,
+    i.priority,
+    i.status,
+    i.location,
+    ...(showSchool ? [i.schoolName || i.schoolId] : []),
+    i.triggeredByName,
+    i.createdAt ? new Date(i.createdAt).toLocaleString() : '',
+    i.acknowledgedBy?.length > 0 ? 'Yes' : 'No',
+  ].map(escape))
+
+  const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\r\n')
+
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `incident-report-${new Date().toISOString().slice(0, 10)}.csv`
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
+// Returns true when the incident falls within the selected date range
+function isWithinDateRange(incident, range) {
+  if (range === 'all') return true
+  const created = incident.createdAt ? new Date(incident.createdAt) : null
+  if (!created || Number.isNaN(created.getTime())) return true
+
+  const now = new Date()
+  switch (range) {
+    case 'today':
+      return created.toDateString() === now.toDateString()
+    case 'week':
+      return created >= new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+    case 'month':
+      return created >= new Date(now.getFullYear(), now.getMonth() - 1, now.getDate())
+    case 'year':
+      return created >= new Date(now.getFullYear() - 1, now.getMonth(), now.getDate())
+    default:
+      return true
+  }
+}
+
 // Returns true when a triggered incident has exceeded the overdue threshold
 function isOverdue(incident, thresholdMinutes) {
   if (incident.status !== 'triggered') return false
@@ -53,6 +113,7 @@ export default function Incidents() {
   const [filterStatus, setFilterStatus] = useState('active')
   const [filterPriority, setFilterPriority] = useState('all')
   const [filterSchool, setFilterSchool] = useState('all')
+  const [filterDateRange, setFilterDateRange] = useState('all')
   const [search, setSearch] = useState('')
 
   // Overdue threshold (minutes), loaded from settings API
@@ -180,12 +241,15 @@ export default function Incidents() {
         ? true
         : filterStatus === 'active'
           ? ACTIVE_STATUSES.includes(incident.status)
-          : incident.status === filterStatus
+          : filterStatus === 'review-required'
+            ? incident.reviewRequired === true
+            : incident.status === filterStatus
     const matchPriority = filterPriority === 'all' || incident.priority === filterPriority
     const matchSchool = !isCompanyAdmin || filterSchool === 'all' || incident.schoolId === filterSchool
     const matchSearch = !searchTerm || searchableText.includes(searchTerm)
+    const matchDateRange = isWithinDateRange(incident, filterDateRange)
 
-    return matchStatus && matchPriority && matchSchool && matchSearch
+    return matchStatus && matchPriority && matchSchool && matchSearch && matchDateRange
   })
 
   const activeCount = incidents.filter(i => ACTIVE_STATUSES.includes(i.status)).length
@@ -205,14 +269,26 @@ export default function Incidents() {
           <h1 className="text-2xl font-bold text-gray-900">Incident Log</h1>
           <p className="text-sm text-gray-500">{subtitleText}</p>
         </div>
-        {!isCompanyAdmin && (
-        <button
-          onClick={() => navigate('/submit')}
-          className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors"
-        >
-          ➕ Submit Alert
-        </button>
-        )}
+        <div className="flex items-center gap-2">
+          {(isCompanyAdmin || isSchoolAdmin) && !isArchivedView && (
+            <button
+              onClick={() => exportToExcel(filtered, isCompanyAdmin)}
+              disabled={filtered.length === 0}
+              title="Export current filtered list to Excel"
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+            >
+              ⬇️ Export
+            </button>
+          )}
+          {!isCompanyAdmin && (
+            <button
+              onClick={() => navigate('/submit')}
+              className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors"
+            >
+              ➕ Submit Alert
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-3 mb-4">
@@ -234,6 +310,7 @@ export default function Incidents() {
           <option value="acknowledged">Acknowledged</option>
           <option value="in-progress">In Progress</option>
           <option value="resolved">Resolved</option>
+          {(isCompanyAdmin || isSchoolAdmin) && <option value="review-required">Review Required</option>}
           {isCompanyAdmin && <option value="archived">Archived</option>}
         </select>
         <select
@@ -246,6 +323,17 @@ export default function Incidents() {
           <option value="high">High</option>
           <option value="medium">Medium</option>
           <option value="low">Low</option>
+        </select>
+        <select
+          value={filterDateRange}
+          onChange={event => setFilterDateRange(event.target.value)}
+          className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+        >
+          <option value="all">All Time</option>
+          <option value="today">Today</option>
+          <option value="week">This Week</option>
+          <option value="month">This Month</option>
+          <option value="year">This Year</option>
         </select>
         {isCompanyAdmin && (
           <select
@@ -341,6 +429,11 @@ export default function Incidents() {
                   {!overdue && incident.acknowledgedBy && incident.acknowledgedBy.length > 0 && (
                     <span className="text-xs px-2 py-0.5 rounded bg-green-100 text-green-700 font-medium">
                       ✅ Responded
+                    </span>
+                  )}
+                  {incident.reviewRequired && (
+                    <span className="text-xs px-2 py-0.5 rounded bg-red-100 text-red-700 font-medium whitespace-nowrap">
+                      🚩 Review
                     </span>
                   )}
                   <span className="text-gray-400">›</span>

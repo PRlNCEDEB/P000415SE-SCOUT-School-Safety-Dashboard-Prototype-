@@ -62,6 +62,10 @@ export const incidentAPI = {
   list: () => request('/incidents').then(data => data.incidents ?? data),
   updateStatus: (id, status, extra = {}) =>
     request(`/incidents/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status, ...extra }) }),
+  setReviewFlag: (id, reviewRequired, comment) =>
+    request(`/incidents/${id}/review-flag`, { method: 'PATCH', body: JSON.stringify({ reviewRequired, comment }) }),
+  addReviewComment: (id, comment) =>
+    request(`/incidents/${id}/review-comment`, { method: 'POST', body: JSON.stringify({ comment }) }),
 }
 
 export const notificationsAPI = {
@@ -103,6 +107,7 @@ export const analyticsAPI = {
   thisWeek: () => request('/analytics/this-week'),
   responseTimeTrend: () => request('/analytics/response-time-trend'),
   all: () => request('/analytics/all'),
+  trends: (range = 'week') => request(`/analytics/trends?range=${range}`),
 }
 
 export const settingsAPI = {
