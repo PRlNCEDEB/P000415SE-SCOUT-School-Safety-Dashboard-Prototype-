@@ -49,6 +49,11 @@ export default function Analytics() {
   const [unacknowledgedCount, setUnacknowledgedCount] = useState(0)
   const [incidentsByPriority, setIncidentsByPriority] = useState([])
 
+  const [trendsRange, setTrendsRange] = useState('week')
+  const [trendsData, setTrendsData] = useState(null)
+  const [trendsLoading, setTrendsLoading] = useState(false)
+  const [trendsError, setTrendsError] = useState(null)
+
   const fetchAnalytics = async () => {
     setLoading(true)
     setError(null)
@@ -74,6 +79,27 @@ export default function Analytics() {
     if (!isAdmin) return
     fetchAnalytics()
   }, [isAdmin])
+
+  useEffect(() => {
+    if (!isAdmin) return
+    let isActive = true
+
+    async function loadTrends() {
+      setTrendsLoading(true)
+      setTrendsError(null)
+      try {
+        const data = await analyticsAPI.trends(trendsRange)
+        if (isActive) setTrendsData(data)
+      } catch (err) {
+        if (isActive) setTrendsError(err.message || 'Failed to load trend data')
+      } finally {
+        if (isActive) setTrendsLoading(false)
+      }
+    }
+
+    loadTrends()
+    return () => { isActive = false }
+  }, [isAdmin, trendsRange])
 
   if (authLoading || userRole === null) {
     return (
@@ -275,6 +301,123 @@ export default function Analytics() {
             <EmptyChart />
           )}
         </ChartPanel>
+      </div>
+
+      {/* ── Incident Trends ───────────────────────────────────────────────── */}
+      <div className="mt-6">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">Incident Trends</h2>
+            <p className="text-xs text-gray-400">Identify patterns by time of day, day of week, and volume over time</p>
+          </div>
+          <div className="flex items-center gap-2">
+            {trendsLoading && <span className="text-xs text-gray-400">Updating...</span>}
+            <select
+              value={trendsRange}
+              onChange={e => setTrendsRange(e.target.value)}
+              className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+            >
+              <option value="week">This Week</option>
+              <option value="month">Last Month</option>
+              <option value="quarter">Last 3 Months</option>
+              <option value="year">Last Year</option>
+              <option value="all">All Time</option>
+            </select>
+          </div>
+        </div>
+
+        {trendsError ? (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-center text-sm text-red-600">
+            {trendsError}
+          </div>
+        ) : (
+          <>
+            <ChartPanel
+              title="Incidents Over Time"
+              helper={
+                trendsRange === 'week' ? 'Daily totals for the last 7 days'
+                : trendsRange === 'month' ? 'Weekly totals for the last month'
+                : trendsRange === 'quarter' ? 'Monthly totals for the last 3 months'
+                : trendsRange === 'year' ? 'Monthly totals for the last 12 months'
+                : 'All incidents grouped by month'
+              }
+            >
+              {trendsLoading || !trendsData ? (
+                <div className="py-10 text-center text-sm text-gray-400">{trendsLoading ? 'Loading...' : 'No data'}</div>
+              ) : trendsData.incidentsByPeriod.length === 0 ? (
+                <EmptyChart />
+              ) : (
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={trendsData.incidentsByPeriod} margin={{ top: 0, right: 10, left: -20, bottom: trendsRange === 'week' ? 40 : 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                    <XAxis
+                      dataKey="label"
+                      tick={{ fontSize: 11 }}
+                      angle={trendsRange === 'week' ? -35 : 0}
+                      textAnchor={trendsRange === 'week' ? 'end' : 'middle'}
+                      interval={0}
+                    />
+                    <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                    <Tooltip formatter={value => [value, 'Incidents']} />
+                    <Bar dataKey="count" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </ChartPanel>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+              <ChartPanel
+                title="Incidents by Day of Week"
+                helper="Which days consistently see the most incidents"
+              >
+                {trendsLoading || !trendsData ? (
+                  <div className="py-10 text-center text-sm text-gray-400">{trendsLoading ? 'Loading...' : 'No data'}</div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={200}>
+                    <BarChart data={trendsData.incidentsByDayOfWeek} margin={{ top: 0, right: 10, left: -20, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                      <XAxis dataKey="day" tick={{ fontSize: 12 }} />
+                      <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                      <Tooltip formatter={value => [value, 'Incidents']} />
+                      <Bar dataKey="count" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </ChartPanel>
+
+              <ChartPanel
+                title="Incidents by Hour of Day"
+                helper="When during the day incidents are most likely to occur"
+              >
+                {trendsLoading || !trendsData ? (
+                  <div className="py-10 text-center text-sm text-gray-400">{trendsLoading ? 'Loading...' : 'No data'}</div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={200}>
+                    <BarChart data={trendsData.incidentsByHour} margin={{ top: 0, right: 10, left: -20, bottom: 40 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                      <XAxis
+                        dataKey="hour"
+                        tick={{ fontSize: 9 }}
+                        angle={-45}
+                        textAnchor="end"
+                        interval={1}
+                      />
+                      <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                      <Tooltip formatter={value => [value, 'Incidents']} />
+                      <Bar dataKey="count" fill="#f97316" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </ChartPanel>
+            </div>
+
+            {trendsData && (
+              <p className="text-xs text-gray-400 text-right mt-2">
+                {trendsData.totalInRange} incident{trendsData.totalInRange !== 1 ? 's' : ''} in selected range
+              </p>
+            )}
+          </>
+        )}
       </div>
 
       {isCompanyAdmin && (

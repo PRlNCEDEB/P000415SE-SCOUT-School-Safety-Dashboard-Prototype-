@@ -16,6 +16,7 @@ const analyticsRoutes = require('./routes/analytics')
 const actionLogRoutes = require('./routes/actionLogs')
 const settingsRoutes = require('./routes/settings')
 const setupRoutes = require('./routes/setup')
+const { runArchiveJob } = require('./archiver')
 //app setup
 const app = express()
 const PORT = process.env.PORT || 5000
@@ -59,6 +60,14 @@ app.use((err, req, res, next) => {
   console.error('Unhandled error:', err)
   res.status(500).json({ error: 'Internal server error.' })
 })
+
+// ── Archive job ───────────────────────────────────────────────────────────────
+// Run once on startup, then every 24 hours
+const ARCHIVE_INTERVAL_MS = 24 * 60 * 60 * 1000
+runArchiveJob().catch(err => console.error('[archiver] Startup run failed:', err))
+setInterval(() => {
+  runArchiveJob().catch(err => console.error('[archiver] Scheduled run failed:', err))
+}, ARCHIVE_INTERVAL_MS)
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 //start the server
