@@ -6,7 +6,7 @@ import {
 } from 'firebase/auth'
 import { auth } from '../firebase'
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'
 
 // Role normalization for backend role values.
 function normaliseRole(raw) {
@@ -26,13 +26,13 @@ function normaliseRole(raw) {
 async function fetchUserProfile(firebaseUser) {
   try {
     const token = await firebaseUser.getIdToken()
-    let res = await fetch(`${API_BASE}/api/auth/role`, {
+    let res = await fetch(`${API_BASE_URL}/auth/role`, {
       headers: { Authorization: `Bearer ${token}` },
     })
 
     if (res.status === 401) {
       const freshToken = await firebaseUser.getIdToken(true)
-      res = await fetch(`${API_BASE}/api/auth/role`, {
+      res = await fetch(`${API_BASE_URL}/auth/role`, {
         headers: { Authorization: `Bearer ${freshToken}` },
       })
     }

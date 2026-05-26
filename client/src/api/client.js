@@ -68,6 +68,33 @@ export const notificationsAPI = {
   list: () => request('/notifications').then(data => data.notifications ?? data),
 }
 
+
+export const setupAPI = {
+  // Alert types
+  getAlertTypes: (category) => request(`/setup/alert-types${category ? `?category=${category}` : ''}`),
+  createAlertType: data => request('/setup/alert-types', { method: 'POST', body: JSON.stringify(data) }),
+  updateAlertType: (id, data) => request(`/setup/alert-types/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteAlertType: id => request(`/setup/alert-types/${id}`, { method: 'DELETE' }),
+
+  // Locations
+  getLocations: () => request('/setup/locations'),
+  createLocation: data => request('/setup/locations', { method: 'POST', body: JSON.stringify(data) }),
+  updateLocation: (id, data) => request(`/setup/locations/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteLocation: id => request(`/setup/locations/${id}`, { method: 'DELETE' }),
+
+  // Routing (School Admin)
+  getRouting: () => request('/setup/routing'),
+  updateRouting: (alertType, recipients) =>
+    request(`/setup/routing/${encodeURIComponent(alertType)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ recipients }),
+    }),
+
+  // School users (School Admin)
+  getSchoolUsers: () => request('/setup/school-users'),
+}
+
+
 export const analyticsAPI = {
   summary: () => request('/analytics/summary'),
   byType: () => request('/analytics/by-type'),
@@ -76,4 +103,13 @@ export const analyticsAPI = {
   thisWeek: () => request('/analytics/this-week'),
   responseTimeTrend: () => request('/analytics/response-time-trend'),
   all: () => request('/analytics/all'),
+}
+
+export const settingsAPI = {
+  get: () => request('/settings'),
+  update: (overdueThresholdMinutes) =>
+    request('/settings', {
+      method: 'PATCH',
+      body: JSON.stringify({ overdueThresholdMinutes }),
+    }),
 }

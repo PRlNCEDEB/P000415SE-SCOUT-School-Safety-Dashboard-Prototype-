@@ -360,6 +360,33 @@ test('POST /api/incidents creates a new incident with authenticated reporter det
   })
 })
 
+test('POST /api/incidents rejects company admin incident creation', async () => {
+  fakeDb = createTestDb({
+    users: {
+      'company-uid': {
+        name: 'Company Admin',
+        email: 'company@scout.edu',
+        role: 'companyAdmin',
+      },
+    },
+  })
+
+  await withServer(createApp(), async baseUrl => {
+    const response = await fetch(`${baseUrl}/api/incidents`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer company-token' },
+      body: JSON.stringify({
+        type: 'fire',
+        priority: 'critical',
+        title: 'Company admin should not create this',
+        location: 'Block B',
+      }),
+    })
+
+    assert.equal(response.status, 403)
+  })
+})
+
 test('GET /api/incidents scopes school admin to their school', async () => {
   fakeDb = createTestDb({
     users: {
