@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { incidentAPI, apiCall } from '../api/client'
+import { incidentAPI, apiCall, setupAPI } from '../api/client'
 
-const emergencyTypes = [
+const FALLBACK_EMERGENCY_TYPES = [
   { value: 'Natural Disaster', icon: '🌊', desc: 'Earthquake, flood, severe weather' },
   { value: 'Fire', icon: '🔥', desc: 'Fire emergency or smoke detected' },
   { value: 'Threat', icon: '🛡️', desc: 'Security threat or lockdown' },
 ]
 
-const action2Types = [
+const FALLBACK_ACTION2_TYPES = [
   { value: 'general', label: 'General', icon: '📢', desc: 'General incident or school-wide notice' },
   { value: 'behaviour', label: 'Behaviour', icon: '⚠️', desc: 'Student behaviour and conduct incidents' },
   { value: 'medical', label: 'Medical', icon: '🏥', desc: 'Health and first-aid incidents' },
@@ -16,7 +16,7 @@ const action2Types = [
 ]
 
 export default function QuickActions() {
-  const { isAdmin, currentUser } = useAuth()
+  const { isAdmin, isCompanyAdmin, currentUser } = useAuth()
   const [logs, setLogs] = useState([])
   const [feedback, setFeedback] = useState(null)
   const [showConfirm, setShowConfirm] = useState(false)
@@ -31,6 +31,38 @@ export default function QuickActions() {
   const [showResult, setShowResult] = useState(null)
   const [editingId, setEditingId] = useState(null)
   const [editForm, setEditForm] = useState({ title: '', description: '', location: '' })
+  const [emergencyTypes, setEmergencyTypes] = useState(FALLBACK_EMERGENCY_TYPES)
+  const [action2Types, setAction2Types] = useState(FALLBACK_ACTION2_TYPES)
+
+  // Fetch alert types from Firestore — fall back to hardcoded if API unavailable
+  useEffect(() => {
+    // Fetch emergency types for Button 1
+    setupAPI.getAlertTypes('emergency')
+      .then(data => {
+        if (data.alertTypes?.length) {
+          setEmergencyTypes(data.alertTypes.map(t => ({
+            value: t.label,
+            icon: t.emoji || '🚨',
+            desc: t.desc || '',
+          })))
+        }
+      })
+      .catch(() => {})
+
+    // Fetch general types for Button 2
+    setupAPI.getAlertTypes('general')
+      .then(data => {
+        if (data.alertTypes?.length) {
+          setAction2Types(data.alertTypes.map(t => ({
+            value: t.value || t.label.toLowerCase().replace(/\s+/g, '_'),
+            label: t.label,
+            icon: t.emoji || '📢',
+            desc: t.desc || '',
+          })))
+        }
+      })
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     if (editingId || showConfirm || showCategory || showKeypad) return
@@ -62,25 +94,25 @@ export default function QuickActions() {
     setCustomMessage('')
   }
 
-  // Creates the incident record and returns the full incident object (with id)
   const createIncidentRecord = async (typeValue, description) => {
-    const mappedType = typeValue === 'Natural Disaster'
-      ? 'weather'
-      : typeValue === 'Fire'
-        ? 'fire'
-        : 'lockdown'
+    // Use value field from Firestore if available, otherwise derive from label
+    const matchedType = emergencyTypes.find(t => t.value === typeValue)
+    const incidentType = matchedType?.value
+      ? matchedType.value.toLowerCase().replace(/\s+/g, '_')
+      : typeValue.toLowerCase().replace(/\s+/g, '_')
 
     try {
       const incident = await incidentAPI.create({
-        type: mappedType,
+        type: incidentType,
         priority: 'critical',
         title: `${typeValue} alert`,
         location: editForm.location || 'Dashboard quick action',
         description: description || `${typeValue} emergency triggered from dashboard.`,
-        triggeredByName: currentUser?.name || 'Unknown',
-        triggeredById: currentUser?.id || null,
+        triggeredByName: currentUser?.displayName ||
+          currentUser?._profileName || 'Unknown',
+        triggeredById: currentUser?.uid || null,
       })
-      return incident  // return full incident so we can get the id
+      return incident
     } catch (err) {
       console.error('Failed to create incident record:', err)
       return null
@@ -97,11 +129,9 @@ export default function QuickActions() {
     setCodeError('')
 
     try {
-      // Step 1: Create incident FIRST so we have the incidentId
       const incident = await createIncidentRecord(selectedType.value, customMessage || editForm.description)
       const incidentId = incident?.id || null
 
-      // Step 2: Send emergency notification, passing incidentId
       const data = await apiCall('/notifications/emergency', {
         method: 'POST',
         body: JSON.stringify({
@@ -109,19 +139,18 @@ export default function QuickActions() {
           emergencyType: selectedType.value,
           location: editForm.location || '',
           message: customMessage || `Emergency alert triggered for ${selectedType.value}. All relevant staff have been notified.`,
-          incidentId,  // link notification to incident
+          incidentId,
         }),
       })
 
       if (data.success) {
-        // Store active emergency in localStorage so Layout can show the banner
         if (incidentId) {
           localStorage.setItem('activeEmergency', JSON.stringify({
             incidentId,
             emergencyType: selectedType.value,
             triggeredAt: new Date().toISOString(),
           }))
-          window.dispatchEvent(new Event('emergencyTriggered')) // 
+          window.dispatchEvent(new Event('emergencyTriggered'))
         }
 
         const newLog = {
@@ -144,7 +173,7 @@ export default function QuickActions() {
         setCodeError(data.error || 'Failed to send alert. Please try again.')
       }
     } catch (error) {
-      setCodeError('Could not connect to server. Make sure the backend is running.')
+      setCodeError(error.message || 'Could not connect to server. Make sure the backend is running.')
     }
 
     setLoading(false)
@@ -176,7 +205,7 @@ export default function QuickActions() {
         method: 'POST',
         body: JSON.stringify({
           code: '000',
-          emergencyType: selectedAction2Type.value, 
+          emergencyType: selectedAction2Type.value,
           location: editForm.location || '',
           message: `${selectedAction2Type.label} quick action triggered from dashboard.`,
           incidentId,
@@ -210,7 +239,7 @@ export default function QuickActions() {
       setTimeout(() => setFeedback(null), 3000)
     } catch (err) {
       console.error('Failed to create incident or send notifications for action 2:', err)
-      setCodeError('Could not create the incident or send notifications. Please try again.')
+      setCodeError(err.message || 'Could not create the incident or send notifications. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -221,6 +250,8 @@ export default function QuickActions() {
     setEditingId(null)
     setEditForm({ title: '', description: '', location: '' })
   }
+
+  if (isCompanyAdmin) return null
 
   return (
     <div className="space-y-4">
@@ -237,30 +268,22 @@ export default function QuickActions() {
           <span className="absolute top-2 right-2 text-xs bg-red-600 text-white px-2 py-0.5 rounded-full font-semibold">
             EMERGENCY
           </span>
-          <div className="text-4xl font-bold text-red-700 mb-3 text-center">1</div>
-          <div className="space-y-1">
-             <p className="text-xs text-red-700">📧 Send Email</p>
-            <p className="text-xs text-red-700">📱 Send SMS</p>
-            <p className="text-xs text-red-700">🗄️ Create Record</p>
-          </div>
+          <div className="text-1xl font-bold text-gray-700 mb-3 text-center">OPTION 1</div>
+          <div className="text-4xl font-bold text-red-700 mb-3 text-center">EMERGENCY</div>
         </button>
 
         <button
           onClick={handleAction2}
           className="bg-white border-2 border-gray-300 rounded-xl p-6 hover:border-green-500 hover:bg-green-50 transition-all text-left"
         >
-          <div className="text-4xl font-bold text-gray-700 mb-3 text-center">2</div>
-          <div className="space-y-1">
-            <p className="text-xs text-gray-600">📧 Send Email</p>
-            <p className="text-xs text-gray-600">📱 Send SMS</p>
-            <p className="text-xs text-gray-600">🗄️ Create Record</p>
-          </div>
+          <div className="text-1xl font-bold text-gray-700 mb-3 text-center">OPTION 2</div>
+          <div className="text-4xl font-bold text-gray-700 mb-3 text-center">GENERAL</div>
         </button>
       </div>
 
       {feedback && (
         <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3 flex items-center gap-2">
-         <span className="text-green-600">✅</span>
+          <span className="text-green-600">✅</span>
           <div>
             <p className="text-sm font-semibold text-green-900">Action {feedback.button} triggered</p>
             <p className="text-xs text-green-700">{feedback.actions} completed</p>
@@ -278,9 +301,7 @@ export default function QuickActions() {
           <div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100 overflow-hidden">
             {logs.map(log => (
               <div key={log.id} className="px-4 py-3 flex items-start gap-3">
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold shrink-0 ${
-                  log.button === '1' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
-                }`}>
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold shrink-0 ${log.button === '1' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
                   {log.button}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -320,7 +341,7 @@ export default function QuickActions() {
           <div className="absolute inset-0 bg-black bg-opacity-40" onClick={() => setShowConfirm(false)} />
           <div className="relative bg-white border-2 border-red-500 rounded-xl p-6 max-w-md w-full shadow-xl">
             <div className="flex items-start gap-3 mb-4">
-               <div className="p-2 bg-red-100 rounded-lg">⚠️</div>
+              <div className="p-2 bg-red-100 rounded-lg">⚠️</div>
               <div>
                 <h4 className="font-semibold text-gray-900">Emergency Alert Confirmation</h4>
                 <p className="text-sm text-gray-500 mt-1">
@@ -332,18 +353,8 @@ export default function QuickActions() {
               <p className="text-sm text-red-800">Are you sure you want to proceed?</p>
             </div>
             <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setShowConfirm(false)}
-                className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleConfirm}
-                className="px-4 py-2 text-sm rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors"
-              >
-                Confirm
-              </button>
+              <button onClick={() => setShowConfirm(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">Cancel</button>
+              <button onClick={handleConfirm} className="px-4 py-2 text-sm rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors">Confirm</button>
             </div>
           </div>
         </div>
@@ -414,22 +425,17 @@ export default function QuickActions() {
               <h4 className="font-bold text-gray-900">{selectedType?.value} Emergency</h4>
               <p className="text-sm text-gray-500 mt-1">Enter <strong className="text-red-600">000</strong> to confirm and send alerts to all teams.</p>
             </div>
-
             <div className="mb-4">
               <input
                 type="text"
                 value={code}
-                onChange={event => {
-                  setCode(event.target.value)
-                  setCodeError('')
-                }}
+                onChange={event => { setCode(event.target.value); setCodeError('') }}
                 placeholder="Enter 000"
                 maxLength={3}
                 className="w-full text-center text-3xl font-bold tracking-widest px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-red-500"
               />
               {codeError && <p className="text-xs text-red-600 text-center mt-2">{codeError}</p>}
             </div>
-
             <div className="mb-4">
               <label className="text-xs text-gray-500 mb-1 block">Additional message <span className="text-gray-400">(optional)</span></label>
               <textarea
@@ -440,15 +446,9 @@ export default function QuickActions() {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-red-500 resize-none"
               />
             </div>
-
             <div className="flex gap-3">
               <button
-                onClick={() => {
-                  setShowKeypad(false)
-                  setCode('')
-                  setCodeError('')
-                  setCustomMessage('')
-                }}
+                onClick={() => { setShowKeypad(false); setCode(''); setCodeError(''); setCustomMessage('') }}
                 className="flex-1 py-2.5 border border-gray-300 text-sm rounded-lg hover:bg-gray-50 transition-colors"
               >
                 Cancel
@@ -456,9 +456,7 @@ export default function QuickActions() {
               <button
                 onClick={handleCodeSubmit}
                 disabled={loading || code.length !== 3}
-                className={`flex-1 py-2.5 text-sm rounded-lg font-semibold transition-colors ${
-                  loading || code.length !== 3 ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-red-600 text-white hover:bg-red-700'
-                }`}
+                className={`flex-1 py-2.5 text-sm rounded-lg font-semibold transition-colors ${loading || code.length !== 3 ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-red-600 text-white hover:bg-red-700'}`}
               >
                 {loading ? 'Sending...' : '🚨 Send Alert'}
               </button>
@@ -490,7 +488,7 @@ export default function QuickActions() {
                         📧 {result.emailStatus}
                       </span>
                       <span className={`text-xs px-2 py-0.5 rounded ${result.smsStatus === 'sent' ? 'bg-green-100 text-green-700' : result.smsStatus === 'skipped' ? 'bg-gray-100 text-gray-500' : 'bg-red-100 text-red-700'}`}>
-                       📱 {result.smsStatus}
+                        📱 {result.smsStatus}
                       </span>
                     </div>
                   </div>
@@ -545,23 +543,13 @@ export default function QuickActions() {
               </div>
             </div>
             <div className="flex justify-end gap-2 mt-6">
-              <button
-                onClick={() => setEditingId(null)}
-                className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSaveEdit}
-                className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Save Details
-              </button>
+              <button onClick={() => setEditingId(null)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">Cancel</button>
+              <button onClick={handleSaveEdit} className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors">Save Details</button>
             </div>
           </div>
         </div>
       )}
-      
+
     </div>
   )
 }
