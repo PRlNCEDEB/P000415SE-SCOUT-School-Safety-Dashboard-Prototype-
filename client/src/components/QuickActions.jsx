@@ -268,24 +268,16 @@ export default function QuickActions() {
           <span className="absolute top-2 right-2 text-xs bg-red-600 text-white px-2 py-0.5 rounded-full font-semibold">
             EMERGENCY
           </span>
-          <div className="text-4xl font-bold text-red-700 mb-3 text-center">1</div>
-          <div className="space-y-1">
-            <p className="text-xs text-red-700">📧 Send Email</p>
-            <p className="text-xs text-red-700">📱 Send SMS</p>
-            <p className="text-xs text-red-700">🗄️ Create Record</p>
-          </div>
+          <div className="text-1xl font-bold text-gray-700 mb-3 text-center">OPTION 1</div>
+          <div className="text-4xl font-bold text-red-700 mb-3 text-center">EMERGENCY</div>
         </button>
 
         <button
           onClick={handleAction2}
           className="bg-white border-2 border-gray-300 rounded-xl p-6 hover:border-green-500 hover:bg-green-50 transition-all text-left"
         >
-          <div className="text-4xl font-bold text-gray-700 mb-3 text-center">2</div>
-          <div className="space-y-1">
-            <p className="text-xs text-gray-600">📧 Send Email</p>
-            <p className="text-xs text-gray-600">📱 Send SMS</p>
-            <p className="text-xs text-gray-600">🗄️ Create Record</p>
-          </div>
+          <div className="text-1xl font-bold text-gray-700 mb-3 text-center">OPTION 2</div>
+          <div className="text-4xl font-bold text-green-700 mb-3 text-center">GENERAL</div>
         </button>
       </div>
 
