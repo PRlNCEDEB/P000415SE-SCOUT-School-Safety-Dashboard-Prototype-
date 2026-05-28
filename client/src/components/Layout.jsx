@@ -102,7 +102,7 @@ export default function Layout({ children }) {
       visible: true,
       items: [
         { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, visible: true },
-        { path: '/submit', label: 'Submit Alert', icon: PlusCircle, visible: isSchoolAdmin || isStaff },
+        { path: '/submit', label: isSchoolAdmin ? 'Alert Testing' : 'Submit Alert', icon: PlusCircle, visible: isSchoolAdmin || isStaff },
         { path: '/incidents', label: 'Incidents', icon: ClipboardList, visible: isCompanyAdmin || isSchoolAdmin || isStaff },
       ],
     },

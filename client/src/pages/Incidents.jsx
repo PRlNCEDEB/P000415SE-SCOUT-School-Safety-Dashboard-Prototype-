@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getIncidents, settingsAPI, archiveAPI } from '../api/client'
+import { archiveAPI, getIncidents, settingsAPI } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 
 const priorityColors = {
@@ -23,60 +23,65 @@ const typeIcons = {
   behaviour: '⚠️',
   fire: '🔥',
   lockdown: '🔒',
-  weather: '🌩️',
-  maintenance: '🔧',
+  weather: '⛈️',
+  maintenance: '🛠️',
   general: '📢',
 }
 
-// Active statuses — what "active" view means
 const ACTIVE_STATUSES = ['triggered', 'acknowledged', 'in-progress']
+const DEFAULT_INCIDENT_ICON = '📢'
 
-// Exports the filtered incident list as a CSV (opens natively in Excel)
 function exportToExcel(incidents, showSchool) {
   const headers = [
-    'Title', 'Type', 'Priority', 'Status', 'Location',
+    'Title',
+    'Type',
+    'Priority',
+    'Status',
+    'Location',
     ...(showSchool ? ['School'] : []),
-    'Triggered By', 'Date / Time', 'Acknowledged',
+    'Triggered By',
+    'Date / Time',
+    'Acknowledged',
   ]
 
-  const escape = val => {
-    const str = String(val ?? '')
-    // Wrap in quotes if the value contains a comma, quote, or newline
-    return str.includes(',') || str.includes('"') || str.includes('\n')
-      ? `"${str.replace(/"/g, '""')}"`
-      : str
+  const escape = value => {
+    const text = String(value ?? '')
+    return text.includes(',') || text.includes('"') || text.includes('\n')
+      ? `"${text.replace(/"/g, '""')}"`
+      : text
   }
 
-  const rows = incidents.map(i => [
-    i.title,
-    i.type,
-    i.priority,
-    i.status,
-    i.location,
-    ...(showSchool ? [i.schoolName || i.schoolId] : []),
-    i.triggeredByName,
-    i.createdAt ? new Date(i.createdAt).toLocaleString() : '',
-    i.acknowledgedBy?.length > 0 ? 'Yes' : 'No',
+  const rows = incidents.map(incident => [
+    incident.title,
+    incident.type,
+    incident.priority,
+    incident.status,
+    incident.location,
+    ...(showSchool ? [incident.schoolName || incident.schoolId] : []),
+    incident.triggeredByName,
+    incident.createdAt ? new Date(incident.createdAt).toLocaleString() : '',
+    incident.acknowledgedBy?.length > 0 ? 'Yes' : 'No',
   ].map(escape))
 
-  const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\r\n')
-
-  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
+  const csv = [headers.join(','), ...rows.map(row => row.join(','))].join('\r\n')
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' })
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
+
   link.href = url
   link.download = `incident-report-${new Date().toISOString().slice(0, 10)}.csv`
   link.click()
   URL.revokeObjectURL(url)
 }
 
-// Returns true when the incident falls within the selected date range
 function isWithinDateRange(incident, range) {
   if (range === 'all') return true
+
   const created = incident.createdAt ? new Date(incident.createdAt) : null
   if (!created || Number.isNaN(created.getTime())) return true
 
   const now = new Date()
+
   switch (range) {
     case 'today':
       return created.toDateString() === now.toDateString()
@@ -91,22 +96,44 @@ function isWithinDateRange(incident, range) {
   }
 }
 
-// Returns true when a triggered incident has exceeded the overdue threshold
 function isOverdue(incident, thresholdMinutes) {
-  if (incident.status !== 'triggered') return false
-  if (!incident.createdAt) return false
+  if (incident.status !== 'triggered' || !incident.createdAt) return false
 
   const created = new Date(incident.createdAt)
   if (Number.isNaN(created.getTime())) return false
 
-  const elapsedMs = Date.now() - created.getTime()
-  return elapsedMs > thresholdMinutes * 60 * 1000
+  return Date.now() - created.getTime() > thresholdMinutes * 60 * 1000
+}
+
+function getElapsedMinutes(incident) {
+  if (!incident.createdAt) return 0
+
+  const created = new Date(incident.createdAt)
+  if (Number.isNaN(created.getTime())) return 0
+
+  return Math.floor((Date.now() - created.getTime()) / 60000)
+}
+
+function formatDuration(minutes) {
+  if (minutes < 60) return `${minutes} min`
+
+  const hours = Math.floor(minutes / 60)
+  const remainingMinutes = minutes % 60
+
+  if (hours < 24) {
+    return remainingMinutes > 0 ? `${hours} hr ${remainingMinutes} min` : `${hours} hr`
+  }
+
+  const days = Math.floor(hours / 24)
+  const remainingHours = hours % 24
+  const dayLabel = days === 1 ? 'day' : 'days'
+
+  return remainingHours > 0 ? `${days} ${dayLabel} ${remainingHours} hr` : `${days} ${dayLabel}`
 }
 
 export default function Incidents() {
   const navigate = useNavigate()
-  const { userRole, authLoading } = useAuth()
-  const { isCompanyAdmin, isSchoolAdmin } = useAuth()
+  const { authLoading, isCompanyAdmin, isSchoolAdmin, userRole } = useAuth()
   const [incidents, setIncidents] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -115,11 +142,7 @@ export default function Incidents() {
   const [filterSchool, setFilterSchool] = useState('all')
   const [filterDateRange, setFilterDateRange] = useState('all')
   const [search, setSearch] = useState('')
-
-  // Overdue threshold (minutes), loaded from settings API
   const [overdueThresholdMinutes, setOverdueThresholdMinutes] = useState(15)
-
-  // Archived incidents — loaded on demand when the archived filter is selected
   const [archivedIncidents, setArchivedIncidents] = useState([])
   const [archivedLoading, setArchivedLoading] = useState(false)
   const [archivedError, setArchivedError] = useState('')
@@ -162,7 +185,6 @@ export default function Incidents() {
     }
   }, [authLoading, userRole])
 
-  // Load archived incidents when the archived tab is first selected (Company Admin only)
   useEffect(() => {
     if (filterStatus !== 'archived' || !isCompanyAdmin || archivedLoaded) return
 
@@ -171,6 +193,7 @@ export default function Incidents() {
     async function loadArchived() {
       setArchivedLoading(true)
       setArchivedError('')
+
       try {
         const records = await archiveAPI.list()
         if (isActive) {
@@ -182,23 +205,20 @@ export default function Incidents() {
           setArchivedError(err.message || 'Failed to load archived incidents.')
         }
       } finally {
-        if (isActive) setArchivedLoading(false)
+        if (isActive) {
+          setArchivedLoading(false)
+        }
       }
     }
 
     loadArchived()
 
-    return () => { isActive = false }
-  }, [filterStatus, isCompanyAdmin, archivedLoaded])
+    return () => {
+      isActive = false
+    }
+  }, [archivedLoaded, filterStatus, isCompanyAdmin])
 
-  // Wait for role to resolve before deciding access
-  if (authLoading || userRole === null) {
-    return (
-      <div className="p-6 max-w-5xl mx-auto">
-        <div className="text-center py-12"><p className="text-gray-500">Loading...</p></div>
-      </div>
-    )
-  }
+  const isArchivedView = filterStatus === 'archived' && isCompanyAdmin
 
   const schoolOptions = useMemo(() => {
     const options = new Map()
@@ -214,53 +234,63 @@ export default function Incidents() {
       .sort((left, right) => left.name.localeCompare(right.name))
   }, [incidents])
 
-  const schoolAdminSchoolName = useMemo(() => {
-    if (!isSchoolAdmin || isCompanyAdmin) return null
+  const filtered = useMemo(() => {
+    if (isArchivedView) return []
 
-    const incidentWithSchool = incidents.find(incident => incident.schoolName)
-    return incidentWithSchool?.schoolName || null
-  }, [incidents, isCompanyAdmin, isSchoolAdmin])
+    return incidents.filter(incident => {
+      const searchTerm = search.trim().toLowerCase()
+      const searchableText = [
+        incident.title,
+        incident.location,
+        incident.triggeredByName,
+        incident.schoolName,
+        incident.schoolId,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
 
-  const isArchivedView = filterStatus === 'archived' && isCompanyAdmin
+      const matchStatus =
+        filterStatus === 'all'
+          ? true
+          : filterStatus === 'active'
+            ? ACTIVE_STATUSES.includes(incident.status)
+            : filterStatus === 'review-required'
+              ? incident.reviewRequired === true
+              : incident.status === filterStatus
+      const matchPriority = filterPriority === 'all' || incident.priority === filterPriority
+      const matchSchool = !isCompanyAdmin || filterSchool === 'all' || incident.schoolId === filterSchool
+      const matchSearch = !searchTerm || searchableText.includes(searchTerm)
+      const matchDateRange = isWithinDateRange(incident, filterDateRange)
 
-  const filtered = isArchivedView ? [] : incidents.filter(incident => {
-    const searchTerm = search.trim().toLowerCase()
-    const searchableText = [
-      incident.title,
-      incident.location,
-      incident.triggeredByName,
-      incident.schoolName,
-      incident.schoolId,
-    ]
-      .filter(Boolean)
-      .join(' ')
-      .toLowerCase()
+      return matchStatus && matchPriority && matchSchool && matchSearch && matchDateRange
+    })
+  }, [filterDateRange, filterPriority, filterSchool, filterStatus, incidents, isArchivedView, isCompanyAdmin, search])
 
-    const matchStatus =
-      filterStatus === 'all'
-        ? true
-        : filterStatus === 'active'
-          ? ACTIVE_STATUSES.includes(incident.status)
-          : filterStatus === 'review-required'
-            ? incident.reviewRequired === true
-            : incident.status === filterStatus
-    const matchPriority = filterPriority === 'all' || incident.priority === filterPriority
-    const matchSchool = !isCompanyAdmin || filterSchool === 'all' || incident.schoolId === filterSchool
-    const matchSearch = !searchTerm || searchableText.includes(searchTerm)
-    const matchDateRange = isWithinDateRange(incident, filterDateRange)
-
-    return matchStatus && matchPriority && matchSchool && matchSearch && matchDateRange
-  })
-
-  const activeCount = incidents.filter(i => ACTIVE_STATUSES.includes(i.status)).length
+  const activeCount = useMemo(
+    () => incidents.filter(incident => ACTIVE_STATUSES.includes(incident.status)).length,
+    [incidents]
+  )
 
   const subtitleText = isArchivedView
-    ? (archivedLoading ? 'Loading archived incidents...' : `${archivedIncidents.length} archived incident${archivedIncidents.length !== 1 ? 's' : ''}`)
+    ? archivedLoading
+      ? 'Loading archived incidents...'
+      : `${archivedIncidents.length} archived incident${archivedIncidents.length !== 1 ? 's' : ''}`
     : loading
       ? 'Loading incidents...'
       : filterStatus === 'active'
         ? `${activeCount} active incident${activeCount !== 1 ? 's' : ''}`
         : `${filtered.length} of ${incidents.length} incidents`
+
+  if (authLoading || userRole === null) {
+    return (
+      <div className="p-6 max-w-5xl mx-auto">
+        <div className="text-center py-12">
+          <p className="text-gray-500">Loading...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -268,7 +298,18 @@ export default function Incidents() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Incident Log</h1>
           <p className="text-sm text-gray-500">{subtitleText}</p>
+          {isSchoolAdmin && !isCompanyAdmin && (
+            <p className="text-xs text-gray-400 mt-1">
+              Monitor and review incidents within your school, including status, response progress, and repeated patterns.
+            </p>
+          )}
+          {!isSchoolAdmin && !isCompanyAdmin && (
+            <p className="text-xs text-gray-400 mt-1">
+              View alerts you created or incidents where you are involved.
+            </p>
+          )}
         </div>
+
         <div className="flex items-center gap-2">
           {(isCompanyAdmin || isSchoolAdmin) && !isArchivedView && (
             <button
@@ -280,7 +321,7 @@ export default function Incidents() {
               ⬇️ Export
             </button>
           )}
-          {!isCompanyAdmin && (
+          {!isCompanyAdmin && !isSchoolAdmin && (
             <button
               onClick={() => navigate('/submit')}
               className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors"
@@ -351,7 +392,6 @@ export default function Incidents() {
         )}
       </div>
 
-      {/* Archived incidents view */}
       {isArchivedView ? (
         <div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100 overflow-hidden">
           {archivedLoading ? (
@@ -366,7 +406,7 @@ export default function Incidents() {
                 key={incident.id}
                 className="px-4 py-3 flex items-center gap-3 opacity-75"
               >
-                <span className="text-lg">{typeIcons[incident.type] || '📢'}</span>
+                <span className="text-lg">{typeIcons[incident.type] || DEFAULT_INCIDENT_ICON}</span>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-gray-800 truncate">{incident.title}</p>
                   <p className="text-xs text-gray-500 truncate">
@@ -397,6 +437,7 @@ export default function Incidents() {
             <div className="p-8 text-center text-sm text-gray-500">No incidents found.</div>
           ) : (
             filtered.map(incident => {
+              const elapsedMinutes = getElapsedMinutes(incident)
               const overdue = isOverdue(incident, overdueThresholdMinutes)
 
               return (
@@ -404,15 +445,16 @@ export default function Incidents() {
                   key={incident.id}
                   onClick={() => navigate(`/incidents/${incident.id}`)}
                   className={`px-4 py-3 flex items-center gap-3 cursor-pointer transition-colors ${
-                    overdue ? 'bg-amber-50 hover:bg-amber-100 border-l-4 border-amber-400' : 'hover:bg-gray-50'
+                    overdue ? 'bg-amber-50 hover:bg-amber-100 border-l-4 border-l-amber-400' : 'hover:bg-gray-50'
                   }`}
                 >
-                  <span className="text-lg">{typeIcons[incident.type] || '📢'}</span>
+                  <span className="text-lg">{typeIcons[incident.type] || DEFAULT_INCIDENT_ICON}</span>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-gray-800 truncate">{incident.title}</p>
                     <p className="text-xs text-gray-500 truncate">
                       {incident.location} · {incident.timestamp} · {incident.triggeredByName}
                       {isCompanyAdmin && incident.schoolName ? ` · ${incident.schoolName}` : ''}
+                      {overdue ? ` · Unacknowledged for ${formatDuration(elapsedMinutes)}` : ''}
                     </p>
                   </div>
                   <span className={`text-xs px-2 py-0.5 rounded ${priorityColors[incident.priority]}`}>
@@ -436,7 +478,7 @@ export default function Incidents() {
                       🚩 Review
                     </span>
                   )}
-                  <span className="text-gray-400">›</span>
+                  <span className="text-gray-400">&gt;</span>
                 </div>
               )
             })

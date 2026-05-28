@@ -83,6 +83,23 @@ function isTodayIncident(incident) {
     incidentDate.getDate() === today.getDate()
 }
 
+function formatDuration(minutes) {
+  if (minutes < 60) return `${minutes} min`
+
+  const hours = Math.floor(minutes / 60)
+  const remainingMinutes = minutes % 60
+
+  if (hours < 24) {
+    return remainingMinutes > 0 ? `${hours} hr ${remainingMinutes} min` : `${hours} hr`
+  }
+
+  const days = Math.floor(hours / 24)
+  const remainingHours = hours % 24
+  const dayLabel = days === 1 ? 'day' : 'days'
+
+  return remainingHours > 0 ? `${days} ${dayLabel} ${remainingHours} hr` : `${days} ${dayLabel}`
+}
+
 export default function Dashboard() {
   const navigate = useNavigate()
   const { currentUser, userRole, isCompanyAdmin, isSchoolAdmin, isStaff } = useAuth()
@@ -165,7 +182,7 @@ export default function Dashboard() {
           </div>
           <p className="text-sm text-gray-500">Welcome back, {displayName}</p>
         </div>
-        {!isCompanyAdmin && (
+        {isStaff && (
         <button
           onClick={() => navigate('/submit')}
           className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors"
@@ -209,7 +226,7 @@ export default function Dashboard() {
       )}
 
       {/* ── Quick Actions (Staff & School Admin only, not Company Admin) ── */}
-      {!isCompanyAdmin && (
+      {isStaff && (
         <div className="bg-white border border-gray-200 rounded-xl p-5 mb-6">
           <QuickActions />
         </div>
@@ -251,7 +268,8 @@ export default function Dashboard() {
           </div>
           <div className="space-y-2">
             {unacked.map(incident => {
-              const isIncidentOverdue = getElapsedMinutes(incident) > overdueThresholdMinutes
+              const elapsedMinutes = getElapsedMinutes(incident)
+              const isIncidentOverdue = elapsedMinutes > overdueThresholdMinutes
               return (
                 <div
                   key={incident.id}
@@ -267,11 +285,14 @@ export default function Dashboard() {
                     <p className={`text-sm ${isIncidentOverdue ? 'text-amber-900' : 'text-red-900'}`}>{incident.title}</p>
                     <p className={`text-xs ${isIncidentOverdue ? 'text-amber-700' : 'text-red-600'}`}>
                       {incident.location} - {incident.timestamp}
-                      {isIncidentOverdue && ` · ${getElapsedMinutes(incident)} min unacknowledged`}
+                      {isIncidentOverdue && ` · Unacknowledged for ${formatDuration(elapsedMinutes)}`}
                     </p>
                   </div>
                   <span className={`text-xs px-2 py-0.5 rounded ${priorityColors[incident.priority]}`}>
                     {incident.priority}
+                  </span>
+                  <span className={`text-xs px-2 py-0.5 rounded ${statusColors[incident.status]}`}>
+                    {incident.status}
                   </span>
                   {isIncidentOverdue && (
                     <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-700 font-medium whitespace-nowrap">
@@ -289,7 +310,7 @@ export default function Dashboard() {
       <div>
         <div className="flex items-center justify-between mb-2">
           <h2 className="font-semibold text-gray-900">
-            {isStaff ? "Today's Incidents" : "Today's Recent Incidents"}
+            {isStaff ? 'My Activity' : "Today's Recent Incidents"}
           </h2>
           <button onClick={() => navigate('/incidents')} className="text-xs text-blue-600 hover:underline">
             View all
@@ -322,6 +343,36 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      {isStaff && (
+        <div className="mt-6">
+          <h2 className="font-semibold text-gray-900 mb-2">School Updates</h2>
+          <div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100 overflow-hidden">
+            <SchoolUpdate
+              title="Asthma warning"
+              detail="High pollen levels today. Monitor students who may need support."
+              time="Today"
+            />
+            <SchoolUpdate
+              title="Weather awareness"
+              detail="Check outdoor activities if conditions change during the day."
+              time="Today"
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SchoolUpdate({ title, detail, time }) {
+  return (
+    <div className="px-4 py-3">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-medium text-gray-800">{title}</p>
+        <span className="text-xs text-gray-400 shrink-0">{time}</span>
+      </div>
+      <p className="text-xs text-gray-500 mt-0.5">{detail}</p>
     </div>
   )
 }

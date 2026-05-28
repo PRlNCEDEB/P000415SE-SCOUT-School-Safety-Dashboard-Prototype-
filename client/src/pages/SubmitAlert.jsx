@@ -38,7 +38,7 @@ export default function SubmitAlert() {
     location: '',
   })
   const [errors, setErrors] = useState({})
-  const { currentUser } = useAuth()
+  const { currentUser, isSchoolAdmin } = useAuth()
 
   useEffect(() => {
     setupAPI.getAlertTypes()
@@ -110,8 +110,14 @@ export default function SubmitAlert() {
 
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Submit Alert</h1>
-        <p className="text-sm text-gray-500">Report a safety incident or concern</p>
+        <h1 className="text-2xl font-bold text-gray-900">
+          {isSchoolAdmin ? 'Alert Testing' : 'Submit Alert'}
+        </h1>
+        <p className="text-sm text-gray-500">
+          {isSchoolAdmin
+            ? 'Design, test, and review how alerts behave before they are used in practice.'
+            : 'Create a structured alert with the key details staff need to respond.'}
+        </p>
       </div>
 
       {/* Form */}
@@ -217,7 +223,7 @@ export default function SubmitAlert() {
           disabled={isSubmitting}
           className="w-full py-3 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition-colors"
         >
-          {isSubmitting ? 'Submitting...' : '🚨 Submit Alert'}
+          {isSubmitting ? 'Submitting...' : isSchoolAdmin ? 'Run Alert Test' : '🚨 Submit Alert'}
         </button>
 
       </div>

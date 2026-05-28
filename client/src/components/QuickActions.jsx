@@ -195,8 +195,9 @@ export default function QuickActions() {
         title: `${selectedAction2Type.label} alert`,
         location: editForm.location || 'Dashboard quick action',
         description: `${selectedAction2Type.label} quick action triggered from dashboard.`,
-        triggeredByName: currentUser?.name || 'Unknown',
-        triggeredById: currentUser?.id || null,
+        triggeredByName: currentUser?.displayName ||
+          currentUser?._profileName || 'Unknown',
+        triggeredById: currentUser?.uid || null,
       })
 
       const incidentId = incident?.id || null
@@ -253,11 +254,14 @@ export default function QuickActions() {
 
   if (isCompanyAdmin) return null
 
+  const emergencyPreview = emergencyTypes.slice(0, 3).map(type => type.value).join(', ')
+  const generalPreview = action2Types.slice(0, 3).map(type => type.label).join(', ')
+
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-lg font-semibold text-gray-900">Quick Actions</h2>
-        <p className="text-xs text-gray-500">Press keyboard key or click button to trigger notifications</p>
+        <h2 className="text-lg font-semibold text-gray-900">Quick Alert</h2>
+        <p className="text-xs text-gray-500">Choose the alert that best matches what is happening.</p>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
@@ -268,24 +272,18 @@ export default function QuickActions() {
           <span className="absolute top-2 right-2 text-xs bg-red-600 text-white px-2 py-0.5 rounded-full font-semibold">
             EMERGENCY
           </span>
-          <div className="text-4xl font-bold text-red-700 mb-3 text-center">1</div>
-          <div className="space-y-1">
-            <p className="text-xs text-red-700">📧 Send Email</p>
-            <p className="text-xs text-red-700">📱 Send SMS</p>
-            <p className="text-xs text-red-700">🗄️ Create Record</p>
-          </div>
+          <div className="text-lg font-bold text-red-700 mb-2">Emergency alert</div>
+          <p className="text-xs text-red-700">{emergencyPreview || 'Fire, Medical, Lockdown'}</p>
+          <p className="text-xs text-red-500 mt-3">Use when immediate response is required.</p>
         </button>
 
         <button
           onClick={handleAction2}
           className="bg-white border-2 border-gray-300 rounded-xl p-6 hover:border-green-500 hover:bg-green-50 transition-all text-left"
         >
-          <div className="text-4xl font-bold text-gray-700 mb-3 text-center">2</div>
-          <div className="space-y-1">
-            <p className="text-xs text-gray-600">📧 Send Email</p>
-            <p className="text-xs text-gray-600">📱 Send SMS</p>
-            <p className="text-xs text-gray-600">🗄️ Create Record</p>
-          </div>
+          <div className="text-lg font-bold text-gray-800 mb-2">General alert</div>
+          <p className="text-xs text-gray-600">{generalPreview || 'Behaviour, Maintenance, General'}</p>
+          <p className="text-xs text-gray-400 mt-3">Use for structured reporting and awareness.</p>
         </button>
       </div>
 
@@ -293,17 +291,17 @@ export default function QuickActions() {
         <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3 flex items-center gap-2">
           <span className="text-green-600">✅</span>
           <div>
-            <p className="text-sm font-semibold text-green-900">Action {feedback.button} triggered</p>
-            <p className="text-xs text-green-700">{feedback.actions} completed</p>
+            <p className="text-sm font-semibold text-green-900">Alert triggered</p>
+            <p className="text-xs text-green-700">Relevant staff have been notified.</p>
           </div>
         </div>
       )}
 
       <div>
-        <h3 className="text-sm font-semibold text-gray-900 mb-2">Action Log</h3>
+        <h3 className="text-sm font-semibold text-gray-900 mb-2">My Activity</h3>
         {logs.length === 0 ? (
           <div className="bg-white border border-gray-200 rounded-xl p-6 text-center">
-            <p className="text-xs text-gray-400">No actions recorded yet. Press 1 or 2 to trigger.</p>
+            <p className="text-xs text-gray-400">No alerts triggered in this session yet.</p>
           </div>
         ) : (
           <div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100 overflow-hidden">
@@ -325,7 +323,7 @@ export default function QuickActions() {
                   )}
                   {log.description && <p className="text-xs text-gray-500 mt-0.5">{log.description}</p>}
                   {log.location && <p className="text-xs text-gray-400">📍 {log.location}</p>}
-                  <p className="text-xs text-gray-400 mt-0.5">{log.actions.join(' + ')} - {log.timestamp}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">Triggered at {log.timestamp}</p>
                 </div>
                 {isAdmin && (
                   <button
@@ -353,7 +351,7 @@ export default function QuickActions() {
               <div>
                 <h4 className="font-semibold text-gray-900">Emergency Alert Confirmation</h4>
                 <p className="text-sm text-gray-500 mt-1">
-                  This will send immediate notifications via Email and SMS to all relevant staff.
+                  This will alert the relevant response staff immediately.
                 </p>
               </div>
             </div>
