@@ -33,9 +33,10 @@ router.get('/role', verifyToken, async (req, res) => {
     const { uid, email } = req.user
 
     const pick = (data) => ({
-      role:     data.role     || 'staff',
-      schoolId: data.schoolId || null,
-      name:     data.name     || null,
+      role:       data.role       || 'staff',
+      schoolId:   data.schoolId   || null,
+      schoolName: data.schoolName || null,
+      name:       data.name       || null,
     })
 
     // Look up the user document in Firestore by UID
@@ -51,7 +52,7 @@ router.get('/role', verifyToken, async (req, res) => {
     }
 
     // User authenticated but no Firestore record — default to staff
-    return res.json({ role: 'staff', schoolId: null, name: null })
+    return res.json({ role: 'staff', schoolId: null, schoolName: null, name: null })
 
   } catch (err) {
     console.error('Error fetching user role:', err)

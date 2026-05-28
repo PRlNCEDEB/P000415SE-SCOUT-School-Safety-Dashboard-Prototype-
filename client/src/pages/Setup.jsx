@@ -591,7 +591,7 @@ export default function Setup() {
           <div className="bg-white border border-gray-200 rounded-xl p-5 mt-6">
             <h3 className="font-semibold mb-1">Archive Resolved Incidents</h3>
             <p className="text-sm text-gray-500 mb-4">
-              Runs automatically every 24 hours. Use this button to trigger it immediately — any resolved incident older than the retention period above will be moved to the archive.
+              Runs automatically every 24 hours. Use this button to trigger it immediately. Any resolved incident older than the retention period above will be moved to the archive.
             </p>
 
             <button

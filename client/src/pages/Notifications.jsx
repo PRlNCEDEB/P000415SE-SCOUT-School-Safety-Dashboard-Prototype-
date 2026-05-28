@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Navigate } from 'react-router-dom'
+import { Bell } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { notificationsAPI } from '../api/client'
 
@@ -98,10 +99,10 @@ export default function Notifications() {
       )}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <SummaryCard label="Total Sent" value={totalSent} icon="📥" color="text-green-600" />
-        <SummaryCard label="Failed" value={totalFailed} icon="❌" color="text-red-600" />
-        <SummaryCard label="SMS Failed" value={smsFailed} icon="📱" color="text-orange-600" />
-        <SummaryCard label="Email Failed" value={emailFailed} icon="📧" color="text-orange-600" />
+        <SummaryCard label="Total Sent"   value={totalSent}   color="text-green-600" />
+        <SummaryCard label="Failed"       value={totalFailed} color="text-red-600" />
+        <SummaryCard label="SMS Failed"   value={smsFailed}   color="text-orange-600" />
+        <SummaryCard label="Email Failed" value={emailFailed} color="text-orange-600" />
       </div>
 
       {totalFailed > 0 && (
@@ -154,14 +155,14 @@ export default function Notifications() {
           ) : (
             filtered.map(n => (
               <div key={n.id} className="px-4 py-4 flex items-start gap-4">
-                <span className="mt-0.5 text-lg">{getTypeIcon(n.type)}</span>
+                <Bell className="mt-0.5 w-4 h-4 text-gray-400 shrink-0" aria-hidden="true" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-800">{n.incidentTitle}</p>
                   <p className="text-xs text-gray-500 mt-0.5">
-                    👤 {n.recipientName} · 📧 {n.recipientEmail}
+                    {n.recipientName} · {n.recipientEmail}
                   </p>
                   <p className="text-xs text-gray-400 mt-0.5">
-                    🕐 {formatTimestamp(n.timestamp)}
+                    {formatTimestamp(n.timestamp)}
                     {n.schoolName ? ` - ${n.schoolName}` : ''}
                   </p>
                 </div>
@@ -178,23 +179,6 @@ export default function Notifications() {
   )
 }
 
-function getTypeIcon(type) {
-  const icons = {
-    medical: '🚑',
-    behaviour: '⚠️',
-    fire: '🔥',
-    lockdown: '🔒',
-    weather: '🌊',
-    maintenance: '🛠️',
-    general: '🔔',
-    'natural disaster': '🌊',
-    naturaldisaster: '🌊',
-  }
-  return icons[String(type || '').toLowerCase().replace(/\s/g, '')] ||
-    icons[String(type || '').toLowerCase()] ||
-    '🔔'
-}
-
 function formatTimestamp(timestamp) {
   if (!timestamp) return 'Unknown time'
   const date = new Date(timestamp)
@@ -209,17 +193,16 @@ function formatTimestamp(timestamp) {
 function StatusBadge({ label, status = 'pending' }) {
   return (
     <span className={`text-xs px-2 py-0.5 rounded ${statusStyle[status] || statusStyle.pending}`}>
-      {label === 'SMS' ? '📱' : '📧'} {label} {status}
+      {label} {status}
     </span>
   )
 }
 
-function SummaryCard({ label, value, icon, color }) {
+function SummaryCard({ label, value, color }) {
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-4">
-      <div className="mb-2 text-sm">{icon}</div>
       <div className={`text-2xl font-semibold ${color}`}>{value}</div>
-      <div className="text-xs text-gray-500">{label}</div>
+      <div className="text-xs text-gray-500 mt-0.5">{label}</div>
     </div>
   )
 }

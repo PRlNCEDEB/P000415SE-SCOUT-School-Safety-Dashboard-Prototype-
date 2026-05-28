@@ -22,14 +22,14 @@ const statusColors = {
   archived: 'bg-gray-100 text-gray-500',
 }
 
-const typeIcons = {
-  medical: '🏥',
-  behaviour: '⚠️',
-  fire: '🔥',
-  lockdown: '🔒',
-  weather: '🌩️',
-  maintenance: '🔧',
-  general: '📢',
+const typeLabels = {
+  medical: 'Medical',
+  behaviour: 'Behaviour',
+  fire: 'Fire',
+  lockdown: 'Lockdown',
+  weather: 'Weather',
+  maintenance: 'Maintenance',
+  general: 'General',
 }
 
 // ── Role badge used in the dashboard header ───────────────────────────────────
@@ -51,21 +51,21 @@ function ScopeNotice({ role }) {
   if (role === 'Company Admin') {
     return (
       <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-2 mb-5 text-xs text-red-800">
-        👁️ <strong>Company Admin view</strong> — you can see incidents across all schools in the network.
+        <strong>Company Admin view</strong> — you can see incidents across all schools in the network.
       </div>
     )
   }
   if (role === 'School Admin') {
     return (
       <div className="bg-purple-50 border border-purple-200 rounded-lg px-4 py-2 mb-5 text-xs text-purple-800">
-        🏫 <strong>School Admin view</strong> — showing incidents for your school.
+        <strong>School Admin view</strong> — showing incidents for your school.
       </div>
     )
   }
   // Staff
   return (
     <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 mb-5 text-xs text-blue-800">
-      👤 <strong>Staff view</strong> — submit alerts and track incidents you are involved in.
+      <strong>Staff view</strong> — submit alerts and track incidents you are involved in.
     </div>
   )
 }
@@ -170,7 +170,7 @@ export default function Dashboard() {
           onClick={() => navigate('/submit')}
           className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors"
         >
-          ➕ Submit Alert
+          Submit Alert
         </button>
         )}
       </div>
@@ -215,24 +215,23 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ── Summary stats (Company Admin & School Admin see all 4; Staff sees simplified 2) ── */}
+      {/* ── Summary stats (School Admin see all 4; Staff sees simplified 2) ── */}
       {isStaff ? (
         <div className="grid grid-cols-2 gap-4 mb-6">
-          <StatCard label="Active Incidents" value={active.length} color="text-gray-700" icon="🚨" />
+          <StatCard label="Active Incidents" value={active.length} color="text-gray-700" />
           <StatCard
             label="Unacknowledged"
             value={unacked.length}
             color="text-red-600"
-            icon="⏳"
             subLabel={overdue.length > 0 ? `${overdue.length} overdue` : null}
           />
         </div>
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <StatCard label="Active Incidents" value={summaryStats ? summaryStats.activeIncidents : active.length}   color="text-gray-700"   icon="🚨" />
-          <StatCard label="Critical"         value={summaryStats ? summaryStats.criticalCount   : critical}        color="text-red-600"    icon="⚡" />
-          <StatCard label="High Priority"    value={summaryStats ? summaryStats.highCount        : high}            color="text-orange-600" icon="🚩" />
-          <StatCard label="Avg Response"     value={summaryStats ? `${summaryStats.avgResponseTime}m` : '...'}     color="text-blue-600"   icon="⏱️" />
+          <StatCard label="Active Incidents" value={summaryStats ? summaryStats.activeIncidents : active.length}   color="text-gray-700"   />
+          <StatCard label="Critical"         value={summaryStats ? summaryStats.criticalCount   : critical}        color="text-red-600"    />
+          <StatCard label="High Priority"    value={summaryStats ? summaryStats.highCount        : high}            color="text-orange-600" />
+          <StatCard label="Avg Response"     value={summaryStats ? `${summaryStats.avgResponseTime}m` : '...'}     color="text-blue-600"   />
         </div>
       )}
 
@@ -245,7 +244,7 @@ export default function Dashboard() {
             <span className="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded">{unacked.length}</span>
             {overdue.length > 0 && (
               <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-medium">
-                ⏰ {overdue.length} overdue
+                {overdue.length} overdue
               </span>
             )}
           </div>
@@ -262,7 +261,9 @@ export default function Dashboard() {
                       : 'bg-red-50 border border-red-200 hover:bg-red-100'
                   }`}
                 >
-                  <span className="text-xs font-semibold text-gray-600">{typeIcons[incident.type] || '📢'}</span>
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                    {typeLabels[incident.type] || incident.type || 'General'}
+                  </span>
                   <div className="flex-1">
                     <p className={`text-sm ${isIncidentOverdue ? 'text-amber-900' : 'text-red-900'}`}>{incident.title}</p>
                     <p className={`text-xs ${isIncidentOverdue ? 'text-amber-700' : 'text-red-600'}`}>
@@ -275,7 +276,7 @@ export default function Dashboard() {
                   </span>
                   {isIncidentOverdue && (
                     <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-700 font-medium whitespace-nowrap">
-                      ⏰ Overdue
+                      Overdue
                     </span>
                   )}
                 </div>
@@ -305,7 +306,9 @@ export default function Dashboard() {
                 onClick={() => navigate(`/incidents/${incident.id}`)}
                 className="px-4 py-3 flex items-center gap-3 cursor-pointer hover:bg-gray-50 transition-colors"
               >
-                <span className="text-xs font-semibold text-gray-600">{typeIcons[incident.type] || '📢'}</span>
+                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide w-20 shrink-0">
+                  {typeLabels[incident.type] || incident.type || 'General'}
+                </span>
                 <div className="flex-1">
                   <p className="text-sm text-gray-800">{incident.title}</p>
                   <p className="text-xs text-gray-500">{incident.location} - {incident.timestamp} - {incident.triggeredByName}</p>
@@ -326,14 +329,13 @@ export default function Dashboard() {
   )
 }
 
-function StatCard({ label, value, color, icon, subLabel }) {
+function StatCard({ label, value, color, subLabel }) {
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-4">
-      <div className="mb-1 text-xs font-semibold text-gray-500">{icon}</div>
       <div className={`text-2xl font-semibold ${color}`}>{value}</div>
-      <div className="text-xs text-gray-500">{label}</div>
+      <div className="text-xs text-gray-500 mt-0.5">{label}</div>
       {subLabel && (
-        <div className="text-xs text-amber-600 font-medium mt-0.5">⏰ {subLabel}</div>
+        <div className="text-xs text-amber-600 font-medium mt-0.5">{subLabel}</div>
       )}
     </div>
   )
