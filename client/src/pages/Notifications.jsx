@@ -78,8 +78,8 @@ export default function Notifications() {
           <h1 className="text-2xl font-bold text-gray-900">Notifications</h1>
           <p className="text-sm text-gray-500">
             {isCompanyAdmin
-              ? 'Track SMS and email delivery across all schools'
-              : 'Track SMS and email delivery for your school'}
+              ? 'Track and verify SMS and email delivery across all schools.'
+              : 'Track and verify which SMS and email messages were sent within your school.'}
           </p>
         </div>
         <button

@@ -165,7 +165,7 @@ export default function Dashboard() {
           </div>
           <p className="text-sm text-gray-500">Welcome back, {displayName}</p>
         </div>
-        {!isCompanyAdmin && (
+        {isStaff && (
         <button
           onClick={() => navigate('/submit')}
           className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors"
@@ -209,7 +209,7 @@ export default function Dashboard() {
       )}
 
       {/* ── Quick Actions (Staff & School Admin only, not Company Admin) ── */}
-      {!isCompanyAdmin && (
+      {isStaff && (
         <div className="bg-white border border-gray-200 rounded-xl p-5 mb-6">
           <QuickActions />
         </div>
@@ -289,7 +289,7 @@ export default function Dashboard() {
       <div>
         <div className="flex items-center justify-between mb-2">
           <h2 className="font-semibold text-gray-900">
-            {isStaff ? "Today's Incidents" : "Today's Recent Incidents"}
+            {isStaff ? 'My Activity' : "Today's Recent Incidents"}
           </h2>
           <button onClick={() => navigate('/incidents')} className="text-xs text-blue-600 hover:underline">
             View all
@@ -322,6 +322,36 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      {isStaff && (
+        <div className="mt-6">
+          <h2 className="font-semibold text-gray-900 mb-2">School Updates</h2>
+          <div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100 overflow-hidden">
+            <SchoolUpdate
+              title="Asthma warning"
+              detail="High pollen levels today. Monitor students who may need support."
+              time="Today"
+            />
+            <SchoolUpdate
+              title="Weather awareness"
+              detail="Check outdoor activities if conditions change during the day."
+              time="Today"
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SchoolUpdate({ title, detail, time }) {
+  return (
+    <div className="px-4 py-3">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-medium text-gray-800">{title}</p>
+        <span className="text-xs text-gray-400 shrink-0">{time}</span>
+      </div>
+      <p className="text-xs text-gray-500 mt-0.5">{detail}</p>
     </div>
   )
 }

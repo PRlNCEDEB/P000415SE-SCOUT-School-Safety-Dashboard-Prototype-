@@ -304,7 +304,8 @@ export default function Setup() {
       {isSchoolAdmin && (
         <p className="text-sm text-gray-500 mb-6 max-w-2xl">
           Configure and apply SCOUT within your school. This includes selecting available alert types,
-          assigning roles, and defining who receives notifications.
+          assigning roles, and defining who receives notifications. Use this area to test and refine
+          how alerts behave before settings are applied in practice.
         </p>
       )}
 
@@ -539,10 +540,10 @@ export default function Setup() {
       {isSchoolAdmin && (
         <div className="mt-6">
           <div className="flex items-center gap-2 mb-3">
-            <h2 className="text-lg font-semibold text-gray-800">Email Routing</h2>
+            <h2 className="text-lg font-semibold text-gray-800">Alert Recipients</h2>
             <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">School Admin</span>
           </div>
-          <p className="text-sm text-gray-500 mb-4">Configure who receives notifications for each emergency alert type at your school.</p>
+          <p className="text-sm text-gray-500 mb-4">Choose who should receive each emergency alert type at your school.</p>
 
           {loadingRouting && <p className="text-sm text-gray-400 mb-4">Loading...</p>}
           {routingError && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-4">{routingError}</p>}

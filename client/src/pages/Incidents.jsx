@@ -165,8 +165,18 @@ export default function Incidents() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Incident Log</h1>
           <p className="text-sm text-gray-500">{subtitleText}</p>
+          {isSchoolAdmin && !isCompanyAdmin && (
+            <p className="text-xs text-gray-400 mt-1">
+              Monitor and review incidents within your school, including status, response progress, and repeated patterns.
+            </p>
+          )}
+          {!isSchoolAdmin && !isCompanyAdmin && (
+            <p className="text-xs text-gray-400 mt-1">
+              View alerts you created or incidents where you are involved.
+            </p>
+          )}
         </div>
-        {!isCompanyAdmin && (
+        {!isCompanyAdmin && !isSchoolAdmin && (
         <button
           onClick={() => navigate('/submit')}
           className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors"
