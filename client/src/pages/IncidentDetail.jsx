@@ -141,7 +141,7 @@ function formatDuration(minutes) {
 export default function IncidentDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { currentUser, userRole, isAdmin, authLoading } = useAuth()
+  const { currentUser, userRole, isAdmin, isSchoolAdmin, authLoading } = useAuth()
   const [incident, setIncident] = useState(null)
   const [status, setStatus] = useState('')
   const [loading, setLoading] = useState(true)
@@ -159,6 +159,15 @@ export default function IncidentDetail() {
 
   // Overdue threshold
   const [overdueThresholdMinutes, setOverdueThresholdMinutes] = useState(15)
+
+  // Review flag state
+  const [showFlagForm, setShowFlagForm] = useState(false)
+  const [flagComment, setFlagComment] = useState('')
+  const [flagging, setFlagging] = useState(false)
+  const [flagError, setFlagError] = useState('')
+  const [reviewCommentText, setReviewCommentText] = useState('')
+  const [addingReviewComment, setAddingReviewComment] = useState(false)
+  const [reviewCommentError, setReviewCommentError] = useState('')
 
   // Shared helper — apply a fresh record from the API to all state
   function applyRecord(record) {
@@ -232,6 +241,53 @@ export default function IncidentDetail() {
       setRefreshError(err.message || 'Failed to refresh incident status.')
     } finally {
       setRefreshingStatus(false)
+    }
+  }
+
+  const handleFlagSubmit = async () => {
+    if (!flagComment.trim()) {
+      setFlagError('Please add a comment before flagging.')
+      return
+    }
+    setFlagging(true)
+    setFlagError('')
+    try {
+      const result = await incidentAPI.setReviewFlag(incident.id, true, flagComment.trim())
+      applyRecord(result.incident)
+      setShowFlagForm(false)
+      setFlagComment('')
+    } catch (err) {
+      setFlagError(err.message || 'Failed to flag for review.')
+    } finally {
+      setFlagging(false)
+    }
+  }
+
+  const handleCloseReview = async () => {
+    setFlagError('')
+    try {
+      const result = await incidentAPI.setReviewFlag(incident.id, false, '')
+      applyRecord(result.incident)
+    } catch (err) {
+      setFlagError(err.message || 'Failed to close review.')
+    }
+  }
+
+  const handleAddReviewComment = async () => {
+    if (!reviewCommentText.trim()) {
+      setReviewCommentError('Comment cannot be empty.')
+      return
+    }
+    setAddingReviewComment(true)
+    setReviewCommentError('')
+    try {
+      const result = await incidentAPI.addReviewComment(incident.id, reviewCommentText.trim())
+      applyRecord(result.incident)
+      setReviewCommentText('')
+    } catch (err) {
+      setReviewCommentError(err.message || 'Failed to add comment.')
+    } finally {
+      setAddingReviewComment(false)
     }
   }
 
@@ -315,6 +371,19 @@ export default function IncidentDetail() {
           {refreshingStatus ? 'Refreshing...' : 'Refresh Status'}
         </button>
       </div>
+
+      {/* Review Required banner */}
+      {found.reviewRequired && (
+        <div className="bg-red-50 border border-red-400 rounded-xl px-5 py-4 mb-4 flex items-start gap-3">
+          <span className="text-2xl">🚩</span>
+          <div className="flex-1">
+            <p className="font-semibold text-red-800">Review Required</p>
+            <p className="text-sm text-red-700 mt-0.5">
+              This resolved incident has been flagged for follow-up. See the Review section below.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Help is on the way banner */}
       {acknowledgedBy.length > 0 && (
@@ -480,6 +549,121 @@ export default function IncidentDetail() {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Follow-up Review section */}
+      {/* Flag for Review — School Admin only, resolved incident, not yet flagged */}
+      {isSchoolAdmin && status === 'resolved' && !found.reviewRequired && (
+        <div className="bg-white border border-gray-200 rounded-xl p-5 mb-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="font-semibold text-gray-900">Follow-up Review</h2>
+              <p className="text-sm text-gray-500 mt-0.5">Flag this resolved incident if further review is needed.</p>
+            </div>
+            {!showFlagForm && (
+              <button
+                type="button"
+                onClick={() => setShowFlagForm(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 border border-red-300 text-red-700 text-sm rounded-lg hover:bg-red-50 transition-colors"
+              >
+                🚩 Flag for Review
+              </button>
+            )}
+          </div>
+          {showFlagForm && (
+            <div className="mt-4">
+              <textarea
+                rows={3}
+                value={flagComment}
+                onChange={e => setFlagComment(e.target.value)}
+                placeholder="Describe what needs to be reviewed…"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-400 resize-none"
+              />
+              {flagError && <p className="text-sm text-red-500 mt-1">{flagError}</p>}
+              <div className="flex gap-2 mt-2">
+                <button
+                  type="button"
+                  onClick={handleFlagSubmit}
+                  disabled={flagging}
+                  className="px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
+                >
+                  {flagging ? 'Flagging…' : '🚩 Confirm Flag'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowFlagForm(false); setFlagComment(''); setFlagError('') }}
+                  className="px-4 py-2 border border-gray-300 text-gray-600 text-sm rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Review Required thread — shown when flagged */}
+      {found.reviewRequired && (
+        <div className="bg-white border border-red-200 rounded-xl p-5 mb-4">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-gray-900 flex items-center gap-2">
+              🚩 Review Thread
+            </h2>
+            {isSchoolAdmin && (
+              <button
+                type="button"
+                onClick={handleCloseReview}
+                className="flex items-center gap-1.5 px-3 py-1.5 border border-green-400 text-green-700 text-sm rounded-lg hover:bg-green-50 transition-colors"
+              >
+                ✅ Close Review
+              </button>
+            )}
+          </div>
+
+          {/* Comments */}
+          <div className="space-y-3 mb-4">
+            {(found.reviewComments || []).length === 0 ? (
+              <p className="text-sm text-gray-400">No comments yet.</p>
+            ) : (
+              (found.reviewComments || []).map((c, idx) => (
+                <div key={idx} className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+                  <div className="flex items-center justify-between mb-0.5">
+                    <span className="text-sm font-medium text-gray-800">{c.name}</span>
+                    <span className="text-xs text-gray-400">
+                      {c.createdAt ? new Date(c.createdAt).toLocaleString('en-AU', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500 mb-1">{c.role}</p>
+                  <p className="text-sm text-gray-700">{c.comment}</p>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Add comment — any admin */}
+          {isAdmin && (
+            <div>
+              <textarea
+                rows={2}
+                value={reviewCommentText}
+                onChange={e => setReviewCommentText(e.target.value)}
+                placeholder="Add a response or note…"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-400 resize-none"
+              />
+              {reviewCommentError && (
+                <p className="text-sm text-red-500 mt-1">{reviewCommentError}</p>
+              )}
+              <button
+                type="button"
+                onClick={handleAddReviewComment}
+                disabled={addingReviewComment}
+                className="mt-2 px-4 py-2 bg-gray-800 text-white text-sm rounded-lg hover:bg-gray-900 disabled:opacity-50 transition-colors"
+              >
+                {addingReviewComment ? 'Adding…' : 'Add Comment'}
+              </button>
+            </div>
+          )}
         </div>
       )}
 

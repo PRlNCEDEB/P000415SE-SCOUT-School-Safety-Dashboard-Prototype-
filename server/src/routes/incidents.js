@@ -198,6 +198,8 @@ function toIncidentResponse(incident) {
     acknowledgedBy: incident.acknowledgedBy || [],  // ← added
     inProgressBy: incident.inProgressBy || [],
     notifications: [],
+    reviewRequired: incident.reviewRequired || false,
+    reviewComments: Array.isArray(incident.reviewComments) ? incident.reviewComments : [],
   }
 }
 
@@ -214,6 +216,30 @@ router.get('/', verifyToken, async (req, res, next) => {
     next(error)
   }
 })
+// GET /api/incidents/archived — company admin only; reads from archivedIncidents collection
+// Must be registered before /:id to prevent Express treating 'archived' as an ID
+router.get('/archived', verifyToken, async (req, res, next) => {
+  try {
+    const profile = await getUserProfile(req.user)
+
+    if (!isCompanyAdmin(profile.role)) {
+      return res.status(403).json({ error: 'Only Company Admins can view archived incidents.' })
+    }
+
+    const snapshot = await getDb().collection('archivedIncidents').get()
+    const incidents = snapshotToArray(snapshot)
+      .sort((left, right) => getSortValue(right) - getSortValue(left))
+      .map(incident => ({
+        ...toIncidentResponse(incident),
+        archivedAt: incident.archivedAt || null,
+      }))
+
+    res.json({ incidents })
+  } catch (error) {
+    next(error)
+  }
+})
+
 //gets a specific incident by ID
 router.get('/:id', verifyToken, async (req, res, next) => {
   try {
@@ -325,6 +351,112 @@ router.patch('/:id/status', verifyToken, async (req, res, next) => {
     const updatedDoc = await docRef.get()
     const updatedIncident = docToObject(updatedDoc)
     invalidateAnalyticsCache()
+    res.json({ success: true, incident: toIncidentResponse(updatedIncident) })
+  } catch (error) {
+    next(error)
+  }
+})
+
+// PATCH /api/incidents/:id/review-flag — School Admin only
+// Sets reviewRequired to true (with a required comment) or false (to close the review)
+router.patch('/:id/review-flag', verifyToken, async (req, res, next) => {
+  try {
+    const profile = await getUserProfile(req.user)
+
+    if (!isSchoolAdmin(profile.role)) {
+      return res.status(403).json({ error: 'Only School Admins can manage the review flag.' })
+    }
+
+    const db = getDb()
+    const docRef = db.collection('incidents').doc(req.params.id)
+    const doc = await docRef.get()
+    const incident = docToObject(doc)
+
+    if (!incident) {
+      return res.status(404).json({ error: 'Incident not found.' })
+    }
+
+    if (!canReadIncident(profile, incident)) {
+      return res.status(403).json({ error: 'You do not have access to this incident.' })
+    }
+
+    const { reviewRequired, comment } = req.body
+    const now = new Date().toISOString()
+    const updates = { reviewRequired: Boolean(reviewRequired), updatedAt: now }
+
+    if (reviewRequired) {
+      if (!comment || !String(comment).trim()) {
+        return res.status(400).json({ error: 'A comment is required when flagging for review.' })
+      }
+      const existing = Array.isArray(incident.reviewComments) ? incident.reviewComments : []
+      updates.reviewComments = [
+        ...existing,
+        {
+          uid: profile.uid,
+          name: profile.name,
+          role: profile.role,
+          comment: String(comment).trim(),
+          createdAt: now,
+        },
+      ]
+    }
+
+    await docRef.update(updates)
+    const updatedDoc = await docRef.get()
+    const updatedIncident = docToObject(updatedDoc)
+    res.json({ success: true, incident: toIncidentResponse(updatedIncident) })
+  } catch (error) {
+    next(error)
+  }
+})
+
+// POST /api/incidents/:id/review-comment — School Admin or Company Admin
+// Appends a comment to the review thread on an incident that already has reviewRequired: true
+router.post('/:id/review-comment', verifyToken, async (req, res, next) => {
+  try {
+    const profile = await getUserProfile(req.user)
+
+    if (!isSchoolAdmin(profile.role) && !isCompanyAdmin(profile.role)) {
+      return res.status(403).json({ error: 'Only admins can add review comments.' })
+    }
+
+    const db = getDb()
+    const docRef = db.collection('incidents').doc(req.params.id)
+    const doc = await docRef.get()
+    const incident = docToObject(doc)
+
+    if (!incident) {
+      return res.status(404).json({ error: 'Incident not found.' })
+    }
+
+    if (!canReadIncident(profile, incident)) {
+      return res.status(403).json({ error: 'You do not have access to this incident.' })
+    }
+
+    const { comment } = req.body
+    if (!comment || !String(comment).trim()) {
+      return res.status(400).json({ error: 'Comment cannot be empty.' })
+    }
+
+    const now = new Date().toISOString()
+    const existing = Array.isArray(incident.reviewComments) ? incident.reviewComments : []
+
+    await docRef.update({
+      reviewComments: [
+        ...existing,
+        {
+          uid: profile.uid,
+          name: profile.name,
+          role: profile.role,
+          comment: String(comment).trim(),
+          createdAt: now,
+        },
+      ],
+      updatedAt: now,
+    })
+
+    const updatedDoc = await docRef.get()
+    const updatedIncident = docToObject(updatedDoc)
     res.json({ success: true, incident: toIncidentResponse(updatedIncident) })
   } catch (error) {
     next(error)
