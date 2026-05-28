@@ -121,6 +121,23 @@ const nextLabel = {
   'in-progress': 'Mark Resolved',
 }
 
+function formatDuration(minutes) {
+  if (minutes < 60) return `${minutes} min`
+
+  const hours = Math.floor(minutes / 60)
+  const remainingMinutes = minutes % 60
+
+  if (hours < 24) {
+    return remainingMinutes > 0 ? `${hours} hr ${remainingMinutes} min` : `${hours} hr`
+  }
+
+  const days = Math.floor(hours / 24)
+  const remainingHours = hours % 24
+  const dayLabel = days === 1 ? 'day' : 'days'
+
+  return remainingHours > 0 ? `${days} ${dayLabel} ${remainingHours} hr` : `${days} ${dayLabel}`
+}
+
 export default function IncidentDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -276,8 +293,8 @@ export default function IncidentDetail() {
             <p className="font-semibold text-amber-800">Alert overdue — no acknowledgement received</p>
             <p className="text-sm text-amber-700 mt-0.5">
               This alert has been unacknowledged for{' '}
-              <strong>{overdueElapsedMinutes} min</strong>, exceeding the{' '}
-              {overdueThresholdMinutes} min threshold. Please review and respond immediately.
+              <strong>{formatDuration(overdueElapsedMinutes)}</strong>, exceeding the{' '}
+              {formatDuration(overdueThresholdMinutes)} threshold. Please review and respond immediately.
             </p>
           </div>
         </div>

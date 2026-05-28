@@ -83,6 +83,23 @@ function isTodayIncident(incident) {
     incidentDate.getDate() === today.getDate()
 }
 
+function formatDuration(minutes) {
+  if (minutes < 60) return `${minutes} min`
+
+  const hours = Math.floor(minutes / 60)
+  const remainingMinutes = minutes % 60
+
+  if (hours < 24) {
+    return remainingMinutes > 0 ? `${hours} hr ${remainingMinutes} min` : `${hours} hr`
+  }
+
+  const days = Math.floor(hours / 24)
+  const remainingHours = hours % 24
+  const dayLabel = days === 1 ? 'day' : 'days'
+
+  return remainingHours > 0 ? `${days} ${dayLabel} ${remainingHours} hr` : `${days} ${dayLabel}`
+}
+
 export default function Dashboard() {
   const navigate = useNavigate()
   const { currentUser, userRole, isCompanyAdmin, isSchoolAdmin, isStaff } = useAuth()
@@ -251,7 +268,8 @@ export default function Dashboard() {
           </div>
           <div className="space-y-2">
             {unacked.map(incident => {
-              const isIncidentOverdue = getElapsedMinutes(incident) > overdueThresholdMinutes
+              const elapsedMinutes = getElapsedMinutes(incident)
+              const isIncidentOverdue = elapsedMinutes > overdueThresholdMinutes
               return (
                 <div
                   key={incident.id}
@@ -267,11 +285,14 @@ export default function Dashboard() {
                     <p className={`text-sm ${isIncidentOverdue ? 'text-amber-900' : 'text-red-900'}`}>{incident.title}</p>
                     <p className={`text-xs ${isIncidentOverdue ? 'text-amber-700' : 'text-red-600'}`}>
                       {incident.location} - {incident.timestamp}
-                      {isIncidentOverdue && ` · ${getElapsedMinutes(incident)} min unacknowledged`}
+                      {isIncidentOverdue && ` · Unacknowledged for ${formatDuration(elapsedMinutes)}`}
                     </p>
                   </div>
                   <span className={`text-xs px-2 py-0.5 rounded ${priorityColors[incident.priority]}`}>
                     {incident.priority}
+                  </span>
+                  <span className={`text-xs px-2 py-0.5 rounded ${statusColors[incident.status]}`}>
+                    {incident.status}
                   </span>
                   {isIncidentOverdue && (
                     <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-700 font-medium whitespace-nowrap">

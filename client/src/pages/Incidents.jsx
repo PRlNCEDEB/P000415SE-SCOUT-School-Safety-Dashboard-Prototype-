@@ -43,6 +43,32 @@ function isOverdue(incident, thresholdMinutes) {
   return elapsedMs > thresholdMinutes * 60 * 1000
 }
 
+function getElapsedMinutes(incident) {
+  if (!incident.createdAt) return 0
+
+  const created = new Date(incident.createdAt)
+  if (Number.isNaN(created.getTime())) return 0
+
+  return Math.floor((Date.now() - created.getTime()) / 60000)
+}
+
+function formatDuration(minutes) {
+  if (minutes < 60) return `${minutes} min`
+
+  const hours = Math.floor(minutes / 60)
+  const remainingMinutes = minutes % 60
+
+  if (hours < 24) {
+    return remainingMinutes > 0 ? `${hours} hr ${remainingMinutes} min` : `${hours} hr`
+  }
+
+  const days = Math.floor(hours / 24)
+  const remainingHours = hours % 24
+  const dayLabel = days === 1 ? 'day' : 'days'
+
+  return remainingHours > 0 ? `${days} ${dayLabel} ${remainingHours} hr` : `${days} ${dayLabel}`
+}
+
 export default function Incidents() {
   const navigate = useNavigate()
   const { userRole, authLoading } = useAuth()
@@ -243,6 +269,7 @@ export default function Incidents() {
           <div className="p-8 text-center text-sm text-gray-500">No incidents found.</div>
         ) : (
           filtered.map(incident => {
+            const elapsedMinutes = getElapsedMinutes(incident)
             const overdue = isOverdue(incident, overdueThresholdMinutes)
 
             return (
@@ -250,7 +277,7 @@ export default function Incidents() {
                 key={incident.id}
                 onClick={() => navigate(`/incidents/${incident.id}`)}
                 className={`px-4 py-3 flex items-center gap-3 cursor-pointer transition-colors ${
-                  overdue ? 'bg-amber-50 hover:bg-amber-100 border-l-4 border-amber-400' : 'hover:bg-gray-50'
+                  overdue ? 'bg-amber-50 hover:bg-amber-100 border-l-4 border-l-amber-400' : 'hover:bg-gray-50'
                 }`}
               >
                 <span className="text-lg">{typeIcons[incident.type] || '📢'}</span>
@@ -259,6 +286,7 @@ export default function Incidents() {
                   <p className="text-xs text-gray-500 truncate">
                     {incident.location} · {incident.timestamp} · {incident.triggeredByName}
                     {isCompanyAdmin && incident.schoolName ? ` · ${incident.schoolName}` : ''}
+                    {overdue ? ` · Unacknowledged for ${formatDuration(elapsedMinutes)}` : ''}
                   </p>
                 </div>
                 <span className={`text-xs px-2 py-0.5 rounded ${priorityColors[incident.priority]}`}>
