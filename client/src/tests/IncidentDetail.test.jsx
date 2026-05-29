@@ -37,13 +37,17 @@ vi.mock('../api/client', () => ({
       id: '1',
       title: 'Fire Alert',
       type: 'fire',
-      status: 'active',
+      status: 'triggered',
       location: 'Science Block',
       description: 'Emergency fire reported',
       priority: 'high',
       timestamp: '2026-05-12 10:00',
+      createdAt: new Date().toISOString(),
     })
   ),
+  settingsAPI: {
+    get: vi.fn(() => Promise.resolve({ overdueThresholdMinutes: 15 })),
+  },
 }))
 
 describe('Incident Detail Page', () => {

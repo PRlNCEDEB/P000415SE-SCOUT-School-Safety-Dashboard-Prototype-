@@ -3,7 +3,7 @@
 const express = require('express')
 const admin = require('firebase-admin')
 const { getDb } = require('../db/firebase')
-const { getAnalytics } = require('../analyticsCache')
+const { getAnalytics, getTrends } = require('../analyticsCache')
 
 const router = express.Router()
 
@@ -149,6 +149,19 @@ router.get('/response-time-trend', async (req, res, next) => {
   try {
     const data = await getAnalytics(getAnalyticsOptions(req.profile))
     res.json(data.responseTimeData)
+  } catch (error) {
+    next(error)
+  }
+})
+
+const VALID_TREND_RANGES = ['week', 'month', 'quarter', 'year', 'all']
+
+router.get('/trends', async (req, res, next) => {
+  try {
+    const range = VALID_TREND_RANGES.includes(req.query.range) ? req.query.range : 'week'
+    const opts = getAnalyticsOptions(req.profile)
+    const data = await getTrends({ schoolId: opts.schoolId || null, range })
+    res.json(data)
   } catch (error) {
     next(error)
   }

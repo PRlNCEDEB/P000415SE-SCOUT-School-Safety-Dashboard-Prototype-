@@ -46,6 +46,24 @@ vi.mock('../api/client', () => ({
       })
     ),
   },
+  setupAPI: {
+    getAlertTypes: vi.fn(() =>
+      Promise.resolve({
+        alertTypes: [
+          { label: 'Fire', emoji: '🔥' },
+          { label: 'Medical', emoji: '🏥' },
+        ],
+      })
+    ),
+    getLocations: vi.fn(() =>
+      Promise.resolve({
+        locations: [
+          { label: 'Block A' },
+          { label: 'Science Block' },
+        ],
+      })
+    ),
+  },
 }))
 
 describe('Submit Alert Interaction Test', () => {

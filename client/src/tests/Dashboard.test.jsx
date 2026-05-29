@@ -30,10 +30,11 @@ vi.mock('../api/client', () => ({
           id: '1',
           title: 'Fire Alert',
           type: 'fire',
-          status: 'active',
+          status: 'acknowledged',
           location: 'Science Block',
           priority: 'high',
           timestamp: '2026-05-12 10:00',
+          createdAt: new Date().toISOString(),
         },
         {
           id: '2',
@@ -43,9 +44,23 @@ vi.mock('../api/client', () => ({
           location: 'Library',
           priority: 'medium',
           timestamp: '2026-05-12 11:00',
+          createdAt: new Date().toISOString(),
         },
       ])
     ),
+  },
+  analyticsAPI: {
+    summary: vi.fn(() =>
+      Promise.resolve({
+        activeIncidents: 1,
+        criticalCount: 0,
+        highCount: 1,
+        avgResponseTime: 4.2,
+      })
+    ),
+  },
+  settingsAPI: {
+    get: vi.fn(() => Promise.resolve({ overdueThresholdMinutes: 15 })),
   },
   notificationsAPI: {
     list: vi.fn(() => Promise.resolve([])),

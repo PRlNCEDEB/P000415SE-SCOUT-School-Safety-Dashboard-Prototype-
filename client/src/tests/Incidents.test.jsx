@@ -27,11 +27,13 @@ vi.mock('../api/client', () => ({
         id: '1',
         title: 'Fire Alert',
         type: 'fire',
-        status: 'active',
+        status: 'triggered',
         location: 'Science Block',
         priority: 'high',
         reportedBy: 'Admin',
+        triggeredByName: 'Admin',
         timestamp: '2026-05-12 10:00',
+        createdAt: new Date().toISOString(),
       },
       {
         id: '2',
@@ -41,10 +43,18 @@ vi.mock('../api/client', () => ({
         location: 'Library',
         priority: 'medium',
         reportedBy: 'Staff',
+        triggeredByName: 'Staff',
         timestamp: '2026-05-12 11:00',
+        createdAt: new Date().toISOString(),
       },
     ])
   ),
+  settingsAPI: {
+    get: vi.fn(() => Promise.resolve({ overdueThresholdMinutes: 15 })),
+  },
+  archiveAPI: {
+    list: vi.fn(() => Promise.resolve([])),
+  },
 }))
 
 describe('Incidents Page', () => {
@@ -74,28 +84,27 @@ describe('Incidents Page', () => {
   })
 
   test('filters incidents by resolved status', async () => {
-  render(
-    <MemoryRouter>
-      <Incidents />
-    </MemoryRouter>
-  )
+    render(
+      <MemoryRouter>
+        <Incidents />
+      </MemoryRouter>
+    )
 
-  await waitFor(() => {
-    expect(screen.getByText(/fire alert/i)).toBeInTheDocument()
-    expect(screen.getByText(/medical emergency/i)).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText(/fire alert/i)).toBeInTheDocument()
+    })
+
+    const statusDropdown = screen.getAllByRole('combobox')[0]
+
+    fireEvent.change(statusDropdown, {
+      target: { value: 'resolved' },
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText(/medical emergency/i)).toBeInTheDocument()
+      expect(screen.queryByText(/fire alert/i)).not.toBeInTheDocument()
+    })
   })
-
-  const statusDropdown = screen.getAllByRole('combobox')[0]
-
-  fireEvent.change(statusDropdown, {
-    target: { value: 'resolved' },
-  })
-
-  await waitFor(() => {
-    expect(screen.getByText(/medical emergency/i)).toBeInTheDocument()
-    expect(screen.queryByText(/fire alert/i)).not.toBeInTheDocument()
-  })
-})
 
   test('allows user to search incidents', async () => {
     render(
@@ -109,12 +118,19 @@ describe('Incidents Page', () => {
     })
 
     const searchInput = screen.getByPlaceholderText(/search incidents/i)
+    const statusDropdown = screen.getAllByRole('combobox')[0]
+
+    fireEvent.change(statusDropdown, {
+      target: { value: 'all' },
+    })
 
     fireEvent.change(searchInput, {
       target: { value: 'medical' },
     })
 
     expect(searchInput).toHaveValue('medical')
-    expect(screen.getByText(/medical emergency/i)).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText(/medical emergency/i)).toBeInTheDocument()
+    })
   })
 })

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { settingsAPI, setupAPI } from '../api/client'
+import { settingsAPI, setupAPI, archiveAPI } from '../api/client'
 
 const EMOJI_OPTIONS = ['🏥', '🔥', '🔒', '⚠️', '🌩️', '🔧', '📢', '🚨', '🛡️', '🌊']
 
@@ -39,10 +39,16 @@ export default function Setup() {
   const [notifyPrefs, setNotifyPrefs] = useState({})
 
   const [overdueThreshold, setOverdueThreshold] = useState(15)
+  const [retentionDays, setRetentionDays] = useState(30)
   const [thresholdLoading, setThresholdLoading] = useState(true)
   const [thresholdSaving, setThresholdSaving] = useState(false)
   const [thresholdError, setThresholdError] = useState('')
   const [thresholdSuccess, setThresholdSuccess] = useState(false)
+
+  // Archive now state
+  const [archiving, setArchiving] = useState(false)
+  const [archiveResult, setArchiveResult] = useState(null)
+  const [archiveError, setArchiveError] = useState('')
 
   const loadConfig = useCallback(async () => {
     setLoadingConfig(true)
@@ -104,6 +110,7 @@ export default function Setup() {
       try {
         const data = await settingsAPI.get()
         setOverdueThreshold(data.overdueThresholdMinutes ?? 15)
+        setRetentionDays(data.archiveRetentionDays ?? 30)
       } catch (err) {
         console.error('Failed to load settings:', err)
       } finally {
@@ -270,23 +277,48 @@ export default function Setup() {
     setThresholdError('')
     setThresholdSuccess(false)
 
-    const parsed = parseInt(overdueThreshold, 10)
+    const parsedThreshold = parseInt(overdueThreshold, 10)
+    const parsedRetention = parseInt(retentionDays, 10)
 
-    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 1440) {
+    if (!Number.isInteger(parsedThreshold) || parsedThreshold < 1 || parsedThreshold > 1440) {
       setThresholdError('Threshold must be a whole number between 1 and 1440 minutes.')
       setThresholdSaving(false)
       return
     }
 
+    if (!Number.isInteger(parsedRetention) || parsedRetention < 1 || parsedRetention > 365) {
+      setThresholdError('Retention period must be a whole number between 1 and 365 days.')
+      setThresholdSaving(false)
+      return
+    }
+
     try {
-      await settingsAPI.update(parsed)
-      setOverdueThreshold(parsed)
+      await settingsAPI.update({
+        overdueThresholdMinutes: parsedThreshold,
+        archiveRetentionDays: parsedRetention,
+      })
+      setOverdueThreshold(parsedThreshold)
+      setRetentionDays(parsedRetention)
       setThresholdSuccess(true)
       setTimeout(() => setThresholdSuccess(false), 3000)
     } catch (err) {
       setThresholdError(err.message || 'Failed to save settings.')
     } finally {
       setThresholdSaving(false)
+    }
+  }
+
+  async function handleArchiveNow() {
+    setArchiving(true)
+    setArchiveResult(null)
+    setArchiveError('')
+    try {
+      const result = await archiveAPI.trigger()
+      setArchiveResult(result)
+    } catch (err) {
+      setArchiveError(err.message || 'Archiving failed.')
+    } finally {
+      setArchiving(false)
     }
   }
 
@@ -304,7 +336,8 @@ export default function Setup() {
       {isSchoolAdmin && (
         <p className="text-sm text-gray-500 mb-6 max-w-2xl">
           Configure and apply SCOUT within your school. This includes selecting available alert types,
-          assigning roles, and defining who receives notifications.
+          assigning roles, and defining who receives notifications. Use this area to test and refine
+          how alerts behave before settings are applied in practice.
         </p>
       )}
 
@@ -516,6 +549,27 @@ export default function Setup() {
               disabled={thresholdLoading}
             />
 
+            <label className="block text-xs text-gray-600 mb-1 mt-4">
+              Resolved incident retention period (days)
+            </label>
+            <p className="text-xs text-gray-400 mb-2">
+              Resolved incidents older than this will be moved to the archive automatically. Archived records are never deleted.
+            </p>
+            <input
+              type="number"
+              min={1}
+              max={365}
+              value={thresholdLoading ? '' : retentionDays}
+              onChange={event => {
+                setThresholdSuccess(false)
+                setThresholdError('')
+                setRetentionDays(event.target.value)
+              }}
+              placeholder={thresholdLoading ? 'Loading...' : '30'}
+              className="w-full px-3 py-2 border rounded disabled:bg-gray-50 disabled:text-gray-400"
+              disabled={thresholdLoading}
+            />
+
             {thresholdError && (
               <p className="text-xs text-red-600 mt-1">{thresholdError}</p>
             )}
@@ -533,16 +587,43 @@ export default function Setup() {
               </button>
             </div>
           </div>
+
+          {/* Archive Now panel */}
+          <div className="bg-white border border-gray-200 rounded-xl p-5 mt-6">
+            <h3 className="font-semibold mb-1">Archive Resolved Incidents</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              Runs automatically every 24 hours. Use this button to trigger it immediately — any resolved incident older than the retention period above will be moved to the archive.
+            </p>
+
+            <button
+              onClick={handleArchiveNow}
+              disabled={archiving}
+              className="px-4 py-2 bg-gray-800 text-white rounded hover:bg-gray-900 disabled:opacity-50"
+            >
+              {archiving ? 'Archiving...' : 'Archive Now'}
+            </button>
+
+            {archiveResult !== null && !archiveError && (
+              <p className="text-sm text-green-600 mt-3">
+                {archiveResult.archived > 0
+                  ? `✓ Archived ${archiveResult.archived} incident${archiveResult.archived === 1 ? '' : 's'}.`
+                  : '✓ Nothing to archive — no resolved incidents past the retention period.'}
+              </p>
+            )}
+            {archiveError && (
+              <p className="text-sm text-red-600 mt-3">{archiveError}</p>
+            )}
+          </div>
         </div>
       )}
 
       {isSchoolAdmin && (
         <div className="mt-6">
           <div className="flex items-center gap-2 mb-3">
-            <h2 className="text-lg font-semibold text-gray-800">Email Routing</h2>
+            <h2 className="text-lg font-semibold text-gray-800">Alert Recipients</h2>
             <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">School Admin</span>
           </div>
-          <p className="text-sm text-gray-500 mb-4">Configure who receives notifications for each emergency alert type at your school.</p>
+          <p className="text-sm text-gray-500 mb-4">Choose who should receive each emergency alert type at your school.</p>
 
           {loadingRouting && <p className="text-sm text-gray-400 mb-4">Loading...</p>}
           {routingError && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-4">{routingError}</p>}
