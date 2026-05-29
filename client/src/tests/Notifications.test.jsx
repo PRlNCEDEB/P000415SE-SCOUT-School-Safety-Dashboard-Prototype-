@@ -94,8 +94,9 @@ describe('Notifications Page', () => {
     expect(screen.getByText(/fire alert/i)).toBeInTheDocument()
   })
 
-  expect(screen.getAllByText(/sent/i).length).toBeGreaterThan(0)
-  expect(screen.getByText(/skipped/i)).toBeInTheDocument()
+  expect(screen.getAllByText(/SMS sent/i).length).toBeGreaterThan(0)
+  expect(screen.getAllByText(/Email sent/i).length).toBeGreaterThan(0)
+  expect(screen.getByText(/SMS skipped/i)).toBeInTheDocument()
 })
 
   test('renders email and sms statuses', async () => {
@@ -106,8 +107,9 @@ describe('Notifications Page', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getAllByText(/sent/i).length).toBeGreaterThan(0)
-      expect(screen.getByText(/skipped/i)).toBeInTheDocument()
+      expect(screen.getAllByText(/SMS sent/i).length).toBeGreaterThan(0)
+      expect(screen.getAllByText(/Email sent/i).length).toBeGreaterThan(0)
+      expect(screen.getByText(/SMS skipped/i)).toBeInTheDocument()
     })
   })
 })
