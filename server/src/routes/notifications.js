@@ -1,4 +1,4 @@
-require('dotenv').config()
+
 const express = require('express')
 const router = express.Router()
 const nodemailer = require('nodemailer')
@@ -139,11 +139,7 @@ function getSmsClient() {
   if (!process.env.CLICKSEND_USERNAME || !process.env.CLICKSEND_API_KEY) {
     throw new Error('CLICKSEND_USERNAME or CLICKSEND_API_KEY is not set in .env')
   }
-  const defaultClient = ClickSend.ApiClient.instance
-  const http = defaultClient.authentications['BasicAuth']
-  http.username = process.env.CLICKSEND_USERNAME
-  http.password = process.env.CLICKSEND_API_KEY
-  return new ClickSend.SMSApi()
+  return new ClickSend.SMSApi(process.env.CLICKSEND_USERNAME, process.env.CLICKSEND_API_KEY)
 }
 
 function normaliseRecipient(recipient) {

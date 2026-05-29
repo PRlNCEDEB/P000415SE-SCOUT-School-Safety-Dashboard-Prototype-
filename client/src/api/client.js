@@ -96,6 +96,8 @@ export const setupAPI = {
 
   // School users (School Admin)
   getSchoolUsers: () => request('/setup/school-users'),
+  updateSchoolUserPhone: (uid, phone) =>
+    request(`/setup/school-users/${uid}`, { method: 'PATCH', body: JSON.stringify({ phone }) }),
 }
 
 

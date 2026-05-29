@@ -38,6 +38,12 @@ export default function Setup() {
   const [selectedEmergencyType, setSelectedEmergencyType] = useState('')
   const [notifyPrefs, setNotifyPrefs] = useState({})
 
+  // ── Phone editing state (added for ClickSend SMS) ─────────────────────────
+  const [editingPhoneUserId, setEditingPhoneUserId] = useState(null)
+  const [editingPhoneValue, setEditingPhoneValue] = useState('')
+  const [savingPhone, setSavingPhone] = useState(false)
+  const [phoneError, setPhoneError] = useState('')
+
   const [overdueThreshold, setOverdueThreshold] = useState(15)
   const [retentionDays, setRetentionDays] = useState(30)
   const [thresholdLoading, setThresholdLoading] = useState(true)
@@ -271,6 +277,62 @@ export default function Setup() {
       [alertType]: { ...(prev[alertType] || {}), [userId]: value },
     }))
   }
+
+  // ── Phone edit handlers (added for ClickSend SMS) ─────────────────────────
+  const handleEditPhone = (user) => {
+    setEditingPhoneUserId(user.id)
+    setEditingPhoneValue(user.phone || '')
+    setPhoneError('')
+  }
+
+  const handleCancelEditPhone = () => {
+    setEditingPhoneUserId(null)
+    setEditingPhoneValue('')
+    setPhoneError('')
+  }
+
+  const handleSavePhone = async (userId) => {
+  setSavingPhone(true)
+  setPhoneError('')
+  try {
+    const newPhone = editingPhoneValue.trim() || null
+
+    // 1. Update users collection
+    await setupAPI.updateSchoolUserPhone(userId, newPhone)
+
+    // 2. Update local schoolUsers state
+    setSchoolUsers(prev => prev.map(u =>
+      u.id === userId ? { ...u, phone: newPhone } : u
+    ))
+
+    // 3. If this user is already added as a recipient for the current
+    //    alert type, update their phone in notificationRouting too
+    if (selectedEmergencyType) {
+      const current = getRecipients(selectedEmergencyType)
+      const user = schoolUsers.find(u => u.id === userId)
+      const isAlreadyAdded = current.some(
+        r => r.email?.toLowerCase() === user?.email?.toLowerCase()
+      )
+
+      if (isAlreadyAdded) {
+        const updated = current.map(r =>
+          r.email?.toLowerCase() === user?.email?.toLowerCase()
+            ? { ...r, phone: newPhone }
+            : r
+        )
+        setRouting(state => ({ ...state, [selectedEmergencyType]: updated }))
+        await saveRouting(selectedEmergencyType, updated)
+      }
+    }
+
+    setEditingPhoneUserId(null)
+    setEditingPhoneValue('')
+  } catch (err) {
+    setPhoneError(err.message || 'Failed to save phone number.')
+  } finally {
+    setSavingPhone(false)
+  }
+}
 
   async function handleSaveGlobalSettings() {
     setThresholdSaving(true)
@@ -712,39 +774,75 @@ export default function Setup() {
                           recipient => recipient.email?.toLowerCase() === user.email?.toLowerCase()
                         )
                         const notify = getNotifyPref(type.value, user.id)
+                        const isEditingPhone = editingPhoneUserId === user.id
 
                         return (
-                          <div key={user.id} className={`flex items-center gap-3 px-3 py-2 rounded-lg border ${
+                          <div key={user.id} className={`flex flex-col gap-2 px-3 py-2 rounded-lg border ${
                             alreadyAdded ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-transparent'
                           }`}>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-gray-800">{user.name}</p>
-                              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                                <span className="text-xs text-gray-400">{formatRole(user.role)}</span>
-                                {user.email && <span className="text-xs text-gray-400">Email: {user.email}</span>}
-                                {user.phone && <span className="text-xs text-gray-400">Phone: {user.phone}</span>}
+                            <div className="flex items-center gap-3">
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-gray-800">{user.name}</p>
+                                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                  <span className="text-xs text-gray-400">{formatRole(user.role)}</span>
+                                  {user.email && <span className="text-xs text-gray-400">Email: {user.email}</span>}
+                                  {user.phone
+                                    ? <span className="text-xs text-gray-400">Phone: {user.phone}</span>
+                                    : <span className="text-xs text-amber-500">No phone</span>
+                                  }
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2 shrink-0">
+                               <button
+                                  onClick={() => isEditingPhone ? handleCancelEditPhone() : handleEditPhone(user)}
+                                        className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-100 transition-colors text-gray-600"
+                                              >
+                                                {isEditingPhone ? 'Cancel' : '✏️ Phone'}
+                                              </button>
+                                {alreadyAdded ? (
+                                  <span className="text-xs text-green-600 font-medium">Added</span>
+                                ) : (
+                                  <>
+                                    <select
+                                      value={notify}
+                                      onChange={event => setNotifyPref(type.value, user.id, event.target.value)}
+                                      className="border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-red-400"
+                                    >
+                                      <option value="email">Email</option>
+                                      <option value="sms">SMS</option>
+                                      <option value="both">Both</option>
+                                    </select>
+                                    <button
+                                      onClick={() => handleAddUser(type.value, user)}
+                                      className="px-3 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 transition-colors"
+                                    >
+                                      Add
+                                    </button>
+                                  </>
+                                )}
                               </div>
                             </div>
 
-                            {alreadyAdded ? (
-                              <span className="text-xs text-green-600 font-medium shrink-0">Added</span>
-                            ) : (
-                              <div className="flex items-center gap-2 shrink-0">
-                                <select
-                                  value={notify}
-                                  onChange={event => setNotifyPref(type.value, user.id, event.target.value)}
-                                  className="border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-red-400"
-                                >
-                                  <option value="email">Email</option>
-                                  <option value="sms">SMS</option>
-                                  <option value="both">Both</option>
-                                </select>
+                            {isEditingPhone && (
+                              <div className="flex items-center gap-2 pt-1 border-t border-gray-200">
+                                <input
+                                  type="tel"
+                                  value={editingPhoneValue}
+                                  onChange={e => setEditingPhoneValue(e.target.value)}
+                                  placeholder="+61400000000"
+                                  className="flex-1 px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-red-400"
+                                />
                                 <button
-                                  onClick={() => handleAddUser(type.value, user)}
-                                  className="px-3 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 transition-colors"
+                                  onClick={() => handleSavePhone(user.id)}
+                                  disabled={savingPhone}
+                                  className="px-3 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition-colors disabled:opacity-60"
                                 >
-                                  Add
+                                  {savingPhone ? 'Saving...' : 'Save'}
                                 </button>
+                                {phoneError && (
+                                  <span className="text-xs text-red-600">{phoneError}</span>
+                                )}
                               </div>
                             )}
                           </div>

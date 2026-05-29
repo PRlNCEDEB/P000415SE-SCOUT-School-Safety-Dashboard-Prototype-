@@ -346,5 +346,31 @@ router.get('/school-users', verifyToken, requireSchoolAdmin, async (req, res, ne
   }
 })
 
+// PATCH /api/setup/school-users/:uid — update phone number for a user in the school admin's school
+router.patch('/school-users/:uid', verifyToken, requireSchoolAdmin, async (req, res, next) => {
+  try {
+    const { schoolId } = req.profile
+    const { uid } = req.params
+    const { phone } = req.body
+
+    const userDoc = await getDb().collection('users').doc(uid).get()
+    if (!userDoc.exists) {
+      return res.status(404).json({ error: 'User not found.' })
+    }
+    if (userDoc.data().schoolId !== schoolId) {
+      return res.status(403).json({ error: 'You can only edit users in your own school.' })
+    }
+
+    await getDb().collection('users').doc(uid).update({
+      phone: phone?.trim() || null,
+      updatedAt: new Date().toISOString(),
+    })
+
+    res.json({ success: true })
+  } catch (err) {
+    next(err)
+  }
+})
+
 module.exports = router
 module.exports.normaliseRole = normaliseRole
