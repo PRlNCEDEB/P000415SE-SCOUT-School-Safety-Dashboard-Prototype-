@@ -8,8 +8,6 @@ import {
   CartesianGrid,
   Cell,
   Legend,
-  Line,
-  LineChart,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -28,7 +26,7 @@ const PRIORITY_COLORS = {
 }
 
 export default function Analytics() {
-  const { isAdmin, isCompanyAdmin, userRole, authLoading } = useAuth()
+  const { isSchoolAdmin, userSchoolName, authLoading, userRole } = useAuth()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [summary, setSummary] = useState({
@@ -43,11 +41,9 @@ export default function Analytics() {
   const [incidentsByType, setIncidentsByType] = useState([])
   const [statusBreakdown, setStatusBreakdown] = useState([])
   const [locationData, setLocationData] = useState([])
-  const [incidentsByDay, setIncidentsByDay] = useState([])
-  const [responseTimeData, setResponseTimeData] = useState([])
-  const [failedAlerts, setFailedAlerts] = useState({ total: 0, sms: 0, email: 0 })
   const [unacknowledgedCount, setUnacknowledgedCount] = useState(0)
   const [incidentsByPriority, setIncidentsByPriority] = useState([])
+  const [failedAlerts, setFailedAlerts] = useState({ total: 0, sms: 0, email: 0 })
 
   const [trendsRange, setTrendsRange] = useState('week')
   const [trendsData, setTrendsData] = useState(null)
@@ -63,11 +59,9 @@ export default function Analytics() {
       setIncidentsByType(data.incidentsByType || [])
       setStatusBreakdown(data.statusBreakdown || [])
       setLocationData(data.locationData || [])
-      setIncidentsByDay(data.incidentsByDay || [])
-      setResponseTimeData(data.responseTimeData || [])
-      setFailedAlerts(data.failedAlerts || { total: 0, sms: 0, email: 0 })
       setUnacknowledgedCount(data.summary?.unacknowledgedCount ?? 0)
       setIncidentsByPriority(data.incidentsByPriority || [])
+      setFailedAlerts(data.failedAlerts || { total: 0, sms: 0, email: 0 })
     } catch (err) {
       setError(err.message || 'Failed to load analytics data')
     } finally {
@@ -76,12 +70,12 @@ export default function Analytics() {
   }
 
   useEffect(() => {
-    if (!isAdmin) return
+    if (!isSchoolAdmin) return
     fetchAnalytics()
-  }, [isAdmin])
+  }, [isSchoolAdmin])
 
   useEffect(() => {
-    if (!isAdmin) return
+    if (!isSchoolAdmin) return
     let isActive = true
 
     async function loadTrends() {
@@ -99,7 +93,7 @@ export default function Analytics() {
 
     loadTrends()
     return () => { isActive = false }
-  }, [isAdmin, trendsRange])
+  }, [isSchoolAdmin, trendsRange])
 
   if (authLoading || userRole === null) {
     return (
@@ -109,7 +103,7 @@ export default function Analytics() {
     )
   }
 
-  if (!isAdmin) {
+  if (!isSchoolAdmin) {
     return <Navigate to="/dashboard" replace />
   }
 
@@ -154,16 +148,17 @@ export default function Analytics() {
         </button>
       </div>
 
-      <div className={`grid gap-4 mb-6 ${isCompanyAdmin ? 'grid-cols-2 md:grid-cols-5' : 'grid-cols-1 md:grid-cols-3'}`}>
-        <SummaryCard label="Total Incidents" value={summary.totalIncidents?.toString() || '0'} icon="🚨" color="text-gray-700" />
-        <SummaryCard label="Resolved" value={summary.resolvedCount?.toString() || '0'} icon="✅" color="text-green-600" />
-        {isCompanyAdmin && (
-          <SummaryCard label="Avg Response" value={`${summary.avgResponseTime || 0}m`} icon="⏱️" color="text-blue-600" />
-        )}
-        {isCompanyAdmin && (
-          <SummaryCard label="Failed Alerts" value={(summary.failedAlerts ?? 0).toString()} icon="❌" color="text-red-600" />
-        )}
-        <SummaryCard label="This Week" value={summary.thisWeekIncidents?.toString() || '0'} icon="📅" color="text-orange-600" />
+      {/* ── School scope banner ── */}
+      {userSchoolName && (
+        <div className="bg-purple-50 border border-purple-200 rounded-lg px-4 py-2 mb-6 text-xs text-purple-800">
+          <strong>Scoped to {userSchoolName}</strong> — all figures below reflect your school only.
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <SummaryCard label="Total Incidents" value={summary.totalIncidents?.toString() || '0'} color="text-gray-700" />
+        <SummaryCard label="Resolved"        value={summary.resolvedCount?.toString() || '0'} color="text-green-600" />
+        <SummaryCard label="This Week"       value={summary.thisWeekIncidents?.toString() || '0'} color="text-orange-600" />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -218,66 +213,25 @@ export default function Analytics() {
         </ChartPanel>
       </div>
 
-      <div className={`grid grid-cols-1 gap-4 mb-4 ${isCompanyAdmin ? 'md:grid-cols-2' : ''}`}>
-        {isCompanyAdmin && (
-          <ChartPanel title="Response & Resolution Time (minutes)" helper="Avg time from incident creation to acknowledgement vs full resolution">
-            {responseTimeData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={220}>
-                <LineChart data={responseTimeData} margin={{ top: 0, right: 10, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis dataKey="week" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} />
-                  <Tooltip formatter={(value, name) => [
-                    `${value} min`,
-                    name === 'avgAckMinutes' ? 'Avg Acknowledgement' : 'Avg Resolution',
-                  ]} />
-                  <Legend formatter={value => value === 'avgAckMinutes' ? 'Avg Acknowledgement Time' : 'Avg Resolution Time'} />
-                  <Line type="monotone" dataKey="avgAckMinutes" stroke="#3b82f6" strokeWidth={2} dot={{ r: 4 }} />
-                  <Line type="monotone" dataKey="avgResolutionMinutes" stroke="#f97316" strokeWidth={2} dot={{ r: 4 }} strokeDasharray="5 3" />
-                </LineChart>
-              </ResponsiveContainer>
-            ) : (
-              <EmptyChart />
-            )}
-          </ChartPanel>
+      <ChartPanel title="Incidents by Location" className="mb-4">
+        {locationData.length > 0 ? (
+          <ResponsiveContainer width="100%" height={220}>
+            <PieChart>
+              <Pie data={getTopLocations(locationData)} dataKey="count" nameKey="location" cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={3}>
+                {getTopLocations(locationData).map((entry, index) => (
+                  <Cell key={index} fill={entry.location === 'Others' ? '#ec4899' : PIE_COLORS[index % PIE_COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip formatter={(value, name) => [value, name]} />
+              <Legend />
+            </PieChart>
+          </ResponsiveContainer>
+        ) : (
+          <EmptyChart />
         )}
-
-        <ChartPanel title="Incidents by Location">
-          {locationData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={220}>
-              <PieChart>
-                <Pie data={getTopLocations(locationData)} dataKey="count" nameKey="location" cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={3}>
-                  {getTopLocations(locationData).map((entry, index) => (
-                    <Cell key={index} fill={entry.location === 'Others' ? '#ec4899' : PIE_COLORS[index % PIE_COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(value, name) => [value, name]} />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
-          ) : (
-            <EmptyChart />
-          )}
-        </ChartPanel>
-      </div>
+      </ChartPanel>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <ChartPanel title="Incidents This Week by Day">
-          {incidentsByDay.length > 0 ? (
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={incidentsByDay} margin={{ top: 0, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="day" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip />
-                <Bar dataKey="incidents" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <EmptyChart />
-          )}
-        </ChartPanel>
-
         <ChartPanel title="Incidents by Priority" helper="Total incidents across all statuses grouped by severity">
           {incidentsByPriority.length > 0 ? (
             <ResponsiveContainer width="100%" height={180}>
@@ -299,6 +253,38 @@ export default function Analytics() {
             </ResponsiveContainer>
           ) : (
             <EmptyChart />
+          )}
+        </ChartPanel>
+
+        <ChartPanel title="Failed Alerts">
+          <div className="mb-4 flex justify-end">
+            {failedAlerts.total > 0 ? (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-medium">
+                {failedAlerts.total} failed
+              </span>
+            ) : (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">
+                No failures
+              </span>
+            )}
+          </div>
+          {failedAlerts.total > 0 ? (
+            <ResponsiveContainer width="100%" height={160}>
+              <BarChart
+                data={[{ name: 'Failures', sms: failedAlerts.sms, email: failedAlerts.email }]}
+                margin={{ top: 0, right: 10, left: -20, bottom: 0 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                <YAxis tick={{ fontSize: 12 }} allowDecimals={false} />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="sms" name="SMS Failed" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="email" name="Email Failed" fill="#f97316" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <p className="text-gray-400 text-center py-8 text-sm">All notifications delivered successfully.</p>
           )}
         </ChartPanel>
       </div>
@@ -420,39 +406,6 @@ export default function Analytics() {
         )}
       </div>
 
-      {isCompanyAdmin && (
-        <ChartPanel title="Failed Alerts" className="mt-4">
-          <div className="mb-4 flex justify-end">
-            {failedAlerts.total > 0 ? (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-medium">
-                {failedAlerts.total} failed
-              </span>
-            ) : (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">
-                No failures
-              </span>
-            )}
-          </div>
-          {failedAlerts.total > 0 ? (
-            <ResponsiveContainer width="100%" height={160}>
-              <BarChart
-                data={[{ name: 'Failures', sms: failedAlerts.sms, email: failedAlerts.email }]}
-                margin={{ top: 0, right: 10, left: -20, bottom: 0 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} allowDecimals={false} />
-                <Tooltip />
-                <Legend />
-                <Bar dataKey="sms" name="SMS Failed" fill="#ef4444" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="email" name="Email Failed" fill="#f97316" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <p className="text-gray-400 text-center py-8 text-sm">All notifications delivered successfully.</p>
-          )}
-        </ChartPanel>
-      )}
     </div>
   )
 }
@@ -478,12 +431,11 @@ function EmptyChart() {
   return <p className="text-gray-400 text-center py-10">No data available</p>
 }
 
-function SummaryCard({ label, value, icon, color }) {
+function SummaryCard({ label, value, color }) {
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-4">
-      <div className="mb-2 text-sm">{icon}</div>
       <div className={`text-2xl font-semibold ${color}`}>{value}</div>
-      <div className="text-xs text-gray-500">{label}</div>
+      <div className="text-xs text-gray-500 mt-0.5">{label}</div>
     </div>
   )
 }

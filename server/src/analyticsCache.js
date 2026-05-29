@@ -82,7 +82,7 @@ async function buildAnalytics({ schoolId = null, includeFailedAlerts = false } =
   const activeIncidents = incidents.filter(i => i.status !== 'archived' && i.status !== 'resolved')
   const criticalCount = activeIncidents.filter(i => i.priority === 'critical').length
   const highCount = activeIncidents.filter(i => i.priority === 'high').length
-  const unacknowledgedCount = incidents.filter(i => !i.acknowledgedBy?.length && i.status !== 'resolved').length
+  const unacknowledgedCount = incidents.filter(i => !i.acknowledgedBy?.length && i.status !== 'resolved' && i.status !== 'archived').length
 
   const allAckTimes = incidents.map(getAcknowledgementTime).filter(v => v !== null)
   const avgAckTime = allAckTimes.length > 0
