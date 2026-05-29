@@ -39,12 +39,12 @@ function PrivateRoute({ children }) {
 // ── PublicRoute ───────────────────────────────────────────────────────────────
 // Redirects already-authenticated users away from the login page.
 function PublicRoute({ children }) {
-  const { currentUser, authLoading } = useAuth()
+  const { currentUser, authLoading, isCompanyAdmin } = useAuth()
 
   if (authLoading) return null  // wait silently; PrivateRoute handles the spinner
 
   if (currentUser) {
-    return <Navigate to="/dashboard" replace />
+    return <Navigate to={isCompanyAdmin ? '/setup' : '/dashboard'} replace />
   }
 
   return children
@@ -74,6 +74,22 @@ function SubmitRoute({ children }) {
   return children
 }
 
+// ── NotCompanyAdminRoute ──────────────────────────────────────────────────────
+// Redirects Company Admins to /setup. All other pages are for School Admin / Staff.
+function NotCompanyAdminRoute({ children }) {
+  const { isCompanyAdmin, authLoading, userRole } = useAuth()
+
+  if (authLoading || userRole === null) {
+    return null
+  }
+
+  if (isCompanyAdmin) {
+    return <Navigate to="/setup" replace />
+  }
+
+  return children
+}
+
 function AppRoutes() {
   return (
     <Routes>
@@ -83,13 +99,13 @@ function AppRoutes() {
       <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
 
       {/* Protected */}
-      <Route path="/dashboard"       element={<PrivateRoute><Layout><Dashboard /></Layout></PrivateRoute>} />
-      <Route path="/incidents"       element={<PrivateRoute><Layout><Incidents /></Layout></PrivateRoute>} />
-      <Route path="/incidents/:id"   element={<PrivateRoute><Layout><IncidentDetail /></Layout></PrivateRoute>} />
+      <Route path="/dashboard"       element={<PrivateRoute><NotCompanyAdminRoute><Layout><Dashboard /></Layout></NotCompanyAdminRoute></PrivateRoute>} />
+      <Route path="/incidents"       element={<PrivateRoute><NotCompanyAdminRoute><Layout><Incidents /></Layout></NotCompanyAdminRoute></PrivateRoute>} />
+      <Route path="/incidents/:id"   element={<PrivateRoute><NotCompanyAdminRoute><Layout><IncidentDetail /></Layout></NotCompanyAdminRoute></PrivateRoute>} />
       <Route path="/submit"          element={<PrivateRoute><SubmitRoute><Layout><SubmitAlert /></Layout></SubmitRoute></PrivateRoute>} />
       <Route path="/setup"           element={<PrivateRoute><SetupRoute><Layout><Setup /></Layout></SetupRoute></PrivateRoute>} />
-      <Route path="/analytics"       element={<PrivateRoute><Layout><Analytics /></Layout></PrivateRoute>} />
-      <Route path="/notifications"   element={<PrivateRoute><Layout><Notifications /></Layout></PrivateRoute>} />
+      <Route path="/analytics"       element={<PrivateRoute><NotCompanyAdminRoute><Layout><Analytics /></Layout></NotCompanyAdminRoute></PrivateRoute>} />
+      <Route path="/notifications"   element={<PrivateRoute><NotCompanyAdminRoute><Layout><Notifications /></Layout></NotCompanyAdminRoute></PrivateRoute>} />
 
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/login" replace />} />

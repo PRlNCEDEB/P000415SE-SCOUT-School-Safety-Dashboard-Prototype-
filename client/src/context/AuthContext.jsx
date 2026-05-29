@@ -39,20 +39,21 @@ async function fetchUserProfile(firebaseUser) {
 
     if (!res.ok) {
       if (res.status === 401) {
-        return { role: 'Staff', schoolId: null, name: null }
+        return { role: 'Staff', schoolId: null, schoolName: null, name: null }
       }
 
-      return { role: 'Staff', schoolId: null, name: null }
+      return { role: 'Staff', schoolId: null, schoolName: null, name: null }
     }
 
     const data = await res.json()
     return {
       role: normaliseRole(data.role),
       schoolId: data.schoolId || null,
+      schoolName: data.schoolName || null,
       name: data.name || null,
     }
   } catch {
-    return { role: 'Staff', schoolId: null, name: null }
+    return { role: 'Staff', schoolId: null, schoolName: null, name: null }
   }
 }
 
@@ -62,6 +63,7 @@ export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null)
   const [userRole, setUserRole] = useState(null)
   const [userSchoolId, setUserSchoolId] = useState(null)
+  const [userSchoolName, setUserSchoolName] = useState(null)
   const [authLoading, setAuthLoading] = useState(true)
 
   useEffect(() => {
@@ -69,7 +71,7 @@ export function AuthProvider({ children }) {
       if (firebaseUser) {
         const profile = await fetchUserProfile(firebaseUser)
 
-        const { role, schoolId, name } = profile
+        const { role, schoolId, schoolName, name } = profile
 
         // Preserve name from profile if auth displayName is missing.
         if (name && !firebaseUser.displayName) {
@@ -79,10 +81,12 @@ export function AuthProvider({ children }) {
         setCurrentUser(firebaseUser)
         setUserRole(role)
         setUserSchoolId(schoolId)
+        setUserSchoolName(schoolName)
       } else {
         setCurrentUser(null)
         setUserRole(null)
         setUserSchoolId(null)
+        setUserSchoolName(null)
       }
 
       setAuthLoading(false)
@@ -110,6 +114,7 @@ export function AuthProvider({ children }) {
         currentUser,
         userRole,
         userSchoolId,
+        userSchoolName,
         authLoading,
         login,
         logout,
