@@ -1,8 +1,18 @@
 export default function SchoolAdminStatus({ incidents }) {
-  const active = incidents.filter(i => i.status !== 'archived' && i.status !== 'resolved')
+  const active      = incidents.filter(i => i.status !== 'archived' && i.status !== 'resolved')
   const acknowledged = active.filter(i => i.status !== 'triggered')
-  const unacked = active.filter(i => i.status === 'triggered')
-  const resolved = incidents.filter(i => i.status === 'resolved')
+  // Match analytics definition: no acknowledgedBy entries and not resolved/archived
+  const unacked     = incidents.filter(i =>
+    (!i.acknowledgedBy || i.acknowledgedBy.length === 0) &&
+    i.status !== 'resolved' &&
+    i.status !== 'archived'
+  )
+  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+  const resolved = incidents.filter(i => {
+    if (i.status !== 'resolved') return false
+    const d = i.updatedAt ? new Date(i.updatedAt) : null
+    return d && !Number.isNaN(d.getTime()) && d >= weekAgo
+  })
 
   return (
     <div className="bg-gradient-to-r from-purple-50 to-purple-100 border border-purple-200 rounded-xl p-6 mb-6">

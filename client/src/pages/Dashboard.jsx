@@ -4,7 +4,7 @@ import QuickActions from '../components/QuickActions'
 import ShortcutCard from '../components/ShortcutCard'
 import QuickViewStrip from '../components/QuickViewStrip'
 import SchoolAdminStatus from '../components/SchoolAdminStatus'
-import { incidentAPI, analyticsAPI, settingsAPI } from '../api/client'
+import { incidentAPI, settingsAPI } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 
 const priorityColors = {
@@ -105,7 +105,6 @@ export default function Dashboard() {
   const { currentUser, userRole, isCompanyAdmin, isSchoolAdmin, isStaff } = useAuth()
   const [incidents, setIncidents] = useState([])
   const [loading, setLoading] = useState(true)
-  const [summaryStats, setSummaryStats] = useState(null)
   const [overdueThresholdMinutes, setOverdueThresholdMinutes] = useState(15)
 
   useEffect(() => {
@@ -129,24 +128,8 @@ export default function Dashboard() {
     fetchIncidents()
   }, [])
 
-  useEffect(() => {
-    const fetchSummary = async () => {
-      try {
-        const data = await analyticsAPI.summary()
-        setSummaryStats(data)
-      } catch (error) {
-        console.error('Failed to fetch summary stats:', error)
-      }
-    }
-
-    fetchSummary()
-  }, [])
-
-  const active   = incidents.filter(i => i.status !== 'archived' && i.status !== 'resolved')
-  const critical = active.filter(i => i.priority === 'critical').length
-  const high     = active.filter(i => i.priority === 'high').length
-  const unacked  = active.filter(i => i.status === 'triggered')
-  const recent   = incidents.filter(i => i.status !== 'triggered' && isTodayIncident(i))
+  const active  = incidents.filter(i => i.status !== 'archived' && i.status !== 'resolved')
+  const unacked = active.filter(i => i.status === 'triggered')
 
   // Overdue: triggered incidents past the configured threshold
   function getElapsedMinutes(incident) {
@@ -157,8 +140,9 @@ export default function Dashboard() {
   }
   const overdue = unacked.filter(i => getElapsedMinutes(i) > overdueThresholdMinutes)
 
-  // Staff see only the last 5 of today's recent incidents for a simplified view
-  const recentToShow = isStaff ? recent.slice(0, 5) : recent
+  // Staff: show all their incidents (API already scopes to their own); School Admin: today's
+  const recent      = incidents.filter(i => i.status !== 'triggered' && isTodayIncident(i))
+  const recentToShow = isStaff ? incidents.slice(0, 10) : recent
 
   const displayName = currentUser?.displayName || currentUser?.name || currentUser?.email || 'there'
 
@@ -182,7 +166,7 @@ export default function Dashboard() {
           </div>
           <p className="text-sm text-gray-500">Welcome back, {displayName}</p>
         </div>
-        {isStaff && (
+        {!isCompanyAdmin && (
         <button
           onClick={() => navigate('/submit')}
           className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors"
@@ -226,32 +210,12 @@ export default function Dashboard() {
       )}
 
       {/* ── Quick Actions (Staff & School Admin only, not Company Admin) ── */}
-      {isStaff && (
+      {!isCompanyAdmin && (
         <div className="bg-white border border-gray-200 rounded-xl p-5 mb-6">
           <QuickActions />
         </div>
       )}
 
-      {/* ── Summary stats (Company Admin & School Admin see all 4; Staff sees simplified 2) ── */}
-      {isStaff ? (
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          <StatCard label="Active Incidents" value={active.length} color="text-gray-700" icon="🚨" />
-          <StatCard
-            label="Unacknowledged"
-            value={unacked.length}
-            color="text-red-600"
-            icon="⏳"
-            subLabel={overdue.length > 0 ? `${overdue.length} overdue` : null}
-          />
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <StatCard label="Active Incidents" value={summaryStats ? summaryStats.activeIncidents : active.length}   color="text-gray-700"   icon="🚨" />
-          <StatCard label="Critical"         value={summaryStats ? summaryStats.criticalCount   : critical}        color="text-red-600"    icon="⚡" />
-          <StatCard label="High Priority"    value={summaryStats ? summaryStats.highCount        : high}            color="text-orange-600" icon="🚩" />
-          <StatCard label="Avg Response"     value={summaryStats ? `${summaryStats.avgResponseTime}m` : '...'}     color="text-blue-600"   icon="⏱️" />
-        </div>
-      )}
 
       {/* ── Unacknowledged alerts ── */}
       {unacked.length > 0 && (
@@ -318,7 +282,7 @@ export default function Dashboard() {
         </div>
         <div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100 overflow-hidden">
           {recentToShow.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-8">No incidents from today.</p>
+            <p className="text-sm text-gray-400 text-center py-8">No incidents found.</p>
           ) : (
             recentToShow.map(incident => (
               <div
@@ -344,48 +308,8 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {isStaff && (
-        <div className="mt-6">
-          <h2 className="font-semibold text-gray-900 mb-2">School Updates</h2>
-          <div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100 overflow-hidden">
-            <SchoolUpdate
-              title="Asthma warning"
-              detail="High pollen levels today. Monitor students who may need support."
-              time="Today"
-            />
-            <SchoolUpdate
-              title="Weather awareness"
-              detail="Check outdoor activities if conditions change during the day."
-              time="Today"
-            />
-          </div>
-        </div>
-      )}
     </div>
   )
 }
 
-function SchoolUpdate({ title, detail, time }) {
-  return (
-    <div className="px-4 py-3">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-medium text-gray-800">{title}</p>
-        <span className="text-xs text-gray-400 shrink-0">{time}</span>
-      </div>
-      <p className="text-xs text-gray-500 mt-0.5">{detail}</p>
-    </div>
-  )
-}
 
-function StatCard({ label, value, color, icon, subLabel }) {
-  return (
-    <div className="bg-white border border-gray-200 rounded-xl p-4">
-      <div className="mb-1 text-xs font-semibold text-gray-500">{icon}</div>
-      <div className={`text-2xl font-semibold ${color}`}>{value}</div>
-      <div className="text-xs text-gray-500">{label}</div>
-      {subLabel && (
-        <div className="text-xs text-amber-600 font-medium mt-0.5">⏰ {subLabel}</div>
-      )}
-    </div>
-  )
-}

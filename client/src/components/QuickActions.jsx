@@ -16,8 +16,7 @@ const FALLBACK_ACTION2_TYPES = [
 ]
 
 export default function QuickActions() {
-  const { isAdmin, isCompanyAdmin, currentUser } = useAuth()
-  const [logs, setLogs] = useState([])
+  const { isCompanyAdmin, currentUser } = useAuth()
   const [feedback, setFeedback] = useState(null)
   const [showConfirm, setShowConfirm] = useState(false)
   const [showCategory, setShowCategory] = useState(false)
@@ -29,8 +28,6 @@ export default function QuickActions() {
   const [customMessage, setCustomMessage] = useState('')
   const [loading, setLoading] = useState(false)
   const [showResult, setShowResult] = useState(null)
-  const [editingId, setEditingId] = useState(null)
-  const [editForm, setEditForm] = useState({ title: '', description: '', location: '' })
   const [emergencyTypes, setEmergencyTypes] = useState(FALLBACK_EMERGENCY_TYPES)
   const [action2Types, setAction2Types] = useState(FALLBACK_ACTION2_TYPES)
 
@@ -64,17 +61,6 @@ export default function QuickActions() {
       .catch(() => {})
   }, [])
 
-  useEffect(() => {
-    if (editingId || showConfirm || showCategory || showKeypad) return
-
-    const handler = event => {
-      if (event.key === '1') handleEmergencyClick()
-      if (event.key === '2') handleAction2()
-    }
-
-    window.addEventListener('keypress', handler)
-    return () => window.removeEventListener('keypress', handler)
-  }, [editingId, showConfirm, showCategory, showKeypad])
 
   const handleEmergencyClick = () => {
     setShowConfirm(true)
@@ -106,7 +92,7 @@ export default function QuickActions() {
         type: incidentType,
         priority: 'critical',
         title: `${typeValue} alert`,
-        location: editForm.location || 'Dashboard quick action',
+        location: 'Dashboard quick action',
         description: description || `${typeValue} emergency triggered from dashboard.`,
         triggeredByName: currentUser?.displayName ||
           currentUser?._profileName || 'Unknown',
@@ -129,7 +115,7 @@ export default function QuickActions() {
     setCodeError('')
 
     try {
-      const incident = await createIncidentRecord(selectedType.value, customMessage || editForm.description)
+      const incident = await createIncidentRecord(selectedType.value, customMessage)
       const incidentId = incident?.id || null
 
       const data = await apiCall('/notifications/emergency', {
@@ -137,7 +123,7 @@ export default function QuickActions() {
         body: JSON.stringify({
           code,
           emergencyType: selectedType.value,
-          location: editForm.location || '',
+          location: '',
           message: customMessage || `Emergency alert triggered for ${selectedType.value}. All relevant staff have been notified.`,
           incidentId,
         }),
@@ -153,21 +139,9 @@ export default function QuickActions() {
           window.dispatchEvent(new Event('emergencyTriggered'))
         }
 
-        const newLog = {
-          id: Date.now().toString(),
-          button: '1',
-          emergencyType: selectedType.value,
-          actions: ['Email', 'SMS', 'Record'],
-          timestamp: new Date().toLocaleTimeString(),
-          title: editForm.title,
-          description: customMessage || editForm.description,
-          location: editForm.location,
-        }
-
-        setLogs(prev => [newLog, ...prev])
         setShowKeypad(false)
         setShowResult(data)
-        setFeedback({ button: '1', actions: 'Email + SMS + Record' })
+        setFeedback({ type: selectedType.value })
         setTimeout(() => setFeedback(null), 3000)
       } else {
         setCodeError(data.error || 'Failed to send alert. Please try again.')
@@ -193,7 +167,7 @@ export default function QuickActions() {
         type: selectedAction2Type.value,
         priority: 'medium',
         title: `${selectedAction2Type.label} alert`,
-        location: editForm.location || 'Dashboard quick action',
+        location: 'Dashboard quick action',
         description: `${selectedAction2Type.label} quick action triggered from dashboard.`,
         triggeredByName: currentUser?.displayName ||
           currentUser?._profileName || 'Unknown',
@@ -214,17 +188,6 @@ export default function QuickActions() {
         }),
       })
 
-      const newLog = {
-        id: Date.now().toString(),
-        button: '2',
-        emergencyType: selectedAction2Type.label,
-        actions: ['Email', 'SMS', 'Record'],
-        timestamp: new Date().toLocaleTimeString(),
-        title: `${selectedAction2Type.label} alert`,
-        description: `${selectedAction2Type.label} quick action triggered from dashboard.`,
-        location: editForm.location || 'Dashboard quick action',
-      }
-
       if (incidentId) {
         localStorage.setItem('activeEmergency', JSON.stringify({
           incidentId,
@@ -234,9 +197,8 @@ export default function QuickActions() {
         window.dispatchEvent(new Event('emergencyTriggered'))
       }
 
-      setLogs(prev => [newLog, ...prev])
       setShowResult(data)
-      setFeedback({ button: '2', actions: 'Email + SMS + Record' })
+      setFeedback({ type: selectedAction2Type.label })
       setTimeout(() => setFeedback(null), 3000)
     } catch (err) {
       console.error('Failed to create incident or send notifications for action 2:', err)
@@ -246,16 +208,10 @@ export default function QuickActions() {
     }
   }
 
-  const handleSaveEdit = () => {
-    setLogs(prev => prev.map(log => (log.id === editingId ? { ...log, ...editForm } : log)))
-    setEditingId(null)
-    setEditForm({ title: '', description: '', location: '' })
-  }
-
   if (isCompanyAdmin) return null
 
-  const emergencyPreview = emergencyTypes.slice(0, 3).map(type => type.value).join(', ')
-  const generalPreview = action2Types.slice(0, 3).map(type => type.label).join(', ')
+  const emergencyPreview = emergencyTypes.slice(0, 3).map(t => t.value).join(', ')
+  const generalPreview   = action2Types.slice(0, 3).map(t => t.label).join(', ')
 
   return (
     <div className="space-y-4">
@@ -291,56 +247,12 @@ export default function QuickActions() {
         <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3 flex items-center gap-2">
           <span className="text-green-600">✅</span>
           <div>
-            <p className="text-sm font-semibold text-green-900">Alert triggered</p>
-            <p className="text-xs text-green-700">Relevant staff have been notified.</p>
+            <p className="text-sm font-semibold text-green-900">{feedback.type} alert sent</p>
+            <p className="text-xs text-green-700">Help is on the way. Relevant staff have been notified.</p>
           </div>
         </div>
       )}
 
-      <div>
-        <h3 className="text-sm font-semibold text-gray-900 mb-2">My Activity</h3>
-        {logs.length === 0 ? (
-          <div className="bg-white border border-gray-200 rounded-xl p-6 text-center">
-            <p className="text-xs text-gray-400">No alerts triggered in this session yet.</p>
-          </div>
-        ) : (
-          <div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100 overflow-hidden">
-            {logs.map(log => (
-              <div key={log.id} className="px-4 py-3 flex items-start gap-3">
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold shrink-0 ${log.button === '1' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                  {log.button}
-                </div>
-                <div className="flex-1 min-w-0">
-                  {log.emergencyType && (
-                    <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded font-semibold mb-1 inline-block">
-                      {log.emergencyType}
-                    </span>
-                  )}
-                  {log.title ? (
-                    <p className="text-sm font-medium text-gray-800">{log.title}</p>
-                  ) : (
-                    <p className="text-sm text-gray-400 italic">No details added</p>
-                  )}
-                  {log.description && <p className="text-xs text-gray-500 mt-0.5">{log.description}</p>}
-                  {log.location && <p className="text-xs text-gray-400">📍 {log.location}</p>}
-                  <p className="text-xs text-gray-400 mt-0.5">Triggered at {log.timestamp}</p>
-                </div>
-                {isAdmin && (
-                  <button
-                    onClick={() => {
-                      setEditingId(log.id)
-                      setEditForm({ title: log.title, description: log.description, location: log.location })
-                    }}
-                    className="text-xs text-gray-400 hover:text-gray-600 shrink-0"
-                  >
-                    Edit
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
 
       {showConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -474,87 +386,20 @@ export default function QuickActions() {
       {showResult && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black bg-opacity-40" onClick={() => setShowResult(null)} />
-          <div className="relative bg-white border border-gray-200 rounded-xl p-6 max-w-md w-full shadow-xl">
-            <div className="text-center mb-4">
-              <div className="text-4xl mb-2">✅</div>
-              <h4 className="font-bold text-gray-900">Emergency Alert Sent</h4>
-              <p className="text-sm text-gray-500 mt-1">{showResult.message}</p>
-            </div>
-            <div className="bg-gray-50 rounded-xl p-4 mb-4">
-              <p className="text-xs font-semibold text-gray-500 uppercase mb-3">Notifications sent to:</p>
-              <div className="space-y-2">
-                {showResult.results?.map((result, index) => (
-                  <div key={index} className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-800">{result.name}</p>
-                      <p className="text-xs text-gray-400">{result.email}</p>
-                    </div>
-                    <div className="flex gap-1">
-                      <span className={`text-xs px-2 py-0.5 rounded ${result.emailStatus === 'sent' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                        📧 {result.emailStatus}
-                      </span>
-                      <span className={`text-xs px-2 py-0.5 rounded ${result.smsStatus === 'sent' ? 'bg-green-100 text-green-700' : result.smsStatus === 'skipped' ? 'bg-gray-100 text-gray-500' : 'bg-red-100 text-red-700'}`}>
-                        📱 {result.smsStatus}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <button onClick={() => setShowResult(null)} className="w-full py-2.5 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors">
+          <div className="relative bg-white border border-gray-200 rounded-xl p-6 max-w-sm w-full shadow-xl text-center">
+            <div className="text-4xl mb-3">✅</div>
+            <h4 className="font-bold text-gray-900 text-lg mb-1">Alert sent</h4>
+            <p className="text-sm text-gray-500 mb-6">Help is on the way. Relevant staff have been notified and will respond shortly.</p>
+            <button
+              onClick={() => setShowResult(null)}
+              className="w-full py-2.5 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors font-medium"
+            >
               Close
             </button>
           </div>
         </div>
       )}
 
-      {editingId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black bg-opacity-30" onClick={() => setEditingId(null)} />
-          <div className="relative bg-white border border-gray-200 rounded-xl p-6 max-w-md w-full shadow-lg">
-            <div className="flex items-center justify-between mb-4">
-              <h4 className="font-semibold text-gray-900">Add Details to Record</h4>
-              <button onClick={() => setEditingId(null)} className="text-gray-400 hover:text-gray-600">X</button>
-            </div>
-            <div className="space-y-4">
-              <div>
-                <label className="text-xs text-gray-600 mb-1 block">Title</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Student injury in playground"
-                  value={editForm.title}
-                  onChange={event => setEditForm(prev => ({ ...prev, title: event.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-gray-600 mb-1 block">Description</label>
-                <textarea
-                  rows={3}
-                  placeholder="Add details about what happened..."
-                  value={editForm.description}
-                  onChange={event => setEditForm(prev => ({ ...prev, description: event.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-gray-600 mb-1 block">Location</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Main playground"
-                  value={editForm.location}
-                  onChange={event => setEditForm(prev => ({ ...prev, location: event.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
-                />
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 mt-6">
-              <button onClick={() => setEditingId(null)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">Cancel</button>
-              <button onClick={handleSaveEdit} className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors">Save Details</button>
-            </div>
-          </div>
-        </div>
-      )}
 
     </div>
   )
