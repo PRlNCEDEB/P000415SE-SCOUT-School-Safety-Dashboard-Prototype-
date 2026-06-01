@@ -1,0 +1,32 @@
+{
+  "name": "scout-e2e",
+  "version": "1.0.0",
+  "description": "Playwright + Cucumber E2E test suite for SCOUT",
+  "private": true,
+  "scripts": {
+    "test": "cucumber-js",
+    "test:auth": "cucumber-js --tags @auth",
+    "test:rbac": "cucumber-js --tags @rbac",
+    "test:dashboard": "cucumber-js --tags @dashboard",
+    "test:alerts": "cucumber-js --tags @alerts",
+    "test:incidents": "cucumber-js --tags @incidents",
+    "test:lifecycle": "cucumber-js --tags @lifecycle",
+    "test:api": "cucumber-js --tags @api",
+    "test:analytics": "cucumber-js --tags @analytics",
+    "test:notifications": "cucumber-js --tags @notifications",
+    "test:setup": "cucumber-js --tags @setup",
+    "test:ux": "cucumber-js --tags @ux",
+    "test:overdue": "cucumber-js --tags @overdue",
+    "test:export": "cucumber-js --tags @export",
+    "test:integrity": "cucumber-js --tags @integrity",
+    "test:full-lifecycle": "cucumber-js --tags @full-lifecycle",
+    "test:isolation": "cucumber-js --tags @isolation",
+    "test:beta-setup": "cucumber-js --tags @beta-setup",
+    "test:dry": "cucumber-js --dry-run"
+  },
+  "dependencies": {
+    "@cucumber/cucumber": "10.3.1",
+    "@playwright/test": "1.44.0",
+    "playwright": "1.44.0"
+  }
+}
