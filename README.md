@@ -34,7 +34,15 @@ cp server/.env.example server/.env
 
 3. Add the Firebase service account file to the `server/` folder, or update the path in `server/.env`.
 
-4. Start the backend first, then the frontend.
+4. For a fresh Firebase project or emulator database, seed the required demo/setup data from the `server/` folder.
+
+```bash
+cd server
+npm run seed:demo
+npm run seed:alert-config
+```
+
+5. Start the backend first, then the frontend.
 
 ```bash
 cd server
@@ -51,11 +59,25 @@ npm run dev
 The frontend uses:
 
 - `VITE_API_BASE_URL`
+- `VITE_FIREBASE_API_KEY`
+- `VITE_FIREBASE_AUTH_DOMAIN`
+- `VITE_FIREBASE_PROJECT_ID`
+- `VITE_FIREBASE_STORAGE_BUCKET`
+- `VITE_FIREBASE_MESSAGING_SENDER_ID`
+- `VITE_FIREBASE_APP_ID`
+- `VITE_FIREBASE_MEASUREMENT_ID`
 
 Recommended local value:
 
 ```env
 VITE_API_BASE_URL=http://localhost:5000/api
+VITE_FIREBASE_API_KEY=your_firebase_api_key
+VITE_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=your_project_id
+VITE_FIREBASE_STORAGE_BUCKET=your_project.firebasestorage.app
+VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+VITE_FIREBASE_APP_ID=your_app_id
+VITE_FIREBASE_MEASUREMENT_ID=your_measurement_id
 ```
 
 #### Backend
@@ -65,12 +87,31 @@ The backend uses:
 - `PORT`
 - `JWT_SECRET`
 - `FIREBASE_SERVICE_ACCOUNT_PATH`
+- `FIREBASE_SERVICE_ACCOUNT_JSON`
 - `FIREBASE_PROJECT_ID`
-- `SENDGRID_API_KEY`
-- `FROM_EMAIL`
-- `TWILIO_ACCOUNT_SID`
-- `TWILIO_AUTH_TOKEN`
-- `TWILIO_MESSAGING_SERVICE_SID`
+- `BACKEND_URL`
+- `GMAIL_USER`
+- `GMAIL_APP_PASSWORD`
+- `CLICKSEND_USERNAME`
+- `CLICKSEND_API_KEY`
+
+Recommended local values:
+
+```env
+PORT=5000
+BACKEND_URL=http://localhost:5000
+JWT_SECRET=replace_with_local_secret
+FIREBASE_SERVICE_ACCOUNT_PATH=./firebase-service-account.json
+FIREBASE_PROJECT_ID=scout-dae49
+GMAIL_USER=your_gmail_address@gmail.com
+GMAIL_APP_PASSWORD=your_gmail_app_password
+CLICKSEND_USERNAME=your_clicksend_username
+CLICKSEND_API_KEY=your_clicksend_api_key
+```
+
+Use `FIREBASE_SERVICE_ACCOUNT_PATH` for local development with a JSON file in `server/`. Use `FIREBASE_SERVICE_ACCOUNT_JSON` for hosted environments such as Render where the service account JSON is stored as an environment variable.
+
+Notification delivery uses Gmail SMTP for email and ClickSend for SMS. The old SendGrid and Twilio variables are no longer used by the notification route.
 
 ### Important Notes
 
