@@ -166,7 +166,7 @@ export default function Dashboard() {
           </div>
           <p className="text-sm text-gray-500">Welcome back, {displayName}</p>
         </div>
-        {!isCompanyAdmin && (
+        {isStaff && (
         <button
           onClick={() => navigate('/submit')}
           className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors"
@@ -209,8 +209,8 @@ export default function Dashboard() {
         <SchoolAdminStatus incidents={incidents} />
       )}
 
-      {/* ── Quick Actions (Staff & School Admin only, not Company Admin) ── */}
-      {!isCompanyAdmin && (
+      {/* ── Quick Actions (Staff live-use only) ── */}
+      {isStaff && (
         <div className="bg-white border border-gray-200 rounded-xl p-5 mb-6">
           <QuickActions />
         </div>

@@ -16,7 +16,7 @@ const FALLBACK_ACTION2_TYPES = [
 ]
 
 export default function QuickActions() {
-  const { isCompanyAdmin, currentUser } = useAuth()
+  const { isStaff, currentUser } = useAuth()
   const [feedback, setFeedback] = useState(null)
   const [showConfirm, setShowConfirm] = useState(false)
   const [showCategory, setShowCategory] = useState(false)
@@ -208,7 +208,7 @@ export default function QuickActions() {
     }
   }
 
-  if (isCompanyAdmin) return null
+  if (!isStaff) return null
 
   const emergencyPreview = emergencyTypes.slice(0, 3).map(t => t.value).join(', ')
   const generalPreview   = action2Types.slice(0, 3).map(t => t.label).join(', ')
