@@ -1,8 +1,8 @@
-require('dotenv').config()
+
 const express = require('express')
 const router = express.Router()
-const sgMail = require('@sendgrid/mail')
-const twilio = require('twilio')
+const nodemailer = require('nodemailer')
+const ClickSend = require('clicksend')
 const crypto = require('crypto')
 const admin = require('firebase-admin')
 const { getDb } = require('../db/firebase')
@@ -44,10 +44,8 @@ function canSendAlert(role) {
 
 async function getSchoolName(db, schoolId) {
   if (!schoolId) return null
-
   const schoolDoc = await db.collection('schools').doc(schoolId).get()
   if (!schoolDoc.exists) return null
-
   return schoolDoc.data()?.name || null
 }
 
@@ -122,17 +120,26 @@ async function requireNotificationViewer(req, res, next) {
   }
 }
 
-function getSgMail() {
-  if (!process.env.SENDGRID_API_KEY) throw new Error('SENDGRID_API_KEY is not set in .env')
-  sgMail.setApiKey(process.env.SENDGRID_API_KEY)
-  return sgMail
+// ── Email via Gmail SMTP ───────────────────────────────────────────────────────
+function getMailTransporter() {
+  if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
+    throw new Error('GMAIL_USER or GMAIL_APP_PASSWORD is not set in .env')
+  }
+  return nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: process.env.GMAIL_USER,
+      pass: process.env.GMAIL_APP_PASSWORD,
+    },
+  })
 }
 
-function getTwilioClient() {
-  if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN) {
-    throw new Error('TWILIO_ACCOUNT_SID or TWILIO_AUTH_TOKEN is not set in .env')
+// ── SMS via ClickSend ─────────────────────────────────────────────────────────
+function getSmsClient() {
+  if (!process.env.CLICKSEND_USERNAME || !process.env.CLICKSEND_API_KEY) {
+    throw new Error('CLICKSEND_USERNAME or CLICKSEND_API_KEY is not set in .env')
   }
-  return twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
+  return new ClickSend.SMSApi(process.env.CLICKSEND_USERNAME, process.env.CLICKSEND_API_KEY)
 }
 
 function normaliseRecipient(recipient) {
@@ -186,8 +193,7 @@ async function getRecipientsForEmergency(emergencyType, schoolId) {
   }
 
   const roles = legacyRule.roles || []
-  let recipientsQuery = db.collection('notificationRecipients')
-    .where('active', '==', true)
+  let recipientsQuery = db.collection('notificationRecipients').where('active', '==', true)
 
   if (schoolId) {
     recipientsQuery = recipientsQuery.where('schoolId', '==', schoolId)
@@ -299,11 +305,13 @@ async function sendAdminSummaryEmail({ emergencyType, location, body, timestamp,
     </div>
   `
 
-  for (const adminUser of admins) {
+  // Send all admin emails in parallel
+  await Promise.all(admins.map(async (adminUser) => {
     try {
-      await getSgMail().send({
+      const transporter = getMailTransporter()
+      await transporter.sendMail({
+        from: `"SCOUT Safety System" <${process.env.GMAIL_USER}>`,
         to: adminUser.email,
-        from: process.env.FROM_EMAIL,
         subject,
         text: `Emergency Alert Summary - ${emergencyType} at ${location || 'Unknown location'} on ${formattedTime}. Incident ID: ${incidentId || 'N/A'}. Staff notified: ${notifiedStaff.map(result => result.name).join(', ')}`,
         html,
@@ -312,7 +320,7 @@ async function sendAdminSummaryEmail({ emergencyType, location, body, timestamp,
     } catch (err) {
       console.error(`Admin summary email failed for ${adminUser.name}:`, err.message)
     }
-  }
+  }))
 }
 
 async function getNotificationSchoolContext(incidentId, senderProfile) {
@@ -322,7 +330,6 @@ async function getNotificationSchoolContext(incidentId, senderProfile) {
 
   if (incidentId) {
     const incidentDoc = await db.collection('incidents').doc(incidentId).get()
-
     if (incidentDoc.exists) {
       const incident = incidentDoc.data()
       schoolId = incident.schoolId || schoolId
@@ -374,9 +381,9 @@ router.post('/emergency', verifyToken, requireAlertSender, async (req, res) => {
   const subject = `EMERGENCY ALERT: ${emergencyType}${location ? ' - ' + location : ''}`
   const body = message || 'An emergency has been declared at the school. Please respond immediately.'
   const timestamp = new Date().toISOString()
-  const results = []
 
-  for (const recipient of recipients) {
+  // Send all emails and SMS in parallel
+  const results = await Promise.all(recipients.map(async (recipient) => {
     const token = crypto.randomUUID()
     const acknowledgeLink = `${BACKEND_URL}/api/notifications/acknowledge/${token}`
     const result = {
@@ -388,11 +395,13 @@ router.post('/emergency', verifyToken, requireAlertSender, async (req, res) => {
       token,
     }
 
+    // Send Email via Gmail SMTP
     if (recipient.email && (recipient.notify === 'email' || recipient.notify === 'both' || !recipient.notify)) {
       try {
-        await getSgMail().send({
+        const transporter = getMailTransporter()
+        await transporter.sendMail({
+          from: `"SCOUT Safety System" <${process.env.GMAIL_USER}>`,
           to: recipient.email,
-          from: process.env.FROM_EMAIL,
           subject,
           text: `${body}\n\nClick here to acknowledge this alert: ${acknowledgeLink}`,
           html: `
@@ -435,23 +444,27 @@ router.post('/emergency', verifyToken, requireAlertSender, async (req, res) => {
       }
     }
 
+    // Send SMS via ClickSend
     if (recipient.phone && (recipient.notify === 'sms' || recipient.notify === 'both')) {
       try {
-        const sms = await getTwilioClient().messages.create({
-          body: `SCOUT EMERGENCY: ${emergencyType}${location ? ' at ' + location : ''}. Please respond immediately. Check your email to acknowledge.`,
-          messagingServiceSid: process.env.TWILIO_MESSAGING_SERVICE_SID,
-          to: recipient.phone,
-        })
+        const smsClient = getSmsClient()
+        const smsMessage = new ClickSend.SmsMessage()
+        smsMessage.to = recipient.phone
+        smsMessage.body = `SCOUT EMERGENCY: ${emergencyType}${location ? ' at ' + location : ''}. Please respond immediately. Check your email to acknowledge.`
+        smsMessage.from = 'SCOUT'
+        const smsCollection = new ClickSend.SmsMessageCollection()
+        smsCollection.messages = [smsMessage]
+        await smsClient.smsSendPost(smsCollection)
         result.smsStatus = 'sent'
-        console.log(`SMS sent to ${recipient.name} - SID: ${sms.sid}`)
+        console.log(`SMS sent to ${recipient.name} (${recipient.phone})`)
       } catch (err) {
         result.smsStatus = 'failed'
         console.error(`SMS failed for ${recipient.name}:`, err.message)
       }
     }
 
-    results.push(result)
-  }
+    return result
+  }))
 
   const deliveriesSent = results.filter(result => result.emailStatus === 'sent' || result.smsStatus === 'sent').length
 

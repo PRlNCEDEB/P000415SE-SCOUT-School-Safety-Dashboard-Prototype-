@@ -87,9 +87,12 @@ When the backend starts with `FIRESTORE_EMULATOR_HOST` set, it seeds the emulato
 
 The emulator seed includes:
 - `users`
-- `notificationRecipients`
+- `schools`
 - `notificationRouting`
+- `notificationRecipients` for legacy fallback/demo routing
 - demo `incidents`
+
+Alert types and locations are seeded separately with `npm run seed:alert-config`.
 
 Collections do not need to be created manually. Firestore creates them automatically when the first document is written.
 
@@ -104,6 +107,13 @@ npm run seed:emulator
 
 If using another port, replace `8080` with that port.
 
+To seed alert types and locations for Setup and Submit Alert, run:
+
+```powershell
+$env:FIRESTORE_EMULATOR_HOST="127.0.0.1:8080"
+npm run seed:alert-config
+```
+
 ## 6. View Emulator Data
 
 Once the emulator is running, open the Emulator UI in your browser:
@@ -112,10 +122,13 @@ Once the emulator is running, open the Emulator UI in your browser:
 
 You can inspect collections such as:
 - `users`
+- `schools`
 - `incidents`
+- `alertTypes`
+- `locations`
 - `notifications`
-- `notificationRecipients`
 - `notificationRouting`
+- `notificationRecipients` if legacy/demo routing is seeded
 
 ## 7. Testing Email Acknowledge Links Locally
 
@@ -146,8 +159,11 @@ Recommended manual checks:
 
 ### Seed data
 - confirm `users` exists
-- confirm `notificationRecipients` exists
+- confirm `schools` exists
+- run `npm run seed:alert-config`, then confirm `alertTypes` and `locations` exist
 - confirm `notificationRouting` exists
+- confirm school-specific routing has recipients in `notificationRouting.recipients`
+- confirm `notificationRecipients` exists if you are testing legacy/demo role-based routing
 - confirm demo `incidents` exist
 
 ### Submit alert
