@@ -95,6 +95,7 @@ export default function Layout({ children }) {
       visible: isCompanyAdmin || isSchoolAdmin,
       items: [
         { path: '/setup', label: 'Setup', icon: Settings, visible: isCompanyAdmin || isSchoolAdmin },
+        { path: '/submit', label: 'Alert Testing', icon: Siren, visible: isSchoolAdmin },
       ],
     },
     {
@@ -102,7 +103,7 @@ export default function Layout({ children }) {
       visible: !isCompanyAdmin,
       items: [
         { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, visible: !isCompanyAdmin },
-        { path: '/submit', label: 'Submit Alert', icon: PlusCircle, visible: isSchoolAdmin || isStaff },
+        { path: '/submit', label: 'Submit Alert', icon: PlusCircle, visible: isStaff },
         { path: '/incidents', label: 'Incidents', icon: ClipboardList, visible: isSchoolAdmin || isStaff },
       ],
     },

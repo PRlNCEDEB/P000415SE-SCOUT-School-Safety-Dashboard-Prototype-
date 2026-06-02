@@ -2,6 +2,11 @@ const express = require('express')
 const admin = require('firebase-admin')
 const { docToObject, formatTimestamp, getDb, snapshotToArray } = require('../db/firebase')
 const { invalidateAnalyticsCache } = require('../analyticsCache')
+const {
+  getCachedIncidentList,
+  invalidateIncidentListCache,
+  setCachedIncidentList,
+} = require('../incidentListCache')
 
 const router = express.Router()
 
@@ -206,8 +211,15 @@ function toIncidentResponse(incident) {
 router.get('/', verifyToken, async (req, res, next) => {
   try {
     const profile = await getUserProfile(req.user)
+    const cachedIncidents = getCachedIncidentList(profile)
+    const visibleIncidents = cachedIncidents || await getVisibleIncidents(profile)
+
+    if (!cachedIncidents) {
+      setCachedIncidentList(profile, visibleIncidents)
+    }
+
     //sorts incidents from newest to oldest based on createdAt, updatedAt, or timestamp and converts to response format
-    const incidents = (await getVisibleIncidents(profile))
+    const incidents = visibleIncidents
       .sort((left, right) => getSortValue(right) - getSortValue(left))
       .map(toIncidentResponse)
     //sends the result back as JSON
@@ -313,6 +325,7 @@ router.post('/', verifyToken, async (req, res, next) => {
     const doc = await docRef.get()
     const incident = { id: doc.id, ...doc.data() }
     invalidateAnalyticsCache()
+    invalidateIncidentListCache()
     res.status(201).json(toIncidentResponse(incident))
   } catch (error) {
     next(error)
@@ -351,6 +364,7 @@ router.patch('/:id/status', verifyToken, async (req, res, next) => {
     const updatedDoc = await docRef.get()
     const updatedIncident = docToObject(updatedDoc)
     invalidateAnalyticsCache()
+    invalidateIncidentListCache()
     res.json({ success: true, incident: toIncidentResponse(updatedIncident) })
   } catch (error) {
     next(error)
@@ -404,6 +418,7 @@ router.patch('/:id/review-flag', verifyToken, async (req, res, next) => {
     await docRef.update(updates)
     const updatedDoc = await docRef.get()
     const updatedIncident = docToObject(updatedDoc)
+    invalidateIncidentListCache()
     res.json({ success: true, incident: toIncidentResponse(updatedIncident) })
   } catch (error) {
     next(error)
@@ -457,6 +472,7 @@ router.post('/:id/review-comment', verifyToken, async (req, res, next) => {
 
     const updatedDoc = await docRef.get()
     const updatedIncident = docToObject(updatedDoc)
+    invalidateIncidentListCache()
     res.json({ success: true, incident: toIncidentResponse(updatedIncident) })
   } catch (error) {
     next(error)
