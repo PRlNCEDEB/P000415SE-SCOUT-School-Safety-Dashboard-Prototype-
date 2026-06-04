@@ -1,0 +1,81 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Test reports and results
+reports/
+*.html
+test-results/
+allure-results/
+allure-report/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+test-debug.log
+
+# Local env files
+.env
+.env.local
+.env.*.local
+
+# Secrets and credentials
+firebase-service-account.json
+*.key
+*.pem
+
+# Temporary files
+*.tmp
+*.temp
+tmp/
+temp/
+
+# Screenshots and recordings (if captured during tests)
+screenshots/
+recordings/
+videos/
+*.mp4
+*.webm
+
+# OS and Editor files
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# IDE-specific
+.vscode/settings.json
+.vscode/launch.json
+
+# Local development
+*.local
+.agents/
+.claude/
+.junie/
+skills-lock.json
+
+# Playwright/Selenium cache
+.playwright/
+.selenium/
+browser-cache/
+
+# Node-specific
+npm-shrinkwrap.json
+.npm
+.node-gyp
+
+# Test-specific ignores
+.mocharc.json.local
+cucumber.js.local
+config.local.js
