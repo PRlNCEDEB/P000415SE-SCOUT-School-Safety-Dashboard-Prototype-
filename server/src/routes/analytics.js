@@ -85,7 +85,7 @@ function getAnalyticsOptions(profile) {
 
   return {
     schoolId: profile.schoolId,
-    includeFailedAlerts: false,
+    includeFailedAlerts: true,
   }
 }
 
