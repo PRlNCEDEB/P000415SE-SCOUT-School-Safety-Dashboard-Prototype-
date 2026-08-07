@@ -77,14 +77,10 @@ function SubmitRoute({ children }) {
 // ── NotCompanyAdminRoute ──────────────────────────────────────────────────────
 // Redirects Company Admins to /setup. All other pages are for School Admin / Staff.
 function NotCompanyAdminRoute({ children }) {
-  const { isCompanyAdmin, authLoading, userRole } = useAuth()
+  const { authLoading, userRole } = useAuth()
 
   if (authLoading || userRole === null) {
     return null
-  }
-
-  if (isCompanyAdmin) {
-    return <Navigate to="/setup" replace />
   }
 
   return children
