@@ -16,12 +16,26 @@ Fields:
 Firebase Authentication stores the login password. Firestore stores the role and school profile used by the backend.
 
 ### schools
-Stores school records used for role scoping and display.
+Stores school records used for role scoping and display. Managed through
+`/api/schools` (Company Admin) and read by every dropdown in the app via
+`schoolService`  never from a hardcoded list.
+
+The document ID **is** the `schoolId` referenced by every other collection. It is
+slugified from the name on creation (`Alpha School` → `school_alpha_school`) and
+never changes afterwards, so a rename cannot orphan existing references.
 
 Fields:
 - `name`
+- `active`  soft-delete flag. Schools are never hard-deleted, because incidents,
+  users and routing rules reference `schoolId`. Deactivation is refused while the
+  school has an incident in `triggered`, `acknowledged` or `in-progress`.
 - `createdAt`
 - `updatedAt`
+
+`schoolName` is denormalised onto `users`, `incidents`, `archivedIncidents`,
+`notifications`, `notificationRecipients` and `notificationRouting`. Renaming a
+school through the API rewrites all six in batches; do not rename by editing the
+document directly in the Firebase console, or those copies will go stale.
 
 ### incidents
 Stores submitted incident records.
