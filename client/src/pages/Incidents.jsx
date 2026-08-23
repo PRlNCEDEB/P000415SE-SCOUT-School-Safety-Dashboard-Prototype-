@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { archiveAPI, getIncidents, settingsAPI } from '../api/client'
 import { useAuth } from '../context/AuthContext'
+import { useSchools } from '../context/SchoolsContext'
 
 const priorityColors = {
   critical: 'bg-red-100 text-red-700',
@@ -134,6 +135,7 @@ function formatDuration(minutes) {
 export default function Incidents() {
   const navigate = useNavigate()
   const { authLoading, isCompanyAdmin, isSchoolAdmin, userRole } = useAuth()
+  const { schools } = useSchools()
   const [incidents, setIncidents] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -220,11 +222,18 @@ export default function Incidents() {
 
   const isArchivedView = filterStatus === 'archived' && isCompanyAdmin
 
+  // Options come from the schools collection, not from the loaded incidents.
+  // Deriving them from incidents meant a school with no incidents yet was
+  // invisible in this filter which is exactly what a newly created school is.
+  //
+  // Incidents are still scanned, but only to recover schools that are no longer
+  // in the list (deactivated, or deleted outside the app). Without that, their
+  // historical incidents would be unfilterable.
   const schoolOptions = useMemo(() => {
-    const options = new Map()
+    const options = new Map(schools.map(school => [school.id, school.name || school.id]))
 
     incidents.forEach(incident => {
-      if (incident.schoolId) {
+      if (incident.schoolId && !options.has(incident.schoolId)) {
         options.set(incident.schoolId, incident.schoolName || incident.schoolId)
       }
     })
@@ -232,7 +241,17 @@ export default function Incidents() {
     return [...options.entries()]
       .map(([id, name]) => ({ id, name }))
       .sort((left, right) => left.name.localeCompare(right.name))
-  }, [incidents])
+  }, [schools, incidents])
+
+  // A school can vanish from the options while it is selected deactivated by
+  // a Company Admin in another tab, for instance. Fall back to "All Schools"
+  // rather than leaving the select showing a blank value and filtering to zero.
+  useEffect(() => {
+    if (filterSchool === 'all') return
+    if (schoolOptions.some(option => option.id === filterSchool)) return
+
+    setFilterSchool('all')
+  }, [filterSchool, schoolOptions])
 
   const filtered = useMemo(() => {
     if (isArchivedView) return []

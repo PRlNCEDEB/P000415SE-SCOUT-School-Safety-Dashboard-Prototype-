@@ -14,6 +14,10 @@ function makeDoc(id, data) {
 }
 
 function createTestDb({ incidents = {}, notifications = {}, users = {}, schools = {} } = {}) {
+  // schoolService caches the school list in a module-level store, so it has to
+  // be cleared whenever a test swaps in a fresh database.
+  require('../src/schoolCache').resetSchoolCache()
+
   const incidentStore = new Map(Object.entries(incidents).map(([id, value]) => [id, { ...value }]))
   const notificationStore = new Map(Object.entries(notifications).map(([id, value]) => [id, { ...value }]))
   const userStore = new Map(Object.entries(users).map(([id, value]) => [id, { ...value }]))
@@ -113,6 +117,15 @@ function createTestDb({ incidents = {}, notifications = {}, users = {}, schools 
                 return makeDoc(id, schoolStore.get(id))
               },
             }
+          },
+          // schoolService reads the whole collection once and caches it,
+          // rather than doing a per-lookup document read.
+          async get() {
+            const docs = [...schoolStore.entries()].map(([id, record]) => makeDoc(id, record))
+            return { docs, empty: docs.length === 0 }
+          },
+          where(field, operator, value) {
+            return makeQuery(schoolStore).where(field, operator, value)
           },
         }
       }

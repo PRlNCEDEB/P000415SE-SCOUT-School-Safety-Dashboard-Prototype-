@@ -1,6 +1,7 @@
 const express = require('express')
 const admin = require('firebase-admin')
 const { getDb } = require('../db/firebase')
+const { getSchoolName } = require('../services/schoolService')
 
 const router = express.Router()
 
@@ -32,26 +33,35 @@ router.get('/role', verifyToken, async (req, res) => {
     const db = getDb()
     const { uid, email } = req.user
 
-    const pick = (data) => ({
-      role:     data.role     || 'staff',
-      schoolId: data.schoolId || null,
-      name:     data.name     || null,
-    })
+    // schoolName is resolved live from the schools collection rather than read
+    // from the copy stored on the user document, so a renamed school shows the
+    // new name immediately. The stored value is only a fallback for a schoolId
+    // that no longer resolves.
+    const pick = async (data) => {
+      const schoolId = data.schoolId || null
+
+      return {
+        role:       data.role || 'staff',
+        schoolId,
+        schoolName: (schoolId ? await getSchoolName(schoolId) : null) || data.schoolName || null,
+        name:       data.name || null,
+      }
+    }
 
     // Look up the user document in Firestore by UID
     const userDoc = await db.collection('users').doc(uid).get()
     if (userDoc.exists) {
-      return res.json(pick(userDoc.data()))
+      return res.json(await pick(userDoc.data()))
     }
 
     // Fallback: search by email if UID doc not found
     const byEmail = await db.collection('users').where('email', '==', email).limit(1).get()
     if (!byEmail.empty) {
-      return res.json(pick(byEmail.docs[0].data()))
+      return res.json(await pick(byEmail.docs[0].data()))
     }
 
     // User authenticated but no Firestore record — default to staff
-    return res.json({ role: 'staff', schoolId: null, name: null })
+    return res.json({ role: 'staff', schoolId: null, schoolName: null, name: null })
 
   } catch (err) {
     console.error('Error fetching user role:', err)

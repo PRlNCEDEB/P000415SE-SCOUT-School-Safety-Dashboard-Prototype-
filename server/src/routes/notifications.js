@@ -8,6 +8,7 @@ const admin = require('firebase-admin')
 const { getDb } = require('../db/firebase')
 const { invalidateAnalyticsCache } = require('../analyticsCache')
 const { invalidateIncidentListCache } = require('../incidentListCache')
+const { getSchoolName } = require('../services/schoolService')
 
 const BACKEND_URL = process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 5000}`
 
@@ -43,13 +44,6 @@ function canSendAlert(role) {
   return ['staff', 'schooladmin'].includes(normaliseRole(role))
 }
 
-async function getSchoolName(db, schoolId) {
-  if (!schoolId) return null
-  const schoolDoc = await db.collection('schools').doc(schoolId).get()
-  if (!schoolDoc.exists) return null
-  return schoolDoc.data()?.name || null
-}
-
 async function getUserProfile(decodedUser) {
   const db = getDb()
   const { uid, email } = decodedUser
@@ -71,7 +65,9 @@ async function getUserProfile(decodedUser) {
     name: profile?.name || email || 'Unknown',
     role: profile?.role || null,
     schoolId: profile?.schoolId || null,
-    schoolName: profile?.schoolName || await getSchoolName(db, profile?.schoolId),
+    // Live lookup first so a renamed school is reflected immediately; the
+    // stored copy is the fallback for a schoolId that no longer resolves.
+    schoolName: (await getSchoolName(profile?.schoolId)) || profile?.schoolName || null,
   }
 }
 
@@ -341,7 +337,7 @@ async function getNotificationSchoolContext(incidentId, senderProfile) {
   }
 
   if (!schoolName && schoolId) {
-    schoolName = await getSchoolName(db, schoolId)
+    schoolName = await getSchoolName(schoolId)
   }
 
   return { schoolId, schoolName }

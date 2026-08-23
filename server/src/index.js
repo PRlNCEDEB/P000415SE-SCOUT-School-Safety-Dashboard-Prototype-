@@ -6,8 +6,6 @@ const express = require('express')
 const cors = require('cors')
 
 const { initFirebase } = require('./db/firebase')
-const { seedDemoAnalyticsData } = require('./db/seedDemoAnalytics')
-const { seedEmulatorData } = require('./db/seedEmulatorData')
 
 const authRoutes = require('./routes/auth')
 const incidentRoutes = require('./routes/incidents')
@@ -16,6 +14,7 @@ const analyticsRoutes = require('./routes/analytics')
 const actionLogRoutes = require('./routes/actionLogs')
 const settingsRoutes = require('./routes/settings')
 const setupRoutes = require('./routes/setup')
+const schoolRoutes = require('./routes/schools')
 const { runArchiveJob } = require('./archiver')
 //app setup
 const app = express()
@@ -32,11 +31,31 @@ app.use(express.json())//parse JSON request bodies
 // ── Initialise Firebase ───────────────────────────────────────────────────────
 initFirebase()
 
-// ── Seed analytics data (runs once) ───────────────────────────────────────────
-if (process.env.FIRESTORE_EMULATOR_HOST) {
-  seedEmulatorData().catch(err => console.error('Failed to seed emulator data:', err))
-} else {
-  seedDemoAnalyticsData().catch(err => console.error('Failed to seed analytics:', err))
+// ── Demo seeding ──────────────────────────────────────────────────────────────
+// Seeding is opt-in. It used to run on every startup, which meant a production
+// boot wrote demo schools into the live database deleting the demo constants
+// would not have helped while that was still happening.
+//
+// Enable locally with SEED_DEMO_DATA=true in server/.env, or run the seed
+// scripts directly (npm run seed:demo). Against the emulator it always runs,
+// because an emulator starts empty every time.
+//
+// The seed modules are required lazily so demo data is never even loaded into
+// the process when seeding is off.
+const useEmulator = Boolean(process.env.FIRESTORE_EMULATOR_HOST)
+const seedDemoDataEnabled = String(process.env.SEED_DEMO_DATA || '').toLowerCase() === 'true'
+const isProduction = process.env.NODE_ENV === 'production'
+
+if (useEmulator) {
+  require('./db/seedEmulatorData')
+    .seedEmulatorData()
+    .catch(err => console.error('Failed to seed emulator data:', err))
+} else if (seedDemoDataEnabled && !isProduction) {
+  require('./db/seedDemoAnalytics')
+    .seedDemoAnalyticsData()
+    .catch(err => console.error('Failed to seed analytics:', err))
+} else if (seedDemoDataEnabled && isProduction) {
+  console.warn('⚠️  SEED_DEMO_DATA is set but ignored because NODE_ENV=production.')
 }
 
 // ── Routes ────────────────────────────────────────────────────────────────────
@@ -47,6 +66,7 @@ app.use('/api/analytics', analyticsRoutes)
 app.use('/api/action-logs', actionLogRoutes)
 app.use('/api/settings', settingsRoutes)
 app.use('/api/setup', setupRoutes)
+app.use('/api/schools', schoolRoutes)
 //simple route to check whether the backend is running
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() })

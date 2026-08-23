@@ -72,6 +72,26 @@ export const notificationsAPI = {
   list: () => request('/notifications').then(data => data.notifications ?? data),
 }
 
+// Schools are role-scoped by the backend: a Company Admin receives every
+// school, everyone else receives only their own. The response also carries a
+// `version` that increments on every change, which SchoolsContext uses to tell
+// "nothing changed" from "changed" while polling.
+export const schoolAPI = {
+  list: ({ includeInactive = false } = {}) =>
+    request(`/schools${includeInactive ? '?includeInactive=true' : ''}`)
+      .then(data => ({ schools: data.schools ?? [], version: data.version ?? 0 })),
+  get: id => request(`/schools/${encodeURIComponent(id)}`).then(data => data.school ?? null),
+  create: name =>
+    request('/schools', { method: 'POST', body: JSON.stringify({ name }) }).then(data => data.school),
+  rename: (id, name) =>
+    request(`/schools/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ name }) }),
+  setActive: (id, active) =>
+    request(`/schools/${encodeURIComponent(id)}/active`, {
+      method: 'PATCH',
+      body: JSON.stringify({ active }),
+    }).then(data => data.school),
+}
+
 
 export const setupAPI = {
   // Alert types
