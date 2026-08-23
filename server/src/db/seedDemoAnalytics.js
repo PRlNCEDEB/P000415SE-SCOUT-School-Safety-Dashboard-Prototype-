@@ -1,5 +1,4 @@
 const { getDb } = require('./firebase')
-const { demoSchools } = require('./demoSchools')
 
 const incidentTemplates = [
   {
@@ -103,13 +102,18 @@ async function seedDemoAnalyticsData() {
   try {
     const db = getDb()
     const incidentsRef = db.collection('incidents')
-    const schoolBatch = db.batch()
 
-    demoSchools.forEach(school => {
-      const { id, ...schoolData } = school
-      schoolBatch.set(db.collection('schools').doc(id), schoolData, { merge: true })
-    })
-    await schoolBatch.commit()
+    // Schools are read from the database rather than written from a constant.
+    // Whatever schools exist including any a Company Admin created through
+    // the app get demo incidents, and this script no longer resurrects a
+    // fixed set of schools every time it runs.
+    const schoolsSnapshot = await db.collection('schools').get()
+    const schools = schoolsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+
+    if (schools.length === 0) {
+      console.warn('No schools in the database — skipping demo incident seed. Run: npm run seed:demo')
+      return
+    }
 
     console.log('Seeding missing demo analytics data into Firestore...')
 
@@ -117,7 +121,7 @@ async function seedDemoAnalyticsData() {
     const batch = db.batch()
     let createdCount = 0
 
-    for (const school of demoSchools) {
+    for (const school of schools) {
       for (const [index, incident] of incidentTemplates.entries()) {
         const docId = `demo_${school.id}_${String(index + 1).padStart(2, '0')}`
         const docRef = incidentsRef.doc(docId)

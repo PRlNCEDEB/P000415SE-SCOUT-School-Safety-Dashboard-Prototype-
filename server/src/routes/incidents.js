@@ -1,6 +1,7 @@
 const express = require('express')
 const admin = require('firebase-admin')
 const { docToObject, formatTimestamp, getDb, snapshotToArray } = require('../db/firebase')
+const { getSchoolName } = require('../services/schoolService')
 const { invalidateAnalyticsCache } = require('../analyticsCache')
 const {
   getCachedIncidentList,
@@ -43,16 +44,6 @@ function canCreateIncident(role) {
   return ['schooladmin', 'staff'].includes(normaliseRole(role))
 }
 
-async function getSchoolName(db, schoolId) {
-  if (!schoolId) return null
-
-  const schoolDoc = await db.collection('schools').doc(schoolId).get()
-  if (!schoolDoc.exists) return null
-
-  const school = schoolDoc.data()
-  return school?.name || null
-}
-
 async function getUserProfile(decodedUser) {
   const db = getDb()
   const { uid, email, name } = decodedUser
@@ -74,7 +65,9 @@ async function getUserProfile(decodedUser) {
     name: profile?.name || name || email || 'Unknown',
     role: profile?.role || null,
     schoolId: profile?.schoolId || null,
-    schoolName: profile?.schoolName || await getSchoolName(db, profile?.schoolId),
+    // Live lookup first so a renamed school is reflected immediately; the
+    // stored copy is the fallback for a schoolId that no longer resolves.
+    schoolName: (await getSchoolName(profile?.schoolId)) || profile?.schoolName || null,
   }
 }
 

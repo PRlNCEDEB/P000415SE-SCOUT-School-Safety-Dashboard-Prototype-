@@ -20,6 +20,27 @@ vi.mock('../context/AuthContext', () => ({
   }),
 }))
 
+// Incidents reads its school filter options from SchoolsContext, so the page
+// needs the context stubbed the same way AuthContext is. Names here are
+// deliberately generic no seeded school names in source (see server/tests/no-hardcoded-schools.test.js).
+vi.mock('../context/SchoolsContext', () => ({
+  useSchools: () => ({
+    schools: [
+      { id: 'school_north', name: 'North Campus', active: true },
+      { id: 'school_south', name: 'South Campus', active: true },
+    ],
+    schoolsById: new Map(),
+    loading: false,
+    error: '',
+    version: 1,
+    refresh: vi.fn(),
+    getSchoolName: vi.fn(),
+    createSchool: vi.fn(),
+    renameSchool: vi.fn(),
+    setSchoolActive: vi.fn(),
+  }),
+}))
+
 vi.mock('../api/client', () => ({
   getIncidents: vi.fn(() =>
     Promise.resolve([

@@ -26,7 +26,10 @@ client/.env
 server/.env
 
 # Secrets
-server/firebase-service-account.json
+# Wildcard, not just the exact name: backups like firebase-service-account__old.json are the same private key and must never be committed either.
+server/firebase-service-account*.json
+**/firebase-service-account*.json
+*-service-account*.json
 
 # Local files
 *.local

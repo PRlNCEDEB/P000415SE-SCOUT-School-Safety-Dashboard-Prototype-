@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
+import { SchoolsProvider } from './context/SchoolsContext'
 import Login from './pages/Login'
 import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
@@ -112,9 +113,13 @@ function AppRoutes() {
 function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <AppRoutes />
-      </BrowserRouter>
+      {/* Inside AuthProvider: the school list is role-scoped, so it can only be
+          fetched once the signed-in user's role is known. */}
+      <SchoolsProvider>
+        <BrowserRouter>
+          <AppRoutes />
+        </BrowserRouter>
+      </SchoolsProvider>
     </AuthProvider>
   )
 }
