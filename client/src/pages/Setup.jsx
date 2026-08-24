@@ -3,8 +3,30 @@ import { useAuth } from '../context/AuthContext'
 import { useSchools } from '../context/SchoolsContext'
 import { applyRecipientPhone } from '../utils/routingRecipients'
 import { settingsAPI, setupAPI, archiveAPI } from '../api/client'
+import AlertTypeSelect from '../components/AlertTypeSelect'
 
 const EMOJI_OPTIONS = ['🏥', '🔥', '🔒', '⚠️', '🌩️', '🔧', '📢', '🚨', '🛡️', '🌊']
+
+// School Admin routing rules are keyed by the alert type label, so options are
+// de-duplicated by label (case-insensitive) to keep one entry per routing rule.
+function buildAlertTypeOptions(alertTypes) {
+  const seen = new Set()
+  const options = []
+  for (const type of alertTypes || []) {
+    const label = String(type?.label || '').trim()
+    if (!label) continue
+    const key = label.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    options.push({
+      value: label,
+      label,
+      icon: type.emoji || (type.category === 'emergency' ? '🚨' : '📢'),
+      category: type.category === 'emergency' ? 'emergency' : 'general',
+    })
+  }
+  return options
+}
 
 function formatRole(role) {
   return String(role || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
@@ -46,7 +68,7 @@ export default function Setup() {
   const [editingLocationId, setEditingLocationId] = useState(null)
   const [editLocationLabel, setEditLocationLabel] = useState('')
 
-  const [emergencyTypes, setEmergencyTypes] = useState([])
+  const [alertTypeOptions, setAlertTypeOptions] = useState([])
   const [routing, setRouting] = useState({})
   const [schoolUsers, setSchoolUsers] = useState([])
   const [loadingRouting, setLoadingRouting] = useState(false)
@@ -102,10 +124,10 @@ export default function Setup() {
       setLoadingRouting(true)
       setRoutingError('')
       try {
-        const [routingData, usersData, emergencyTypesData] = await Promise.all([
+        const [routingData, usersData, alertTypesData] = await Promise.all([
           setupAPI.getRouting(),
           setupAPI.getSchoolUsers(),
-          setupAPI.getAlertTypes('emergency'),
+          setupAPI.getAlertTypes(),
         ])
         const map = {}
         for (const rule of (routingData.routing || [])) {
@@ -113,12 +135,7 @@ export default function Setup() {
         }
         setRouting(map)
         setSchoolUsers(usersData.users || [])
-        setEmergencyTypes(
-          (emergencyTypesData.alertTypes || []).map(type => ({
-            value: type.label,
-            icon: type.emoji || '🚨',
-          }))
-        )
+        setAlertTypeOptions(buildAlertTypeOptions(alertTypesData.alertTypes))
       } catch {
         setRoutingError('Failed to load routing. Is the backend running?')
       } finally {
@@ -913,31 +930,32 @@ export default function Setup() {
             <h2 className="text-lg font-semibold text-gray-800">Alert Recipients</h2>
             <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">School Admin</span>
           </div>
-          <p className="text-sm text-gray-500 mb-2">Choose who should receive each emergency alert type at your school.</p>
-          <p className="text-xs text-gray-400 mb-4">
-            User roles are shown from the existing school user records. This area controls alert routing and notification preferences, not account role changes.
-          </p>
+          <p className="text-sm text-gray-500 mb-2">Choose who should receive each alert type at your school.</p>
+          
 
           {loadingRouting && <p className="text-sm text-gray-400 mb-4">Loading...</p>}
           {routingError && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-4">{routingError}</p>}
 
           <div className="mb-4">
-            <select
+            <label className="block text-xs font-medium text-gray-500 mb-1">Emergency Type</label>
+            <AlertTypeSelect
+              types={alertTypeOptions}
               value={selectedEmergencyType}
-              onChange={event => setSelectedEmergencyType(event.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 w-64"
-            >
-              <option value="">Select an emergency type</option>
-              {emergencyTypes.map(type => (
-                <option key={type.value} value={type.value}>
-                  {type.icon} {type.value}
-                </option>
-              ))}
-            </select>
+              onChange={setSelectedEmergencyType}
+              placeholder="Select an emergency type"
+              disabled={loadingRouting}
+            />
+            {!loadingRouting && (
+              <p className="text-xs text-gray-400 mt-1">
+                {alertTypeOptions.length === 0
+                  ? 'No alert types configured yet. A Company Admin adds them under Alert Types.'
+                  : `${alertTypeOptions.length} alert type${alertTypeOptions.length !== 1 ? 's' : ''} configured by the Company Admin.`}
+              </p>
+            )}
           </div>
 
           {selectedEmergencyType && (() => {
-            const type = emergencyTypes.find(item => item.value === selectedEmergencyType)
+            const type = alertTypeOptions.find(item => item.value === selectedEmergencyType)
             if (!type) return null
 
             const recipients = getRecipients(type.value)
@@ -949,7 +967,12 @@ export default function Setup() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className="text-lg">{type.icon}</span>
-                    <h3 className="font-semibold text-gray-900">{type.value}</h3>
+                    <h3 className="font-semibold text-gray-900">{type.label}</h3>
+                    <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${
+                      type.category === 'emergency' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      {type.category === 'emergency' ? 'Emergency' : 'General'}
+                    </span>
                     <span className="text-xs text-gray-400">{recipients.length} recipient{recipients.length !== 1 ? 's' : ''}</span>
                   </div>
                   <div className="flex items-center gap-2">

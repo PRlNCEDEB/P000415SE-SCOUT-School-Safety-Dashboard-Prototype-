@@ -79,19 +79,18 @@ router.get('/alert-types', verifyToken, async (req, res, next) => {
   try {
     const { category } = req.query
 
-    let query
-    if (category) {
-      query = getDb()
-        .collection('alertTypes')
-        .where('category', '==', category)
-    } else {
-      query = getDb()
-        .collection('alertTypes')
-        .orderBy('createdAt', 'asc')
-    }
+    // Filter and sort in memory: an orderBy() drops documents that are missing
+    // the field (older alert types have no createdAt), and pairing a where()
+    // with an orderBy() would need a composite index.
+    const snapshot = await getDb().collection('alertTypes').get()
+    const alertTypes = snapshotToArray(snapshot)
+      .filter(type => !category || type.category === category)
+      .sort((a, b) =>
+        String(a.createdAt || '').localeCompare(String(b.createdAt || '')) ||
+        String(a.label || '').localeCompare(String(b.label || ''))
+      )
 
-    const snapshot = await query.get()
-    res.json({ alertTypes: snapshotToArray(snapshot) })
+    res.json({ alertTypes })
   } catch (err) {
     next(err)
   }

@@ -2,13 +2,13 @@ require('dotenv').config()
 const { initFirebase, getDb } = require('../db/firebase')
 
 const ALERT_TYPES = [
-  { label: 'Medical', emoji: '🏥' },
-  { label: 'Fire', emoji: '🔥' },
-  { label: 'Lockdown', emoji: '🔒' },
-  { label: 'Behaviour', emoji: '⚠️' },
-  { label: 'Weather', emoji: '🌩️' },
-  { label: 'Maintenance', emoji: '🔧' },
-  { label: 'General', emoji: '📢' },
+  { label: 'Medical', emoji: '🏥', category: 'general' },
+  { label: 'Fire', emoji: '🔥', category: 'emergency' },
+  { label: 'Lockdown', emoji: '🔒', category: 'emergency' },
+  { label: 'Behaviour', emoji: '⚠️', category: 'general' },
+  { label: 'Weather', emoji: '🌩️', category: 'general' },
+  { label: 'Maintenance', emoji: '🔧', category: 'general' },
+  { label: 'General', emoji: '📢', category: 'general' },
 ]
 
 const LOCATIONS = [
@@ -34,6 +34,7 @@ async function seedAlertConfig() {
     await db.collection('alertTypes').add({
       label: type.label,
       emoji: type.emoji,
+      category: type.category,
       active: true,
       createdAt: now,
       updatedAt: now,
