@@ -61,6 +61,9 @@ export default function Setup() {
   const [editingPhoneValue, setEditingPhoneValue] = useState('')
   const [savingPhone, setSavingPhone] = useState(false)
   const [phoneError, setPhoneError] = useState('')
+  const [editingEmailUserId, setEditingEmailUserId] = useState(null)
+  const [editingEmailValue, setEditingEmailValue] = useState('')
+  const [emailError, setEmailError] = useState('')
 
   const [overdueThreshold, setOverdueThreshold] = useState(15)
   const [retentionDays, setRetentionDays] = useState(30)
@@ -312,31 +315,32 @@ export default function Setup() {
   }
 
   const handleSavePhone = async (userId) => {
-  setSavingPhone(true)
-  setPhoneError('')
-  try {
-    const trimmed = editingPhoneValue.trim()
-    const existingPhone = schoolUsers.find(u => u.id === userId)?.phone || null
+    setSavingPhone(true)
+    setPhoneError('')
+    try {
+      const trimmed = editingPhoneValue.trim()
+      const existingPhone = schoolUsers.find(u => u.id === userId)?.phone || null
 
     // Saving an empty field when there was no number to begin with writes null
     // over null: every request succeeds, nothing changes, and the row still
     // reads "No phone" — indistinguishable from a broken save. Refuse it and
     // say so instead.
-    if (!trimmed && !existingPhone) {
-      setPhoneError('Enter a phone number.')
-      return
-    }
+      if (!trimmed && !existingPhone) {
+        setPhoneError('Enter a phone number.')
+        return
+      }
 
     // Clearing an existing number stays allowed; nonsense does not.
-    if (trimmed && !/[0-9]/.test(trimmed)) {
-      setPhoneError('Phone number must contain digits.')
-      return
-    }
+      const digitCount = trimmed.replace(/\D/g, '').length
+      if (trimmed && (!/^[+\d\s()-]+$/.test(trimmed) || digitCount < 8 || digitCount > 15)) {
+        setPhoneError('Enter a valid phone number using 8 to 15 digits.')
+        return
+      }
 
     const newPhone = trimmed || null
 
     // 1. Update users collection
-    await setupAPI.updateSchoolUserPhone(userId, newPhone)
+    await setupAPI.updateSchoolUser(userId, { phone: newPhone })
 
     // 2. Update local schoolUsers state
     setSchoolUsers(prev => prev.map(u =>
@@ -370,12 +374,35 @@ export default function Setup() {
 
     setEditingPhoneUserId(null)
     setEditingPhoneValue('')
-  } catch (err) {
-    setPhoneError(err.message || 'Failed to save phone number.')
-  } finally {
-    setSavingPhone(false)
+    } catch (err) {
+      setPhoneError(err.message || 'Failed to save phone number.')
+    } finally {
+      setSavingPhone(false)
+    }
   }
-}
+
+  const handleEditEmail = (user) => {
+    setEditingEmailUserId(user.id)
+    setEditingEmailValue(user.email || '')
+    setEmailError('')
+  }
+
+  const handleSaveEmail = async (userId) => {
+    const email = editingEmailValue.trim()
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setEmailError('Enter a valid email address.')
+      return
+    }
+
+    try {
+      await setupAPI.updateSchoolUser(userId, { email })
+      setSchoolUsers(prev => prev.map(user => user.id === userId ? { ...user, email } : user))
+      setEditingEmailUserId(null)
+      setEmailError('')
+    } catch (err) {
+      setEmailError(err.message || 'Could not save email.')
+    }
+  }
 
   async function handleSaveGlobalSettings() {
     setThresholdSaving(true)
@@ -1006,6 +1033,7 @@ export default function Setup() {
                         )
                         const notify = getNotifyPref(type.value, user.id)
                         const isEditingPhone = editingPhoneUserId === user.id
+                        const isEditingEmail = editingEmailUserId === user.id
 
                         return (
                           <div key={user.id} className={`flex flex-col gap-2 px-3 py-2 rounded-lg border ${
@@ -1029,8 +1057,16 @@ export default function Setup() {
                                   onClick={() => isEditingPhone ? handleCancelEditPhone() : handleEditPhone(user)}
                                         className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-100 transition-colors text-gray-600"
                                               >
-                                                {isEditingPhone ? 'Cancel' : '✏️ Phone'}
+                                {isEditingPhone ? 'Cancel' : '✏️ Phone'}
                                               </button>
+                                <button
+                                  onClick={() => isEditingEmail
+                                    ? setEditingEmailUserId(null)
+                                    : handleEditEmail(user)}
+                                  className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-100 transition-colors text-gray-600"
+                                >
+                                  {isEditingEmail ? 'Cancel' : '✏️ Email'}
+                                </button>
                                 {alreadyAdded ? (
                                   <span className="text-xs text-green-600 font-medium">Added</span>
                                 ) : (
@@ -1075,6 +1111,25 @@ export default function Setup() {
                                 {phoneError && (
                                   <span className="text-xs text-red-600">{phoneError}</span>
                                 )}
+                              </div>
+                            )}
+                            {isEditingEmail && (
+                              <div className="flex items-center gap-2 pt-1 border-t border-gray-200">
+                                <input
+                                  type="email"
+                                  value={editingEmailValue}
+                                  onChange={e => setEditingEmailValue(e.target.value)}
+                                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleSaveEmail(user.id) } }}
+                                  placeholder="e.g. teacher@school.edu"
+                                  className="flex-1 px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-red-400"
+                                />
+                                <button
+                                  onClick={() => handleSaveEmail(user.id)}
+                                  className="px-3 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition-colors"
+                                >
+                                  Save
+                                </button>
+                                {emailError && <span className="text-xs text-red-600">{emailError}</span>}
                               </div>
                             )}
                           </div>

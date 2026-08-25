@@ -66,7 +66,11 @@ export default function SubmitAlert() {
     const e = {}
     if (!form.type) e.type = 'Please select an alert type'
     if (!form.priority) e.priority = 'Please select a priority'
-    if (!form.title.trim()) e.title = 'Please enter a title'
+    const title = form.title.trim()
+    if (!title) e.title = 'Please enter a title'
+    else if (title.length < 3 || (title.match(/[A-Za-z]/g) || []).length < 2) {
+      e.title = 'Enter a meaningful title using at least 3 characters and 2 letters'
+    }
     if (!form.location) e.location = 'Please select a location'
     return e
   }
