@@ -469,7 +469,9 @@ export default function Incidents() {
                 >
                   <span className="text-lg">{typeIcons[incident.type] || DEFAULT_INCIDENT_ICON}</span>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-gray-800 truncate">{incident.title}</p>
+                    <p className="text-sm text-gray-800 truncate">
+                      {incident.incidentNumber ? `${incident.incidentNumber} · ` : ''}{incident.title}
+                    </p>
                     <p className="text-xs text-gray-500 truncate">
                       {incident.location} · {incident.timestamp} · {incident.triggeredByName}
                       {isCompanyAdmin && incident.schoolName ? ` · ${incident.schoolName}` : ''}
