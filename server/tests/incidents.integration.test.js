@@ -22,6 +22,7 @@ function createTestDb({ incidents = {}, notifications = {}, users = {}, schools 
   const notificationStore = new Map(Object.entries(notifications).map(([id, value]) => [id, { ...value }]))
   const userStore = new Map(Object.entries(users).map(([id, value]) => [id, { ...value }]))
   const schoolStore = new Map(Object.entries(schools).map(([id, value]) => [id, { ...value }]))
+  const counterStore = new Map()
 
   function makeQuery(store, filters = [], limitCount = null) {
     return {
@@ -130,17 +131,50 @@ function createTestDb({ incidents = {}, notifications = {}, users = {}, schools 
         }
       }
 
-      throw new Error(`Unexpected collection: ${name}`)
+if (name === 'counters') {
+  return {
+    doc(id) {
+      return {
+        id,
+        async get() {
+          return makeDoc(id, counterStore.get(id))
+        },
+      }
     },
+  }
+}
+
+            throw new Error(`Unexpected collection: ${name}`)
+    },
+
+    async runTransaction(callback) {
+      const transaction = {
+        async get(ref) {
+          return makeDoc(ref.id, counterStore.get(ref.id))
+        },
+
+        set(ref, data, options = {}) {
+          const existing = counterStore.get(ref.id) || {}
+
+          counterStore.set(
+            ref.id,
+            options.merge ? { ...existing, ...data } : { ...data }
+          )
+        },
+      }
+
+      return callback(transaction)
+    },
+
     stores: {
       incidents: incidentStore,
       notifications: notificationStore,
       users: userStore,
       schools: schoolStore,
+      counters: counterStore,
     },
   }
 }
-
 const firebasePath = require.resolve('../src/db/firebase')
 const incidentsRoutePath = require.resolve('../src/routes/incidents')
 const firebaseAdminPath = require.resolve('firebase-admin')
