@@ -1,9 +1,17 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest'
-import React from 'react'
-import { describe, test, expect, vi, afterEach } from 'vitest'
-import { render, screen, cleanup, fireEvent, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 import Setup from '../pages/Setup'
+
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual('react-router-dom')
+
+  return {
+    ...actual,
+    useNavigate: () => vi.fn(),
+  }
+})
 
 afterEach(() => {
   cleanup()
@@ -16,6 +24,17 @@ vi.mock('../context/AuthContext', () => ({
     userRole: 'School Admin',
     isCompanyAdmin: false,
     isSchoolAdmin: true,
+  }),
+}))
+
+vi.mock('../context/SchoolsContext', () => ({
+  useSchools: () => ({
+    allSchools: [],
+    loading: false,
+    error: null,
+    createSchool: vi.fn(),
+    renameSchool: vi.fn(),
+    setSchoolActive: vi.fn(),
   }),
 }))
 

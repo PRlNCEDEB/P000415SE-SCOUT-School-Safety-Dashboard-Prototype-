@@ -1,5 +1,3 @@
-import { useState, useEffect } from 'react'
-import { Link, Navigate, useLocation } from 'react-router-dom'
 import {
   BarChart3,
   Bell,
@@ -11,8 +9,10 @@ import {
   Settings,
   Siren,
 } from 'lucide-react'
-import { useAuth } from '../context/AuthContext'
+import { useEffect, useState } from 'react'
+import { Link, Navigate, useLocation } from 'react-router-dom'
 import { getIncidentById } from '../api/client'
+import { useAuth } from '../context/AuthContext'
 
 export default function Layout({ children }) {
   const location = useLocation()
@@ -95,7 +95,7 @@ export default function Layout({ children }) {
       visible: isCompanyAdmin || isSchoolAdmin,
       items: [
         { path: '/setup', label: 'Setup', icon: Settings, visible: isCompanyAdmin || isSchoolAdmin },
-        { path: '/submit', label: 'Alert Testing', icon: Siren, visible: isSchoolAdmin },
+        { path: '/submit', label: 'Alert Testing', icon: Siren, visible: isSchoolAdmin || isCompanyAdmin },
       ],
     },
     {

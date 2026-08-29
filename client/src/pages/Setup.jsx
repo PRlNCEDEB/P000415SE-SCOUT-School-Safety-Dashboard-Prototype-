@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { archiveAPI, settingsAPI, setupAPI } from '../api/client'
+import AlertTypeSelect from '../components/AlertTypeSelect'
 import { useAuth } from '../context/AuthContext'
 import { useSchools } from '../context/SchoolsContext'
 import { applyRecipientPhone } from '../utils/routingRecipients'
-import { settingsAPI, setupAPI, archiveAPI } from '../api/client'
-import AlertTypeSelect from '../components/AlertTypeSelect'
 
 const EMOJI_OPTIONS = ['🏥', '🔥', '🔒', '⚠️', '🌩️', '🔧', '📢', '🚨', '🛡️', '🌊']
 
@@ -34,22 +35,24 @@ function formatRole(role) {
 
 export default function Setup() {
   const { isCompanyAdmin, isSchoolAdmin } = useAuth()
-  const {
-    allSchools,
-    loading: schoolsLoading,
-    error: schoolsError,
-    createSchool,
-    renameSchool,
-    setSchoolActive,
-  } = useSchools()
+const navigate = useNavigate()
 
-  // ── Schools (Company Admin) ───────────────────────────────────────────────
-  const [newSchoolName, setNewSchoolName] = useState('')
-  const [addingSchool, setAddingSchool] = useState(false)
-  const [schoolFormError, setSchoolFormError] = useState('')
-  const [editingSchoolId, setEditingSchoolId] = useState(null)
-  const [editSchoolName, setEditSchoolName] = useState('')
-  const [savingSchoolId, setSavingSchoolId] = useState(null)
+const {
+  allSchools,
+  loading: schoolsLoading,
+  error: schoolsError,
+  createSchool,
+  renameSchool,
+  setSchoolActive,
+} = useSchools()
+
+// Schools (Company Admin)
+const [newSchoolName, setNewSchoolName] = useState('')
+const [addingSchool, setAddingSchool] = useState(false)
+const [schoolFormError, setSchoolFormError] = useState('')
+const [editingSchoolId, setEditingSchoolId] = useState(null)
+const [editSchoolName, setEditSchoolName] = useState('')
+const [savingSchoolId, setSavingSchoolId] = useState(null)
 
   const [alertTypes, setAlertTypes] = useState([])
   const [locations, setLocations] = useState([])
@@ -555,6 +558,15 @@ export default function Setup() {
           choosing notification recipients, and defining who receives notifications. Use this area to test and refine
           how alerts behave before settings are applied in practice.
         </p>
+      )}
+
+      {(isCompanyAdmin || isSchoolAdmin) && (
+        <button
+          onClick={() => navigate('/submit')}
+          className="mb-6 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 font-medium text-sm"
+        >
+          Test Alert
+        </button>
       )}
 
       {isCompanyAdmin && (

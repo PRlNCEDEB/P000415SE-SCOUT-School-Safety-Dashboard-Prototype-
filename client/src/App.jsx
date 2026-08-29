@@ -1,15 +1,15 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import Layout from './components/Layout'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { SchoolsProvider } from './context/SchoolsContext'
-import Login from './pages/Login'
-import Layout from './components/Layout'
-import Dashboard from './pages/Dashboard'
-import Incidents from './pages/Incidents'
-import IncidentDetail from './pages/IncidentDetail'
-import SubmitAlert from './pages/SubmitAlert'
 import Analytics from './pages/Analytics'
+import Dashboard from './pages/Dashboard'
+import IncidentDetail from './pages/IncidentDetail'
+import Incidents from './pages/Incidents'
+import Login from './pages/Login'
 import Notifications from './pages/Notifications'
 import Setup from './pages/Setup'
+import SubmitAlert from './pages/SubmitAlert'
 
 // ── PrivateRoute ──────────────────────────────────────────────────────────────
 // Blocks access to protected pages when the user is not authenticated.
@@ -62,13 +62,13 @@ function SetupRoute({ children }) {
 }
 
 function SubmitRoute({ children }) {
-  const { isSchoolAdmin, isStaff, authLoading, userRole } = useAuth()
+  const { isSchoolAdmin, isStaff, isCompanyAdmin, authLoading, userRole } = useAuth()
 
   if (authLoading || userRole === null) {
     return null
   }
 
-  if (!isSchoolAdmin && !isStaff) {
+  if (!isSchoolAdmin && !isStaff  && !isCompanyAdmin) {
     return <Navigate to="/dashboard" replace />
   }
 
