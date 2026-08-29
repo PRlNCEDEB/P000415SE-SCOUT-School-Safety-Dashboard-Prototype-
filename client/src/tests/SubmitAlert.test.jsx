@@ -1,15 +1,14 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest'
-import React from 'react'
-import { describe, test, expect, vi, afterEach } from 'vitest'
 import {
-  render,
-  screen,
   cleanup,
   fireEvent,
+  render,
+  screen,
   waitFor,
 } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 import SubmitAlert from '../pages/SubmitAlert'
 
 const mockNavigate = vi.fn()
@@ -103,6 +102,18 @@ describe('Submit Alert Interaction Test', () => {
 
     await waitFor(() => {
       expect(incidentAPI.create).toHaveBeenCalled()
+    })
+  })
+
+  test('renders Submit Alert form successfully', async () => {
+    render(
+      <MemoryRouter>
+        <SubmitAlert />
+      </MemoryRouter>
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText(/alert type/i)).toBeInTheDocument()
     })
   })
 })

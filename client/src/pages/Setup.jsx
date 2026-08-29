@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { archiveAPI, settingsAPI, setupAPI } from '../api/client'
 import { useAuth } from '../context/AuthContext'
-import { settingsAPI, setupAPI, archiveAPI } from '../api/client'
 
 const EMOJI_OPTIONS = ['🏥', '🔥', '🔒', '⚠️', '🌩️', '🔧', '📢', '🚨', '🛡️', '🌊']
 
@@ -10,6 +11,7 @@ function formatRole(role) {
 
 export default function Setup() {
   const { isCompanyAdmin, isSchoolAdmin } = useAuth()
+  const navigate = useNavigate()
 
   const [alertTypes, setAlertTypes] = useState([])
   const [locations, setLocations] = useState([])
@@ -401,6 +403,15 @@ export default function Setup() {
           choosing notification recipients, and defining who receives notifications. Use this area to test and refine
           how alerts behave before settings are applied in practice.
         </p>
+      )}
+
+      {(isCompanyAdmin || isSchoolAdmin) && (
+        <button
+          onClick={() => navigate('/submit')}
+          className="mb-6 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 font-medium text-sm"
+        >
+          Test Alert
+        </button>
       )}
 
       {isCompanyAdmin && (
