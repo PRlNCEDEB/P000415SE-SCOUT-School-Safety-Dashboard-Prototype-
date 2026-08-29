@@ -255,6 +255,42 @@ test('GET /api/setup/alert-types?category=emergency returns empty when no emerge
   })
 })
 
+test('GET /api/setup/alert-types includes types with no createdAt', async () => {
+  fakeDb = createTestDb({
+    users: { 'staff-uid': STAFF_USER },
+    alertTypes: {
+      'type-1': { label: 'Fire', emoji: '🔥', category: 'emergency', active: true, createdAt: '2026-01-02T00:00:00.000Z' },
+      'type-2': { label: 'Lockdown', emoji: '🔒', category: 'emergency', active: true },
+    },
+  })
+  await withServer(createApp(), async baseUrl => {
+    const res = await fetch(`${baseUrl}/api/setup/alert-types`, {
+      headers: { Authorization: 'Bearer staff-token' },
+    })
+    assert.equal(res.status, 200)
+    const data = await res.json()
+    assert.deepEqual(data.alertTypes.map(t => t.label).sort(), ['Fire', 'Lockdown'])
+  })
+})
+
+test('GET /api/setup/alert-types returns types oldest first then by label', async () => {
+  fakeDb = createTestDb({
+    users: { 'staff-uid': STAFF_USER },
+    alertTypes: {
+      'type-1': { label: 'Weather', category: 'general', active: true, createdAt: '2026-01-03T00:00:00.000Z' },
+      'type-2': { label: 'Fire', category: 'emergency', active: true, createdAt: '2026-01-01T00:00:00.000Z' },
+      'type-3': { label: 'Medical', category: 'general', active: true, createdAt: '2026-01-02T00:00:00.000Z' },
+    },
+  })
+  await withServer(createApp(), async baseUrl => {
+    const res = await fetch(`${baseUrl}/api/setup/alert-types`, {
+      headers: { Authorization: 'Bearer staff-token' },
+    })
+    const data = await res.json()
+    assert.deepEqual(data.alertTypes.map(t => t.label), ['Fire', 'Medical', 'Weather'])
+  })
+})
+
 test('POST /api/setup/alert-types creates emergency alert type for company admin', async () => {
   fakeDb = createTestDb({ users: { 'company-uid': COMPANY_USER } })
   await withServer(createApp(), async baseUrl => {

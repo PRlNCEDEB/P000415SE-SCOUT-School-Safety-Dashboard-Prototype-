@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import Layout from './components/Layout'
 import { AuthProvider, useAuth } from './context/AuthContext'
+import { SchoolsProvider } from './context/SchoolsContext'
 import Analytics from './pages/Analytics'
 import Dashboard from './pages/Dashboard'
 import IncidentDetail from './pages/IncidentDetail'
@@ -77,14 +78,10 @@ function SubmitRoute({ children }) {
 // ── NotCompanyAdminRoute ──────────────────────────────────────────────────────
 // Redirects Company Admins to /setup. All other pages are for School Admin / Staff.
 function NotCompanyAdminRoute({ children }) {
-  const { isCompanyAdmin, authLoading, userRole } = useAuth()
+  const { authLoading, userRole } = useAuth()
 
   if (authLoading || userRole === null) {
     return null
-  }
-
-  if (isCompanyAdmin) {
-    return <Navigate to="/setup" replace />
   }
 
   return children
@@ -116,9 +113,13 @@ function AppRoutes() {
 function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <AppRoutes />
-      </BrowserRouter>
+      {/* Inside AuthProvider: the school list is role-scoped, so it can only be
+          fetched once the signed-in user's role is known. */}
+      <SchoolsProvider>
+        <BrowserRouter>
+          <AppRoutes />
+        </BrowserRouter>
+      </SchoolsProvider>
     </AuthProvider>
   )
 }

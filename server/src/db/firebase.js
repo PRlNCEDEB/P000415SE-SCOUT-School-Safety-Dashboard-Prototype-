@@ -21,10 +21,10 @@ function initFirebase() {
   let serviceAccount
 
   if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
-    // Running on Render/production — read from environment variable
+    // Running on Render/production  read from environment variable
     serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON)
   } else {
-    // Running locally — read from file
+    // Running locally  read from file
     const serviceAccountPath = path.resolve(
       process.env.FIREBASE_SERVICE_ACCOUNT_PATH || './firebase-service-account.json'
     )
@@ -36,14 +36,29 @@ function initFirebase() {
     serviceAccount = require(serviceAccountPath)
   }
 
+  const projectId = process.env.FIREBASE_PROJECT_ID || serviceAccount.project_id
+
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
-    projectId: process.env.FIREBASE_PROJECT_ID || serviceAccount.project_id,
+    projectId,
   })
 
   db = admin.firestore()
   db.settings({ ignoreUndefinedProperties: true })
-  console.log('✅ Firebase initialised — project:', serviceAccount.project_id)
+
+  // Log the project actually being targeted, not the service account's own
+  // project. When FIREBASE_PROJECT_ID points somewhere the credential has no
+  // access to, every query fails with PERMISSION_DENIED  and logging the
+  // service account's project instead makes that look like an IAM problem.
+  console.log('✅ Firebase initialised  project:', projectId)
+
+  if (projectId !== serviceAccount.project_id) {
+    console.warn(
+      `⚠️  FIREBASE_PROJECT_ID (${projectId}) does not match the service account project ` +
+      `(${serviceAccount.project_id}). Expect PERMISSION_DENIED on every Firestore call.`
+    )
+  }
+
   return db
 }
 

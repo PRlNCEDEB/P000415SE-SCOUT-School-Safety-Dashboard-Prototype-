@@ -100,19 +100,19 @@ export default function Layout({ children }) {
     },
     {
       title: 'Live Operations',
-      visible: !isCompanyAdmin,
+      visible: true,
       items: [
-        { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, visible: !isCompanyAdmin },
-        { path: '/submit', label: 'Submit Alert', icon: PlusCircle, visible: isStaff },
-        { path: '/incidents', label: 'Incidents', icon: ClipboardList, visible: isSchoolAdmin || isStaff },
+        { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, visible: true },
+        { path: '/submit', label: 'Submit Alert', icon: PlusCircle, visible: isStaff || isCompanyAdmin },
+        { path: '/incidents', label: 'Incidents', icon: ClipboardList, visible: isCompanyAdmin || isSchoolAdmin || isStaff },
       ],
     },
     {
       title: 'Data & Insights',
-      visible: isSchoolAdmin,
+      visible: isSchoolAdmin || isCompanyAdmin,
       items: [
-        { path: '/analytics', label: 'Analytics', icon: BarChart3, visible: isSchoolAdmin },
-        { path: '/notifications', label: 'Notifications', icon: Bell, visible: isSchoolAdmin },
+        { path: '/analytics', label: 'Analytics', icon: BarChart3, visible: isSchoolAdmin || isCompanyAdmin },
+        { path: '/notifications', label: 'Notifications', icon: Bell, visible: isSchoolAdmin || isCompanyAdmin },
       ],
     },
   ]

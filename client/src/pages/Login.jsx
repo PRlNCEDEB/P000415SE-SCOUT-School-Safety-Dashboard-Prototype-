@@ -2,28 +2,46 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
-const DEMO_PASSWORD = 'password123'
+// Quick-login shortcuts for the seeded demo accounts.
+//
+// Scope is described by role rather than by school name: which school an
+// account belongs to is data, and naming one here would go stale the moment
+// schools are managed from the database.
+//
+// The Company Admin shortcut is driven by environment variables rather than a
+// committed constant, because its password is chosen per environment and must
+// not live in source control. Set both in client/.env (gitignored) and the
+// button appears; omit them and it simply is not rendered:
+//
+//   VITE_DEMO_COMPANY_ADMIN_EMAIL=admin@scout.edu
+//   VITE_DEMO_COMPANY_ADMIN_PASSWORD=your_password
+const DEMO_PASSWORD = 'Scout@1234'
+
+const companyAdminEmail = import.meta.env.VITE_DEMO_COMPANY_ADMIN_EMAIL
+const companyAdminPassword = import.meta.env.VITE_DEMO_COMPANY_ADMIN_PASSWORD
 
 const demoAccounts = [
-  {
-    label: 'Company Admin',
-    email: 'admin@scout.edu',
-    password: DEMO_PASSWORD,
-    scope: 'SCOUT platform',
-    badgeClass: 'bg-red-100 text-red-700',
-  },
+  ...(companyAdminEmail && companyAdminPassword
+    ? [{
+        label: 'Company Admin',
+        email: companyAdminEmail,
+        password: companyAdminPassword,
+        scope: 'All schools',
+        badgeClass: 'bg-red-100 text-red-700',
+      }]
+    : []),
   {
     label: 'School Admin',
-    email: 'schooladmin@school.edu',
+    email: 'admin.beta@scout.edu',
     password: DEMO_PASSWORD,
-    scope: 'Alpha School',
+    scope: 'Their assigned school',
     badgeClass: 'bg-purple-100 text-purple-700',
   },
   {
     label: 'Staff',
-    email: 'staff@school.edu',
+    email: 'staff.beta@scout.edu',
     password: DEMO_PASSWORD,
-    scope: 'Alpha School',
+    scope: 'Their own alerts',
     badgeClass: 'bg-blue-100 text-blue-700',
   },
 ]

@@ -1,9 +1,33 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { archiveAPI, settingsAPI, setupAPI } from '../api/client'
+import AlertTypeSelect from '../components/AlertTypeSelect'
 import { useAuth } from '../context/AuthContext'
+import { useSchools } from '../context/SchoolsContext'
+import { applyRecipientPhone } from '../utils/routingRecipients'
 
 const EMOJI_OPTIONS = ['🏥', '🔥', '🔒', '⚠️', '🌩️', '🔧', '📢', '🚨', '🛡️', '🌊']
+
+// School Admin routing rules are keyed by the alert type label, so options are
+// de-duplicated by label (case-insensitive) to keep one entry per routing rule.
+function buildAlertTypeOptions(alertTypes) {
+  const seen = new Set()
+  const options = []
+  for (const type of alertTypes || []) {
+    const label = String(type?.label || '').trim()
+    if (!label) continue
+    const key = label.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    options.push({
+      value: label,
+      label,
+      icon: type.emoji || (type.category === 'emergency' ? '🚨' : '📢'),
+      category: type.category === 'emergency' ? 'emergency' : 'general',
+    })
+  }
+  return options
+}
 
 function formatRole(role) {
   return String(role || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
@@ -11,7 +35,24 @@ function formatRole(role) {
 
 export default function Setup() {
   const { isCompanyAdmin, isSchoolAdmin } = useAuth()
-  const navigate = useNavigate()
+const navigate = useNavigate()
+
+const {
+  allSchools,
+  loading: schoolsLoading,
+  error: schoolsError,
+  createSchool,
+  renameSchool,
+  setSchoolActive,
+} = useSchools()
+
+// Schools (Company Admin)
+const [newSchoolName, setNewSchoolName] = useState('')
+const [addingSchool, setAddingSchool] = useState(false)
+const [schoolFormError, setSchoolFormError] = useState('')
+const [editingSchoolId, setEditingSchoolId] = useState(null)
+const [editSchoolName, setEditSchoolName] = useState('')
+const [savingSchoolId, setSavingSchoolId] = useState(null)
 
   const [alertTypes, setAlertTypes] = useState([])
   const [locations, setLocations] = useState([])
@@ -30,7 +71,7 @@ export default function Setup() {
   const [editingLocationId, setEditingLocationId] = useState(null)
   const [editLocationLabel, setEditLocationLabel] = useState('')
 
-  const [emergencyTypes, setEmergencyTypes] = useState([])
+  const [alertTypeOptions, setAlertTypeOptions] = useState([])
   const [routing, setRouting] = useState({})
   const [schoolUsers, setSchoolUsers] = useState([])
   const [loadingRouting, setLoadingRouting] = useState(false)
@@ -45,6 +86,9 @@ export default function Setup() {
   const [editingPhoneValue, setEditingPhoneValue] = useState('')
   const [savingPhone, setSavingPhone] = useState(false)
   const [phoneError, setPhoneError] = useState('')
+  const [editingEmailUserId, setEditingEmailUserId] = useState(null)
+  const [editingEmailValue, setEditingEmailValue] = useState('')
+  const [emailError, setEmailError] = useState('')
 
   const [overdueThreshold, setOverdueThreshold] = useState(15)
   const [retentionDays, setRetentionDays] = useState(30)
@@ -86,10 +130,10 @@ export default function Setup() {
       setLoadingRouting(true)
       setRoutingError('')
       try {
-        const [routingData, usersData, emergencyTypesData] = await Promise.all([
+        const [routingData, usersData, alertTypesData] = await Promise.all([
           setupAPI.getRouting(),
           setupAPI.getSchoolUsers(),
-          setupAPI.getAlertTypes('emergency'),
+          setupAPI.getAlertTypes(),
         ])
         const map = {}
         for (const rule of (routingData.routing || [])) {
@@ -97,12 +141,7 @@ export default function Setup() {
         }
         setRouting(map)
         setSchoolUsers(usersData.users || [])
-        setEmergencyTypes(
-          (emergencyTypesData.alertTypes || []).map(type => ({
-            value: type.label,
-            icon: type.emoji || '🚨',
-          }))
-        )
+        setAlertTypeOptions(buildAlertTypeOptions(alertTypesData.alertTypes))
       } catch {
         setRoutingError('Failed to load routing. Is the backend running?')
       } finally {
@@ -234,8 +273,10 @@ export default function Setup() {
       await setupAPI.updateRouting(alertType, recipients)
       setSaveStatus(state => ({ ...state, [alertType]: 'saved' }))
       setTimeout(() => setSaveStatus(state => ({ ...state, [alertType]: null })), 3000)
+      return true
     } catch {
       setSaveStatus(state => ({ ...state, [alertType]: 'error' }))
+      return false
     } finally {
       setSavingRouting(state => ({ ...state, [alertType]: false }))
     }
@@ -294,47 +335,94 @@ export default function Setup() {
   }
 
   const handleSavePhone = async (userId) => {
-  setSavingPhone(true)
-  setPhoneError('')
-  try {
-    const newPhone = editingPhoneValue.trim() || null
+    setSavingPhone(true)
+    setPhoneError('')
+    try {
+      const trimmed = editingPhoneValue.trim()
+      const existingPhone = schoolUsers.find(u => u.id === userId)?.phone || null
+
+    // Saving an empty field when there was no number to begin with writes null
+    // over null: every request succeeds, nothing changes, and the row still
+    // reads "No phone" — indistinguishable from a broken save. Refuse it and
+    // say so instead.
+      if (!trimmed && !existingPhone) {
+        setPhoneError('Enter a phone number.')
+        return
+      }
+
+    // Clearing an existing number stays allowed; nonsense does not.
+      const digitCount = trimmed.replace(/\D/g, '').length
+      if (trimmed && (!/^[+\d\s()-]+$/.test(trimmed) || digitCount < 8 || digitCount > 15)) {
+        setPhoneError('Enter a valid phone number using 8 to 15 digits.')
+        return
+      }
+
+    const newPhone = trimmed || null
 
     // 1. Update users collection
-    await setupAPI.updateSchoolUserPhone(userId, newPhone)
+    await setupAPI.updateSchoolUser(userId, { phone: newPhone })
 
     // 2. Update local schoolUsers state
     setSchoolUsers(prev => prev.map(u =>
       u.id === userId ? { ...u, phone: newPhone } : u
     ))
 
-    // 3. If this user is already added as a recipient for the current
-    //    alert type, update their phone in notificationRouting too
-    if (selectedEmergencyType) {
-      const current = getRecipients(selectedEmergencyType)
-      const user = schoolUsers.find(u => u.id === userId)
-      const isAlreadyAdded = current.some(
-        r => r.email?.toLowerCase() === user?.email?.toLowerCase()
+    // 3. Routing rules hold a snapshot copy of the recipient's phone, so the
+    //    new number has to reach EVERY alert type this person is routed to —
+    //    not just the one currently on screen. Any rule left behind would keep
+    //    sending SMS for that alert to the old number, or to nowhere.
+    const user = schoolUsers.find(u => u.id === userId)
+    const updatesByAlertType = applyRecipientPhone(routing, user?.email, newPhone)
+    const affectedTypes = Object.keys(updatesByAlertType)
+
+    if (affectedTypes.length > 0) {
+      setRouting(state => ({ ...state, ...updatesByAlertType }))
+
+      const results = await Promise.all(
+        affectedTypes.map(alertType => saveRouting(alertType, updatesByAlertType[alertType]))
       )
 
-      if (isAlreadyAdded) {
-        const updated = current.map(r =>
-          r.email?.toLowerCase() === user?.email?.toLowerCase()
-            ? { ...r, phone: newPhone }
-            : r
-        )
-        setRouting(state => ({ ...state, [selectedEmergencyType]: updated }))
-        await saveRouting(selectedEmergencyType, updated)
+      const failed = affectedTypes.filter((_, index) => results[index] === false)
+
+      if (failed.length > 0) {
+        // Keep the editor open: the user record saved, but at least one routing
+        // rule did not, and closing silently would hide that.
+        setPhoneError(`Phone saved, but routing for ${failed.join(', ')} did not update. Please try again.`)
+        return
       }
     }
 
     setEditingPhoneUserId(null)
     setEditingPhoneValue('')
-  } catch (err) {
-    setPhoneError(err.message || 'Failed to save phone number.')
-  } finally {
-    setSavingPhone(false)
+    } catch (err) {
+      setPhoneError(err.message || 'Failed to save phone number.')
+    } finally {
+      setSavingPhone(false)
+    }
   }
-}
+
+  const handleEditEmail = (user) => {
+    setEditingEmailUserId(user.id)
+    setEditingEmailValue(user.email || '')
+    setEmailError('')
+  }
+
+  const handleSaveEmail = async (userId) => {
+    const email = editingEmailValue.trim()
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setEmailError('Enter a valid email address.')
+      return
+    }
+
+    try {
+      await setupAPI.updateSchoolUser(userId, { email })
+      setSchoolUsers(prev => prev.map(user => user.id === userId ? { ...user, email } : user))
+      setEditingEmailUserId(null)
+      setEmailError('')
+    } catch (err) {
+      setEmailError(err.message || 'Could not save email.')
+    }
+  }
 
   async function handleSaveGlobalSettings() {
     setThresholdSaving(true)
@@ -386,6 +474,73 @@ export default function Setup() {
     }
   }
 
+  async function handleAddSchool() {
+    const name = newSchoolName.trim()
+    if (!name) {
+      setSchoolFormError('School name is required.')
+      return
+    }
+
+    setAddingSchool(true)
+    setSchoolFormError('')
+    try {
+      // Goes through SchoolsContext rather than the API directly, so the
+      // shared list refreshes and the school appears in every dropdown at
+      // once — not just on this page.
+      await createSchool(name)
+      setNewSchoolName('')
+    } catch (err) {
+      setSchoolFormError(err.message || 'Failed to add school.')
+    } finally {
+      setAddingSchool(false)
+    }
+  }
+
+  function handleEditSchool(school) {
+    setEditingSchoolId(school.id)
+    setEditSchoolName(school.name || '')
+    setSchoolFormError('')
+  }
+
+  function handleCancelEditSchool() {
+    setEditingSchoolId(null)
+    setEditSchoolName('')
+  }
+
+  async function handleSaveSchoolName(schoolId) {
+    const name = editSchoolName.trim()
+    if (!name) {
+      setSchoolFormError('School name is required.')
+      return
+    }
+
+    setSavingSchoolId(schoolId)
+    setSchoolFormError('')
+    try {
+      await renameSchool(schoolId, name)
+      setEditingSchoolId(null)
+      setEditSchoolName('')
+    } catch (err) {
+      setSchoolFormError(err.message || 'Failed to rename school.')
+    } finally {
+      setSavingSchoolId(null)
+    }
+  }
+
+  async function handleToggleSchoolActive(school) {
+    setSavingSchoolId(school.id)
+    setSchoolFormError('')
+    try {
+      await setSchoolActive(school.id, school.active === false)
+    } catch (err) {
+      // The server refuses to deactivate a school that still has an open
+      // incident; surface that reason rather than failing silently.
+      setSchoolFormError(err.message || 'Failed to update school.')
+    } finally {
+      setSavingSchoolId(null)
+    }
+  }
+
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <h1 className="text-2xl font-bold mb-6">Setup</h1>
@@ -413,6 +568,124 @@ export default function Setup() {
           Test Alert
         </button>
       )}
+
+      {isCompanyAdmin && (
+        <div className="mb-8">
+          <div className="flex items-center gap-2 mb-3">
+            <h2 className="text-lg font-semibold text-gray-800">Schools</h2>
+            <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">Company Admin</span>
+          </div>
+
+          <div className="bg-white border border-gray-200 rounded-xl p-5">
+            <p className="text-sm text-gray-500 mb-4">
+              Schools are read from the database, never from a fixed list. A school added here becomes
+              available immediately in every school dropdown across SCOUT.
+            </p>
+
+            {schoolsError && <p className="text-xs text-red-600 mb-2">{schoolsError}</p>}
+            {schoolFormError && (
+              <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">{schoolFormError}</p>
+            )}
+
+            <div className="space-y-2 mb-4">
+              {schoolsLoading && allSchools.length === 0 && (
+                <p className="text-sm text-gray-400">Loading schools...</p>
+              )}
+              {!schoolsLoading && allSchools.length === 0 && (
+                <p className="text-sm text-gray-400">No schools yet. Add the first one below.</p>
+              )}
+
+              {allSchools.map(school => {
+                const isInactive = school.active === false
+                const isEditingSchool = editingSchoolId === school.id
+                const busy = savingSchoolId === school.id
+
+                return (
+                  <div
+                    key={school.id}
+                    className={`flex items-center gap-2 p-2 rounded-lg ${isInactive ? 'bg-gray-100' : 'bg-gray-50'}`}
+                  >
+                    {isEditingSchool ? (
+                      <>
+                        <input
+                          className="flex-1 border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
+                          value={editSchoolName}
+                          onChange={event => setEditSchoolName(event.target.value)}
+                          onKeyDown={event => event.key === 'Enter' && handleSaveSchoolName(school.id)}
+                          autoFocus
+                        />
+                        <button
+                          onClick={() => handleSaveSchoolName(school.id)}
+                          disabled={busy}
+                          className="px-3 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 disabled:opacity-60 transition-colors"
+                        >
+                          {busy ? 'Saving...' : 'Save'}
+                        </button>
+                        <button
+                          onClick={handleCancelEditSchool}
+                          className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-100 text-gray-600 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-800 truncate">
+                            {school.name}
+                            {isInactive && (
+                              <span className="ml-2 text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">Inactive</span>
+                            )}
+                          </p>
+                          <p className="text-xs text-gray-400 truncate">{school.id}</p>
+                        </div>
+                        <button
+                          onClick={() => handleEditSchool(school)}
+                          className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-100 text-gray-600 transition-colors"
+                        >
+                          Rename
+                        </button>
+                        <button
+                          onClick={() => handleToggleSchoolActive(school)}
+                          disabled={busy}
+                          className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-100 text-gray-600 disabled:opacity-60 transition-colors"
+                        >
+                          {busy ? '...' : isInactive ? 'Activate' : 'Deactivate'}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
+            <div className="border-t border-gray-100 pt-3">
+              <p className="text-xs font-medium text-gray-500 mb-2">Add new school</p>
+              <div className="flex gap-2">
+                <input
+                  className="flex-1 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
+                  placeholder="e.g. Bunbury Senior High"
+                  value={newSchoolName}
+                  onChange={event => setNewSchoolName(event.target.value)}
+                  onKeyDown={event => event.key === 'Enter' && handleAddSchool()}
+                />
+                <button
+                  onClick={handleAddSchool}
+                  disabled={addingSchool}
+                  className="px-3 py-1.5 bg-red-600 text-white text-sm rounded hover:bg-red-700 disabled:opacity-50 transition-colors"
+                >
+                  {addingSchool ? 'Adding...' : 'Add'}
+                </button>
+              </div>
+              <p className="text-xs text-gray-400 mt-2">
+                Schools are never deleted — deactivating hides a school from dropdowns while keeping its
+                incident history intact. A school with an open incident cannot be deactivated.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {isCompanyAdmin && (
         <div>
@@ -696,31 +969,32 @@ export default function Setup() {
             <h2 className="text-lg font-semibold text-gray-800">Alert Recipients</h2>
             <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">School Admin</span>
           </div>
-          <p className="text-sm text-gray-500 mb-2">Choose who should receive each emergency alert type at your school.</p>
-          <p className="text-xs text-gray-400 mb-4">
-            User roles are shown from the existing school user records. This area controls alert routing and notification preferences, not account role changes.
-          </p>
+          <p className="text-sm text-gray-500 mb-2">Choose who should receive each alert type at your school.</p>
+          
 
           {loadingRouting && <p className="text-sm text-gray-400 mb-4">Loading...</p>}
           {routingError && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-4">{routingError}</p>}
 
           <div className="mb-4">
-            <select
+            <label className="block text-xs font-medium text-gray-500 mb-1">Emergency Type</label>
+            <AlertTypeSelect
+              types={alertTypeOptions}
               value={selectedEmergencyType}
-              onChange={event => setSelectedEmergencyType(event.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 w-64"
-            >
-              <option value="">Select an emergency type</option>
-              {emergencyTypes.map(type => (
-                <option key={type.value} value={type.value}>
-                  {type.icon} {type.value}
-                </option>
-              ))}
-            </select>
+              onChange={setSelectedEmergencyType}
+              placeholder="Select an emergency type"
+              disabled={loadingRouting}
+            />
+            {!loadingRouting && (
+              <p className="text-xs text-gray-400 mt-1">
+                {alertTypeOptions.length === 0
+                  ? 'No alert types configured yet. A Company Admin adds them under Alert Types.'
+                  : `${alertTypeOptions.length} alert type${alertTypeOptions.length !== 1 ? 's' : ''} configured by the Company Admin.`}
+              </p>
+            )}
           </div>
 
           {selectedEmergencyType && (() => {
-            const type = emergencyTypes.find(item => item.value === selectedEmergencyType)
+            const type = alertTypeOptions.find(item => item.value === selectedEmergencyType)
             if (!type) return null
 
             const recipients = getRecipients(type.value)
@@ -732,7 +1006,12 @@ export default function Setup() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className="text-lg">{type.icon}</span>
-                    <h3 className="font-semibold text-gray-900">{type.value}</h3>
+                    <h3 className="font-semibold text-gray-900">{type.label}</h3>
+                    <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${
+                      type.category === 'emergency' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      {type.category === 'emergency' ? 'Emergency' : 'General'}
+                    </span>
                     <span className="text-xs text-gray-400">{recipients.length} recipient{recipients.length !== 1 ? 's' : ''}</span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -789,6 +1068,7 @@ export default function Setup() {
                         )
                         const notify = getNotifyPref(type.value, user.id)
                         const isEditingPhone = editingPhoneUserId === user.id
+                        const isEditingEmail = editingEmailUserId === user.id
 
                         return (
                           <div key={user.id} className={`flex flex-col gap-2 px-3 py-2 rounded-lg border ${
@@ -812,8 +1092,16 @@ export default function Setup() {
                                   onClick={() => isEditingPhone ? handleCancelEditPhone() : handleEditPhone(user)}
                                         className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-100 transition-colors text-gray-600"
                                               >
-                                                {isEditingPhone ? 'Cancel' : '✏️ Phone'}
+                                {isEditingPhone ? 'Cancel' : '✏️ Phone'}
                                               </button>
+                                <button
+                                  onClick={() => isEditingEmail
+                                    ? setEditingEmailUserId(null)
+                                    : handleEditEmail(user)}
+                                  className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-100 transition-colors text-gray-600"
+                                >
+                                  {isEditingEmail ? 'Cancel' : '✏️ Email'}
+                                </button>
                                 {alreadyAdded ? (
                                   <span className="text-xs text-green-600 font-medium">Added</span>
                                 ) : (
@@ -844,7 +1132,8 @@ export default function Setup() {
                                   type="tel"
                                   value={editingPhoneValue}
                                   onChange={e => setEditingPhoneValue(e.target.value)}
-                                  placeholder="+61400000000"
+                                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleSavePhone(user.id) } }}
+                                  placeholder="e.g. +61 400 000 000"
                                   className="flex-1 px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-red-400"
                                 />
                                 <button
@@ -857,6 +1146,25 @@ export default function Setup() {
                                 {phoneError && (
                                   <span className="text-xs text-red-600">{phoneError}</span>
                                 )}
+                              </div>
+                            )}
+                            {isEditingEmail && (
+                              <div className="flex items-center gap-2 pt-1 border-t border-gray-200">
+                                <input
+                                  type="email"
+                                  value={editingEmailValue}
+                                  onChange={e => setEditingEmailValue(e.target.value)}
+                                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleSaveEmail(user.id) } }}
+                                  placeholder="e.g. teacher@school.edu"
+                                  className="flex-1 px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-red-400"
+                                />
+                                <button
+                                  onClick={() => handleSaveEmail(user.id)}
+                                  className="px-3 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition-colors"
+                                >
+                                  Save
+                                </button>
+                                {emailError && <span className="text-xs text-red-600">{emailError}</span>}
                               </div>
                             )}
                           </div>

@@ -403,7 +403,9 @@ export default function IncidentDetail() {
         <div className="flex items-start justify-between gap-4 mb-3">
           <div className="flex items-center gap-2">
             <span className="text-2xl">{typeIcons[found.type]}</span>
-            <h1 className="text-xl font-bold text-gray-900">{found.title}</h1>
+            <h1 className="text-xl font-bold text-gray-900">
+              {found.incidentNumber ? `${found.incidentNumber} · ` : ''}{found.title}
+            </h1>
           </div>
           <div className="flex gap-2 shrink-0">
             <span className={`text-xs px-2 py-1 rounded ${priorityColors[found.priority]}`}>

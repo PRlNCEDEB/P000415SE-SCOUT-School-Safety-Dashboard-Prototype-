@@ -1,0 +1,6 @@
+[
+  { "email": "admin.beta@scout.edu", "name": "Beta Admin", "role": "School Admin", "schoolId": "school_beta" },
+  { "email": "staff.beta@scout.edu", "name": "Beta Staff", "role": "staff", "schoolId": "school_beta" },
+  { "email": "admin.gamma@scout.edu", "name": "Gamma Admin", "role": "School Admin", "schoolId": "school_gamma" },
+  { "email": "staff.gamma@scout.edu", "name": "Gamma Staff", "role": "staff", "schoolId": "school_gamma" }
+]

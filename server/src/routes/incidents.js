@@ -1,6 +1,7 @@
 const express = require('express')
 const admin = require('firebase-admin')
 const { docToObject, formatTimestamp, getDb, snapshotToArray } = require('../db/firebase')
+const { getSchoolName } = require('../services/schoolService')
 const { invalidateAnalyticsCache } = require('../analyticsCache')
 const {
   getCachedIncidentList,
@@ -27,6 +28,26 @@ async function verifyToken(req, res, next) {
   }
 }
 
+async function getNextIncidentNumber() {
+  const db = getDb()
+  const counterRef = db.collection('counters').doc('incidents')
+
+  const nextNumber = await db.runTransaction(async (transaction) => {
+    const counterDoc = await transaction.get(counterRef)
+
+    let next = 1
+
+    if (counterDoc.exists) {
+      next = (counterDoc.data().lastNumber || 0) + 1
+    }
+
+    transaction.set(counterRef, { lastNumber: next }, { merge: true })
+
+    return next
+  })
+
+  return `INC${String(nextNumber).padStart(3, '0')}`
+}
 function normaliseRole(role) {
   return String(role || '').toLowerCase().replace(/[-_\s]/g, '')
 }
@@ -41,16 +62,6 @@ function isSchoolAdmin(role) {
 
 function canCreateIncident(role) {
   return ['schooladmin', 'staff'].includes(normaliseRole(role))
-}
-
-async function getSchoolName(db, schoolId) {
-  if (!schoolId) return null
-
-  const schoolDoc = await db.collection('schools').doc(schoolId).get()
-  if (!schoolDoc.exists) return null
-
-  const school = schoolDoc.data()
-  return school?.name || null
 }
 
 async function getUserProfile(decodedUser) {
@@ -74,7 +85,9 @@ async function getUserProfile(decodedUser) {
     name: profile?.name || name || email || 'Unknown',
     role: profile?.role || null,
     schoolId: profile?.schoolId || null,
-    schoolName: profile?.schoolName || await getSchoolName(db, profile?.schoolId),
+    // Live lookup first so a renamed school is reflected immediately; the
+    // stored copy is the fallback for a schoolId that no longer resolves.
+    schoolName: (await getSchoolName(profile?.schoolId)) || profile?.schoolName || null,
   }
 }
 
@@ -183,6 +196,7 @@ function toIsoTimestamp(value) {
 function toIncidentResponse(incident) {
   return {
     id: String(incident.id),
+    incidentNumber: incident.incidentNumber || null,
     type: incident.type || 'general',
     priority: incident.priority || 'low',
     status: incident.status || 'triggered',
@@ -302,8 +316,10 @@ router.post('/', verifyToken, async (req, res, next) => {
     if (!reporter.schoolId) {
       return res.status(403).json({ error: 'Your account is not assigned to a school.' })
     }
+    const incidentNumber = await getNextIncidentNumber()
 
     const docRef = await getDb().collection('incidents').add({
+      incidentNumber,
       type: type || 'general',
       priority: priority || 'low',
       status: status || 'triggered',

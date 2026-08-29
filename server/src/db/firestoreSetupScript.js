@@ -1,36 +1,58 @@
-const admin = require('firebase-admin')
+// firestoreSetupScript.js
+//
+// One-off smoke-test writer: drops a single sample incident, notification,
+// recipient and routing rule into Firestore so a brand-new project has
+// something to look at.
+//
+// It used to hardcode a school ('school_alpha' / 'Alpha School') and create it
+// as a side effect, which is exactly the behaviour the dynamic-schools work
+// removed. It now requires a school to already exist and attaches its sample
+// records to a real one.
+//
+// Usage (from server/):
+//   node src/db/firestoreSetupScript.js              → uses the first school
+//   node src/db/firestoreSetupScript.js school_beta  → uses the named school
+//
+// Prefer `npm run seed:demo` for normal seeding; this script is only useful for
+// eyeballing a fresh project.
 
-const serviceAccount = require('./firebase-service-account.json')
+require('dotenv').config()
 
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-})
+const { initFirebase, getDb } = require('./firebase')
 
-const db = admin.firestore()
+async function resolveSchool(db, requestedId) {
+  if (requestedId) {
+    const doc = await db.collection('schools').doc(requestedId).get()
+
+    if (!doc.exists) {
+      throw new Error(`School "${requestedId}" not found. Run: npm run seed:demo`)
+    }
+
+    return { id: doc.id, ...doc.data() }
+  }
+
+  const snapshot = await db.collection('schools').get()
+
+  if (snapshot.empty) {
+    throw new Error('No schools exist yet. Run: npm run seed:demo')
+  }
+
+  const schools = snapshot.docs
+    .map(doc => ({ id: doc.id, ...doc.data() }))
+    .sort((left, right) => String(left.name || '').localeCompare(String(right.name || '')))
+
+  return schools[0]
+}
 
 async function setupFirestore() {
+  initFirebase()
+  const db = getDb()
+
+  const school = await resolveSchool(db, process.argv[2])
+  const now = new Date().toISOString()
   const batch = db.batch()
 
-  const userRef = db.collection('users').doc('admin')
-  batch.set(userRef, {
-    name: 'Admin User',
-    email: 'admin@school.edu',
-    passwordHash: 'demo-hash',
-    role: 'admin',
-    schoolId: 'school_alpha',
-    schoolName: 'Alpha School',
-    createdAt: new Date().toISOString(),
-  })
-
-  const schoolRef = db.collection('schools').doc('school_alpha')
-  batch.set(schoolRef, {
-    name: 'Alpha School',
-    active: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  })
-
-  const incidentRef = db.collection('incidents').doc('incident-001')
+  const incidentRef = db.collection('incidents').doc('sample-incident-001')
   batch.set(incidentRef, {
     title: 'Fire alert',
     description: 'Fire emergency triggered from dashboard.',
@@ -38,73 +60,51 @@ async function setupFirestore() {
     type: 'fire',
     priority: 'critical',
     status: 'triggered',
-    triggeredById: 'admin',
-    triggeredByName: 'Admin User',
-    triggeredByEmail: 'admin@school.edu',
-    triggeredByRole: 'admin',
-    schoolId: 'school_alpha',
-    schoolName: 'Alpha School',
+    triggeredById: null,
+    triggeredByName: 'Sample Data',
+    triggeredByEmail: null,
+    triggeredByRole: null,
+    schoolId: school.id,
+    schoolName: school.name,
     assignedUserIds: [],
     assignedUserEmails: [],
     acknowledgedBy: [],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    createdAt: now,
+    updatedAt: now,
   })
 
-  const notificationRef = db.collection('notifications').doc('notification-001')
+  const notificationRef = db.collection('notifications').doc('sample-notification-001')
   batch.set(notificationRef, {
-    incidentId: 'incident-001',
+    incidentId: 'sample-incident-001',
     incidentTitle: 'Fire alert',
     incidentType: 'fire',
+    schoolId: school.id,
+    schoolName: school.name,
     recipientName: 'Riley Principal',
     recipientEmail: 'principal@school.edu',
     recipientPhone: '+61400000016',
     recipientRole: 'principal',
     emailStatus: 'sent',
     smsStatus: 'sent',
-    token: 'demo-token-001',
+    token: 'sample-token-001',
     acknowledged: false,
     acknowledgedAt: null,
-    createdAt: new Date().toISOString(),
-  })
-
-  const recipientRef = db.collection('notificationRecipients').doc('principal')
-  batch.set(recipientRef, {
-    name: 'Riley Principal',
-    email: 'principal@school.edu',
-    phone: '+61400000016',
-    role: 'principal',
-    active: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  })
-
-  const routingRef = db.collection('notificationRouting').doc('emergency-fire')
-  batch.set(routingRef, {
-    alertScope: 'emergency',
-    alertType: 'Fire',
-    priority: 'critical',
-    channels: ['sms', 'email'],
-    roles: ['principal'],
-    active: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  })
-
-  const actionLogRef = db.collection('actionLogs').doc('action-001')
-  batch.set(actionLogRef, {
-    button: '1',
-    actions: ['Email', 'SMS', 'Record'],
-    title: 'Fire alert triggered',
-    description: 'Quick action fire alert triggered.',
-    location: 'Dashboard quick action',
-    emergencyType: 'Fire',
-    triggeredById: 'admin',
-    createdAt: new Date().toISOString(),
+    timestamp: now,
+    createdAt: now,
   })
 
   await batch.commit()
-  console.log('Firestore setup complete.')
+
+  console.log(`Firestore setup complete sample records attached to ${school.name} (${school.id}).`)
 }
 
-setupFirestore().catch(console.error)
+if (require.main === module) {
+  setupFirestore()
+    .then(() => process.exit(0))
+    .catch(err => {
+      console.error('Firestore setup failed:', err.message)
+      process.exit(1)
+    })
+}
+
+module.exports = { setupFirestore }

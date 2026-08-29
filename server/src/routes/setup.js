@@ -79,19 +79,18 @@ router.get('/alert-types', verifyToken, async (req, res, next) => {
   try {
     const { category } = req.query
 
-    let query
-    if (category) {
-      query = getDb()
-        .collection('alertTypes')
-        .where('category', '==', category)
-    } else {
-      query = getDb()
-        .collection('alertTypes')
-        .orderBy('createdAt', 'asc')
-    }
+    // Filter and sort in memory: an orderBy() drops documents that are missing
+    // the field (older alert types have no createdAt), and pairing a where()
+    // with an orderBy() would need a composite index.
+    const snapshot = await getDb().collection('alertTypes').get()
+    const alertTypes = snapshotToArray(snapshot)
+      .filter(type => !category || type.category === category)
+      .sort((a, b) =>
+        String(a.createdAt || '').localeCompare(String(b.createdAt || '')) ||
+        String(a.label || '').localeCompare(String(b.label || ''))
+      )
 
-    const snapshot = await query.get()
-    res.json({ alertTypes: snapshotToArray(snapshot) })
+    res.json({ alertTypes })
   } catch (err) {
     next(err)
   }
@@ -346,12 +345,12 @@ router.get('/school-users', verifyToken, requireSchoolAdmin, async (req, res, ne
   }
 })
 
-// PATCH /api/setup/school-users/:uid — update phone number for a user in the school admin's school
+// PATCH /api/setup/school-users/:uid — update contact details for a user in the school admin's school
 router.patch('/school-users/:uid', verifyToken, requireSchoolAdmin, async (req, res, next) => {
   try {
     const { schoolId } = req.profile
     const { uid } = req.params
-    const { phone } = req.body
+    const { phone, email } = req.body
 
     const userDoc = await getDb().collection('users').doc(uid).get()
     if (!userDoc.exists) {
@@ -361,10 +360,11 @@ router.patch('/school-users/:uid', verifyToken, requireSchoolAdmin, async (req, 
       return res.status(403).json({ error: 'You can only edit users in your own school.' })
     }
 
-    await getDb().collection('users').doc(uid).update({
-      phone: phone?.trim() || null,
-      updatedAt: new Date().toISOString(),
-    })
+    const changes = { updatedAt: new Date().toISOString() }
+    if (phone !== undefined) changes.phone = phone?.trim() || null
+    if (email !== undefined) changes.email = email.trim()
+
+    await getDb().collection('users').doc(uid).update(changes)
 
     res.json({ success: true })
   } catch (err) {

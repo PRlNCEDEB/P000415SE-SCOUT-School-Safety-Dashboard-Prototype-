@@ -1,7 +1,7 @@
 // seedDemoUsers.js
 //
 // Creates Firebase Auth accounts + matching Firestore `users` documents for
-// every entry in demoUsers.js.
+// every entry in fixtures/demoUsers.json.
 //
 // Safe to re-run:
 //   • If the Auth account already exists, it reuses the existing UID (no duplicate).
@@ -9,10 +9,24 @@
 //
 // The Firestore document ID is always the Firebase Auth UID, which is what
 // /api/auth/role looks up first (db.collection('users').doc(uid)).
+//
+// The fixture stores only schoolId. schoolName is resolved from the `schools`
+// collection at seed time, so the two can never drift out of sync and so no
+// school name is hardcoded alongside the user list.
+
+require('dotenv').config()
 
 const admin = require('firebase-admin')
 const { initFirebase, getDb } = require('./firebase')
-const { demoUsers } = require('./demoUsers')
+
+const demoUsers = require('./fixtures/demoUsers.json')
+
+const DEMO_PASSWORD = process.env.DEMO_USER_PASSWORD || 'Scout@1234'
+
+async function loadSchoolNames() {
+  const snapshot = await getDb().collection('schools').get()
+  return new Map(snapshot.docs.map(doc => [doc.id, doc.data()?.name || null]))
+}
 
 async function getOrCreateAuthUser(user) {
   // Try to create a new Firebase Auth account.
@@ -20,7 +34,7 @@ async function getOrCreateAuthUser(user) {
   try {
     const created = await admin.auth().createUser({
       email:       user.email,
-      password:    user.password,
+      password:    DEMO_PASSWORD,
       displayName: user.name,
     })
     console.log(`  ✅ Auth account created — ${user.email} (uid: ${created.uid})`)
@@ -35,7 +49,7 @@ async function getOrCreateAuthUser(user) {
   }
 }
 
-async function upsertFirestoreUser(uid, user) {
+async function upsertFirestoreUser(uid, user, schoolName) {
   const db = getDb()
   const now = new Date().toISOString()
 
@@ -45,7 +59,7 @@ async function upsertFirestoreUser(uid, user) {
       email:      user.email,
       role:       user.role,
       schoolId:   user.schoolId,
-      schoolName: user.schoolName,
+      schoolName,
       updatedAt:  now,
       // createdAt is only written on first insert; merge: true leaves it alone afterwards
       createdAt:  now,
@@ -53,7 +67,7 @@ async function upsertFirestoreUser(uid, user) {
     { merge: true }
   )
 
-  console.log(`  📄 Firestore users/${uid} upserted — ${user.name} (${user.role} @ ${user.schoolName})`)
+  console.log(`  📄 Firestore users/${uid} upserted — ${user.name} (${user.role} @ ${schoolName || 'unassigned'})`)
 }
 
 async function seedDemoUsers() {
@@ -61,10 +75,18 @@ async function seedDemoUsers() {
 
   console.log('\n👤 Seeding demo users...')
 
+  const schoolNames = await loadSchoolNames()
+
   for (const user of demoUsers) {
     try {
+      const schoolName = schoolNames.get(user.schoolId) || null
+
+      if (user.schoolId && !schoolName) {
+        console.warn(`  ⚠️  ${user.email} references missing school "${user.schoolId}" — seed schools first.`)
+      }
+
       const uid = await getOrCreateAuthUser(user)
-      await upsertFirestoreUser(uid, user)
+      await upsertFirestoreUser(uid, user, schoolName)
     } catch (err) {
       console.error(`  ❌ Failed to seed user ${user.email}:`, err.message)
     }
@@ -83,4 +105,4 @@ if (require.main === module) {
     })
 }
 
-module.exports = { seedDemoUsers }
+module.exports = { seedDemoUsers, DEMO_PASSWORD }
